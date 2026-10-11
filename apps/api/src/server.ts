@@ -25,6 +25,12 @@ import { mapConfirmedData } from "../../../packages/ingestion/src/map-confirmed"
 import { mapWithLocalAdapter } from "../../../packages/extensions/src/index";
 import { allocate } from "../../../packages/allocation/src/index";
 import {
+  getAuditDefaults,
+  getAuditEvents,
+  auditMechanisms,
+  resolveAudit,
+} from "../../../packages/analysis/src/audit";
+import {
   readRuntimePolicy,
   assertDataDirectory,
 } from "../../../packages/runtime-policy/src/index";
@@ -173,6 +179,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
     tasks.examples.list(req.query.kind, req.query.search),
   );
   app.get("/api/defaults", async () => ({
+    audit: getAuditDefaults(),
+    auditEvents: getAuditEvents(),
+    auditMechanisms,
     training: getTrainingDefaults(),
     factors: getFactors(),
     scenarios: [
@@ -516,6 +525,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
           "sensitivity",
           "attribute",
           "estimateRate",
+          "audit",
         ].includes(operation)
       )
         throw new DomainError("METHOD_UNSUPPORTED", "未知方法");
@@ -539,6 +549,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
           throw new DomainError(issues[0].code, issues[0].message);
         resolveTrainingConfig(input);
       }
+      if (operation === "audit") resolveAudit(input);
       let sourceSnapshot: any;
       if (input.inputId) {
         const doc = tasks

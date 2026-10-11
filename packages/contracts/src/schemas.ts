@@ -21,6 +21,7 @@ export const schemas = {
           "sensitivity",
           "attribute",
           "estimateRate",
+          "audit",
         ],
       },
       input: { type: "object" },

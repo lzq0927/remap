@@ -8,7 +8,16 @@ process.once("message", async (message: any) => {
       ...input
     } = message.input;
     let result: any;
-    if (message.operation === "training") {
+    if (message.operation === "audit") {
+      const { audit } = await import("../../analysis/src/audit");
+      result = audit(input, (done: number, total: number) => {
+        process.send?.({
+          type: "progress",
+          progress: done / total,
+          payload: { done, total },
+        });
+      });
+    } else if (message.operation === "training") {
       const { runTraining } = await import("../../solvers/src/training");
       result = runTraining(input, (done: number, total: number) => {
         if (done === total || done % Math.max(1, Math.floor(total / 50)) === 0)

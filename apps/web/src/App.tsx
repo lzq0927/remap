@@ -39,6 +39,7 @@ import StaticDiagram from "./StaticDiagram";
 import AllocationEditor from "./AllocationEditor";
 import FeedbackPanel from "./FeedbackPanel";
 import CatalogFields from "./CatalogFields";
+import AuditWorkbench from "./AuditWorkbench";
 const pct = (n: number | undefined) =>
   n === undefined ? "—" : (n * 100).toFixed(3) + "%";
 const states: Record<string, string> = {
@@ -70,6 +71,7 @@ const navigation = [
 ] as const;
 const toolNames: Record<string, string> = {
   training: "训练仿真",
+  audit: "事件与机制审核",
   allocate: "指标分配",
   rbd: "可靠性框图",
   fta: "故障树",
@@ -93,7 +95,7 @@ const methodGuidance: Record<string, string> = {
   sensitivity:
     "改变一个有明确单位的参数，查看交付指标及其差值，识别值得优先补证据或优化的参数。",
   attribute:
-    "按全部干预组合计算 Shapley 贡献，解释机制之间的相互作用；贡献可为负，不等同于损失账本的占比。",
+    "Shapley 在具体场景和消减措施确定后分摊组合收益，不向下分配总体可靠性指标。加入顺序不等于物理恢复顺序；独立性不保证收益可加，完全可加时直接比较单项即可。",
   estimateRate:
     "输入事件数、暴露时长与暴露口径。零次事件仍有上界；设备 FIT 不能直接替代软件调用或任务发生率。",
 };
@@ -940,6 +942,19 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
             </section>
             {scenario === "training" ? (
               <>
+                {defaults.audit && (
+                  <AuditWorkbench
+                    defaults={defaults.audit}
+                    events={defaults.auditEvents}
+                    mechanisms={defaults.auditMechanisms}
+                    busy={
+                      busy ||
+                      run?.status === "running" ||
+                      run?.status === "queued"
+                    }
+                    onRun={(input) => void solve("audit", input)}
+                  />
+                )}
                 <section className="hero">
                   <div>
                     <span className="eyebrow">TRAINING / CORRECT DELIVERY</span>

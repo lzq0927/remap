@@ -1,0 +1,40 @@
+{
+  "scope": "hard-interruptions-only",
+  "referenceCards": 10000,
+  "referenceMtbfHours": 30,
+  "checkpointComputeSeconds": 300,
+  "checkpointSaveSeconds": 4,
+  "recoveryAttemptSeconds": 180,
+  "recoverySuccess": 0.99,
+  "manualAdditionalSeconds": 7200,
+  "detectProbability": 0.95,
+  "detectSeconds": 10,
+  "timeoutSeconds": 60,
+  "eventCatalog": {
+    "path": "catalogs/故障事件库.json",
+    "revision": "event-budget-v3-sdc1.4-reviewed-85",
+    "events": 54,
+    "classFit": {
+      "中断": 3333.333333333333,
+      "亚健康": 69.01311249137338,
+      "静默": 48.30917874396136
+    },
+    "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+  },
+  "horizonHours": 720,
+  "shares": {
+    "hard": 0.9660000000000001,
+    "slow": 0.020000000000000007,
+    "sdc": 0.014000000000000005
+  },
+  "slowDetectProbability": 0.95,
+  "slowDetectHours": 0.08333333333333333,
+  "slowLifetimeHours": 24,
+  "slowLoss": 0.05,
+  "sdcImmediateProbability": 0,
+  "sdcDelayHours": 120,
+  "sdcDelayDistribution": "fixed",
+  "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+  "trials": 20000,
+  "seed": 20261009
+}

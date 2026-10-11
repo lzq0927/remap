@@ -73,7 +73,7 @@ export const registry = [
   ["model_defaults", "读取场景指标和参考模型参数", "GET", "/defaults"],
   [
     "analysis_solve",
-    "执行专业求解。返回运行 ID，用 run_status 查询结果；不要自行心算替代结果",
+    "执行专业求解。operation=audit 使用 model_defaults.audit 的事件/机制审核口径，支持有来源的事件 FIT 更新、物理恢复顺序、组合 Shapley 和报告。返回运行 ID，用 run_status 查询结果；不要自行心算替代结果",
     "POST",
     "/runs",
   ],

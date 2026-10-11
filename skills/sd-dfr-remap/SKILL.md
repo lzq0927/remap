@@ -5,6 +5,16 @@ description: Guide reliability target allocation, architecture and failure model
 
 # 系统可靠性建模评估验证
 
+## 事件与机制审核口径
+
+用户要求对齐 `catalogs/review-2026-10-09/故障事件与可靠性机制收益审核.html` 时，优先使用 `model_defaults.audit` 与 `operation:'audit'`。指标为 `training.retained-clean-progress`：窗口末仍污染时保留最后干净检查点。基线300秒计算/4秒保存，中断96.6%、亚健康2%、静默1.4%，万卡中断MTBF30小时；这些是专家外网场景参数，不是产品实测。下文原有 `training` 操作仍使用旧V4整任务清零，不能将两种指标结果混比。
+
+审核输入可设置 scales、mechanisms、recoveryOrder、model、policy、attributionTrials、sensitivity。eventOverrides 只替换明确给出的基线事件（如 CORE-hard），必须有 source、evidence、rateBasis:'npu-equivalent-hour'；未提供的静默和亚健康保留外网先验，禁止按更新后的中断比例自动重算。candidateFitOverrides 表达硬件改进目标，与改变事件后果的检测/恢复机制分开。真实内部数据只在内网部署读取；没有数据时不编造内部占比。
+
+Equal/ARINC/AGREE/Availability 从总体子模型指标向下分配设计预算。AGREE近似公式按 ∏Rᵢ^Eᵢ 回合成；训练产出需互斥损失预算与正向仿真，不能直接串联。先明确故障场景及降低FIT/检测/恢复措施，再用Shapley分摊组合增益。Shapley的加入顺序不是物理恢复链；收益确实可加时无需复杂分摊，统计独立本身不足以证明可加。固定延迟与周期检查点使用DES；指数驻留时间等条件成立时才选CTMC。
+
+审核是独立实验，不传旧V4的executionId，也不代替已有流程的人工确认。使用 run_status 读取实际结果，再通过 report_export 导出HTML事件与机制审核报告，报告保留事件来源、损失账本、条件收益、组合贡献、敏感性和待校准项。
+
 先调用 task_current、design_get、workflow_state，核对本连接绑定的 taskId、设计 revision 和当前 executionId。再通过 model_defaults、catalog_search、run_status 读取目标、模型和资产，不凭聊天重建已有事实。不得切换到另一个任务或自建全局连接。
 
 如果没有执行，调用 workflow_start({body:{inputRevision:<design.revision>,mode:'auto-to-review'}})。已有当前执行则继续它，先核对 stale=false。每次 workflow_save 必须带 executionId、expectedRevision、inputRevision、stepId、status、artifacts、notes。状态与版本以最近 workflow_state 返回值为准；409 时重新读取，不能盲目重试覆盖。

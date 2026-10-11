@@ -6,6 +6,7 @@ import type {
   TrainingRequest,
 } from "../../../packages/contracts/src/types";
 import { pretty, useTaskApi } from "./api";
+import AuditResult from "./AuditResult";
 
 export interface ResultViewProps {
   run: Run | null | undefined;
@@ -379,8 +380,16 @@ function Allocation({ result }: { result: any }) {
       </p>
       {result.method === "agree" && (
         <p className="note">
-          AGREE 使用 NASA 2016
-          工程近似分配；重要度与复杂度需有依据，不能替代实际任务模型回代。
+          AGREE 使用 NASA 2016 工程近似分配，按 ∏Rᵢ^Eᵢ
+          合成加权任务可靠度；普通串联乘积不一定等于总体目标。
+        </p>
+      )}
+      {result.recomposition && (
+        <p className="note">
+          目标回合成：{result.recomposition.formula} ={" "}
+          {pct(result.recomposition.achieved)}；目标{" "}
+          {pct(result.recomposition.target)}。分配先提出设计约束，再通过降低 FIT
+          或检测、恢复、隔离等措施正向验证；Shapley 用于后续组合收益分摊。
         </p>
       )}
       <Table
@@ -714,6 +723,8 @@ function ResultBody({
   result: any;
   onApplyCandidate?: ResultViewProps["onApplyCandidate"];
 }) {
+  if (result?.kind === "expert-review-audit")
+    return <AuditResult result={result} />;
   if (result?.statistics && result?.ledger) return <Training result={result} />;
   if (result?.contributions) return <Attribution result={result} />;
   if (result?.status && searchNames[result.status])

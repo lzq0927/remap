@@ -1,0 +1,44 @@
+{
+  "repository": "https://github.com/zy009197/ai-cluster-reliability",
+  "commit": "683afe829313bfdcb249bc593e48df5b29813666",
+  "path": "catalogs/review-2026-10-09",
+  "metric": "retained clean progress / window hours",
+  "files": [
+    {
+      "path": "engine.cjs",
+      "sha256": "be237edf5249bbefce6fbdb5e0bb962b3eccc8092b43bfc5f6a5df6e7fec4362"
+    },
+    {
+      "path": "reference.cjs",
+      "sha256": "964c1379ebfa0ee8557cdc0fc9cea5666778fc1e8af9675d627ac7384bc0ac67"
+    },
+    {
+      "path": "inputs.json",
+      "sha256": "9e6b7752ca8a62447267ff9c803e21e5388dd9c319d2822b38c8145d47a48fd2"
+    },
+    {
+      "path": "mechanism-policy.json",
+      "sha256": "9335f1c1bfb73324207c145398bdb01910f23717d64c906a019035a24f6b14c0"
+    },
+    {
+      "path": "results.json",
+      "sha256": "353217a17dc92667e093fd0edfba81ee605313fc109e55681efdc34c503b799a"
+    },
+    {
+      "path": "mechanisms.json",
+      "sha256": "4bb84832a9afaede205c511282d15e7a1ebe38d821a689932501afbfddb527e9"
+    },
+    {
+      "path": "故障事件与可靠性机制收益审核.html",
+      "sha256": "e0dde4e11bbe0a9bab182105032062886a25430fbc629a419a866816b4f44eeb"
+    },
+    {
+      "path": "review-checks.json",
+      "sha256": "55fee535eb5d2c2621ce9659ccb2dc47b2b2bbbb36672a28b329db6e46ebe8a4"
+    },
+    {
+      "path": "config.json",
+      "sha256": "7e17f1630056467f2224044dcbcc33e22f045517ff91e16d4cebd7300497ceea"
+    }
+  ]
+}

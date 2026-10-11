@@ -173,7 +173,7 @@ export default function AllocationEditor({
       <p className="note">
         {availability
           ? "缺少实测稳态可用度时显示未知，不能用 exp(−λT) 替代；独立串联假设需确认。"
-          : "推荐 Equal 作为均分基线；有基线发生率时比较 ARINC，有复杂度/任务重要度时比较具名 AGREE。故障率必须属于相同任务口径，示例值需要替换。"}
+          : "Equal 均分总体故障率预算；ARINC 按基线故障率等比缩放；AGREE 分配加权任务可靠度（∏Rᵢ^Eᵢ），不等于普通串联。先分配指标，再用降低 FIT、检测与恢复等措施落实，最后正向验证和分析组合收益。"}
       </p>
     </div>
   );
