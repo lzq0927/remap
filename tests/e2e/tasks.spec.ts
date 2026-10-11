@@ -45,6 +45,10 @@ test("homepage requires explicit task choice and task inputs and sessions remain
   await card(a.name)
     .getByRole("button", { name: "打开任务", exact: true })
     .click();
+  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await page
+    .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
+    .click();
   await page.getByLabel("集群卡数").fill("12345");
   await page.getByLabel("关联 OpenCode 会话").selectOption(`session-${a.id}`);
   await expect(
@@ -56,6 +60,10 @@ test("homepage requires explicit task choice and task inputs and sessions remain
   ).toBeVisible();
   await card(b.name)
     .getByRole("button", { name: "打开任务", exact: true })
+    .click();
+  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await page
+    .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
   await expect(page.getByLabel("集群卡数")).not.toHaveValue("12345");
   await expect(page.getByLabel("关联 OpenCode 会话")).toHaveValue("");
@@ -69,6 +77,10 @@ test("homepage requires explicit task choice and task inputs and sessions remain
   await page.getByRole("button", { name: "返回任务主页" }).click();
   await card(a.name)
     .getByRole("button", { name: "打开任务", exact: true })
+    .click();
+  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await page
+    .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
   await expect(page.getByLabel("集群卡数")).toHaveValue("12345");
   await expect(page.getByLabel("关联 OpenCode 会话")).toHaveValue(
@@ -124,6 +136,10 @@ test("saving budget requires manual review and stage navigation keeps input revi
       has: page.getByRole("heading", { name: task.name, exact: true }),
     })
     .getByRole("button", { name: "打开任务", exact: true })
+    .click();
+  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await page
+    .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
   await page.getByRole("button", { name: "保存预算并加入评估输入" }).click();
   await page

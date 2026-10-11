@@ -14,7 +14,7 @@ for (const viewport of [
     await expect(
       page.getByText("ReMAP / Reliability Modeling and Analysis Platform"),
     ).toBeVisible();
-    await page.goto("/?task=" + taskId);
+    await page.goto("/?view=workflow&task=" + taskId);
     await expect(
       page.getByRole("button", { name: "可靠性设计工作台", exact: true }),
     ).toBeVisible();

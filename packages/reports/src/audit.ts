@@ -1,3 +1,5 @@
+import { auditSummary } from "./audit-summary";
+import { parameterLabels } from "./audit-labels";
 const num = (v: any, digits = 3) =>
   typeof v === "number" && Number.isFinite(v)
     ? v.toLocaleString("zh-CN", { maximumFractionDigits: digits })
@@ -52,7 +54,20 @@ export function auditSections(r: any): AuditSection[] {
         : "缺内网数据时保留外网先验，不置零",
     ];
   });
+  const brief = auditSummary(r);
   const sections: AuditSection[] = [
+    {
+      title: "审核结论与行动重点",
+      paragraphs: [
+        `${num(selected, 0)} 卡：${brief.statusLabel}。基线 ${pct(brief.base.statistics.mean)} → 组合 ${pct(brief.combined.statistics.mean)}；新增正确计算 ${num(brief.additionalHours)} 小时。`,
+        brief.next,
+        `最大基线损失为${brief.losses[0].name}（${num(brief.losses[0].base)} 小时）；优先核对 ${brief.drivers
+          .slice(0, 3)
+          .map((d: any) => d.id)
+          .join("、")} 的数据来源与机制覆盖。`,
+        `${r.events.length} 条事件中 ${brief.internal} 条标记为内部观测；其余为外网先验或方案假设。`,
+      ],
+    },
     {
       title: "01 / 确认口径与数据证据",
       paragraphs: [
@@ -183,7 +198,15 @@ export function auditSections(r: any): AuditSection[] {
               num(x.downtime ?? 0),
               num(loss(x) - (x.downtime ?? 0)),
               denominator ? pct(loss(x) / denominator) : "—",
-              e.source + " / " + e.evidence + "；" + e.note,
+              e.source +
+                " / " +
+                ({
+                  "internal-measured": "内部观测",
+                  "external-prior": "外网先验",
+                  scenario: "方案假设",
+                }[e.evidence as string] ?? e.evidence) +
+                "；" +
+                e.note,
             ];
           }),
         },
@@ -205,7 +228,13 @@ export function auditSections(r: any): AuditSection[] {
         m.prerequisite,
         m.failure,
         "参考说明：" + m.change,
-        "本次生效参数：" + JSON.stringify(m.parameters ?? {}),
+        "本次生效参数：" +
+          Object.entries(m.parameters ?? {})
+            .map(
+              ([key, value]) =>
+                `${parameterLabels[key] ?? key} = ${typeof value === "number" ? num(value, 6) : value}`,
+            )
+            .join("；"),
         "覆盖事件：" + m.eventIds.join("、"),
         "证据：" + m.confidence,
       ],

@@ -39,7 +39,10 @@ import StaticDiagram from "./StaticDiagram";
 import AllocationEditor from "./AllocationEditor";
 import FeedbackPanel from "./FeedbackPanel";
 import CatalogFields from "./CatalogFields";
-import AuditWorkbench from "./AuditWorkbench";
+import AuditWorkbench, {
+  auditDraftInput,
+  type AuditDraft,
+} from "./AuditWorkbench";
 const pct = (n: number | undefined) =>
   n === undefined ? "—" : (n * 100).toFixed(3) + "%";
 const states: Record<string, string> = {
@@ -242,6 +245,15 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     [busy, setBusy] = useState(false),
     [chatBottom, setChatBottom] = useState(false),
     [scenario, setScenario] = useState("training");
+  const [auditDraft, setAuditDraft] = useState<AuditDraft>();
+  const [designMode, setDesignMode] = useState(
+    new URLSearchParams(location.search).get("view") === "workflow"
+      ? "workflow"
+      : "audit",
+  );
+  const [agentVisible, setAgentVisible] = useState(
+    new URLSearchParams(location.search).get("view") === "workflow",
+  );
   const [kind, setKind] = useState("failure-mode"),
     [assets, setAssets] = useState<any[]>([]),
     [examples, setExamples] = useState<any[]>([]),
@@ -306,6 +318,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         stage,
         session,
         runId: run?.id,
+        auditDraft,
       }
     : undefined;
   const flushDesign = () => {
@@ -400,7 +413,16 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       void flushDesign().catch((e) => setError(e.message));
     }, 900);
     return () => clearTimeout(timer);
-  }, [hydrated, request, modelJson, scenario, stage, session, run?.id]);
+  }, [
+    hydrated,
+    request,
+    modelJson,
+    scenario,
+    stage,
+    session,
+    run?.id,
+    auditDraft,
+  ]);
   useEffect(() => {
     if (run?.status === "succeeded") setLastComplete(run);
   }, [run?.id, run?.status]);
@@ -415,6 +437,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         api("/inputs"),
       ]);
       if (disposed) return;
+      setAuditDraft(design?.auditDraft);
       setDefaults(d);
       const restored = design?.request ?? d.training;
       setRequest({ ...restored, factors: restored.factors ?? [] });
@@ -505,6 +528,17 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       assetSnapshot: undefined,
       sourceSnapshot: undefined,
     }) !== pretty({ ...request, model: JSON.parse(modelJson || "{}") });
+  let auditChanged = false;
+  if (run?.operation === "audit" && auditDraft) {
+    try {
+      auditChanged = Object.entries(auditDraftInput(auditDraft)).some(
+        ([key, value]) =>
+          JSON.stringify(value) !== JSON.stringify(run.input?.[key]),
+      );
+    } catch {
+      auditChanged = true;
+    }
+  }
   async function solve(op: string, data: any) {
     setBusy(true);
     await attempt(async () => {
@@ -524,7 +558,9 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       });
       if (!formal)
         setNotice(
-          "本次为独立评估；正式流程需先人工确认前四个阶段，再计算并审核。",
+          op === "audit"
+            ? "审核输入已冻结保存。完成后可查看单项、组合收益并下载完整报告。"
+            : "本次为独立评估；正式流程需先人工确认前四个阶段，再计算并审核。",
         );
       setRun(r);
       setRuns(await api("/runs"));
@@ -572,6 +608,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     setRequest({ ...value, factors: value.factors ?? [], assetRefs: [] });
     setModelJson(pretty({ ...defaults.training.model, ...value.model }));
     setPage("workbench");
+    setDesignMode("workflow");
     setStage(4);
     setNotice("候选已回代当前设计，尚未重新计算；请检查参数后执行评估。");
   }
@@ -735,7 +772,13 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       </div>
     );
   return (
-    <div className={"shell " + (chatBottom ? "bottom-chat" : "")}>
+    <div
+      className={
+        "shell " +
+        (chatBottom ? "bottom-chat " : "") +
+        (!agentVisible ? "agent-hidden" : "")
+      }
+    >
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-symbol">R</span>
@@ -778,6 +821,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
               onClick={() => {
                 setScenario(s.id);
                 setPage("workbench");
+                setDesignMode("workflow");
               }}
               className={scenario === s.id ? "selected" : ""}
             >
@@ -796,6 +840,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         <TaskHeader
           name={task.name}
           scenario={scenario}
+          audit={designMode === "audit"}
           runId={run?.id}
           onHome={() => {
             void attempt(async () => {
@@ -821,23 +866,30 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
             </span>
             <button
               className="icon-button"
-              aria-label="切换对话框位置"
-              onClick={() => setChatBottom(!chatBottom)}
+              aria-label="显示或收起 Agent"
+              onClick={() => setAgentVisible(!agentVisible)}
             >
               <PanelRightClose size={20} />
             </button>
           </div>
         </header>
         <div className="design-save-status">
-          {savedAt
-            ? `草稿已保存 · ${new Date(savedAt).toLocaleTimeString()}`
-            : "当前设计自动保存"}
+          {scenario === "training" && designMode === "audit"
+            ? savedAt
+              ? `审核草稿已保存 · ${new Date(savedAt).toLocaleTimeString()}`
+              : "审核草稿自动保存 · 运行时冻结快照"
+            : savedAt
+              ? `草稿已保存 · ${new Date(savedAt).toLocaleTimeString()}`
+              : "当前设计自动保存"}
           <button
-            onClick={() =>
-              document
-                .querySelector(".official-agent")
-                ?.scrollIntoView({ behavior: "smooth" })
-            }
+            onClick={() => {
+              setAgentVisible(true);
+              requestAnimationFrame(() =>
+                document
+                  .querySelector(".official-agent")
+                  ?.scrollIntoView({ behavior: "smooth" }),
+              );
+            }}
           >
             打开 OpenCode 面板
           </button>
@@ -849,8 +901,12 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
               <button
                 onClick={() =>
                   attempt(async () => {
-                    setRun(await api("/runs/" + agentRunId));
+                    const associated = await api("/runs/" + agentRunId);
+                    setRun(associated);
                     setPage("workbench");
+                    setDesignMode(
+                      associated.operation === "audit" ? "audit" : "workflow",
+                    );
                     setStage(5);
                   })
                 }
@@ -873,6 +929,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   const design = await api("/design");
                   if (!design) return;
                   designRevision.current = design.revision;
+                  setAuditDraft(design.auditDraft);
                   setRequest({
                     ...design.request,
                     factors: design.request.factors ?? [],
@@ -898,380 +955,435 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         )}
         {page === "workbench" && (
           <>
-            <WorkflowTimeline
-              state={workflow}
-              stage={stage}
-              onSelect={(i) => {
-                setStage(i);
-                requestAnimationFrame(() =>
-                  document
-                    .getElementById(workflowSteps[i].anchor)
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                );
-              }}
-              onCancel={() =>
-                void attempt(async () =>
-                  setWorkflow(
-                    await api("/workflow/cancel", {
-                      executionId: workflow?.executionId,
-                    }),
-                  ),
-                )
-              }
-            />
-            <section className="workflow-guide" aria-label="当前流程阶段">
-              <div>
-                <span>第 {stage + 1} / 6 步</span>
-                <h2>{workflowSteps[stage].name}</h2>
-                <p>{workflowSteps[stage].hint}</p>
-              </div>
-              <div>
+            {scenario === "training" && (
+              <div
+                className="assessment-modes"
+                role="group"
+                aria-label="评估口径"
+              >
                 <button
-                  disabled={stage === 0}
-                  onClick={() => setStage(Math.max(0, stage - 1))}
+                  aria-pressed={designMode === "audit"}
+                  onClick={() => setDesignMode("audit")}
                 >
-                  上一步
+                  <strong>事件与机制审核</strong>
+                  <span>保留干净进度 · 专家审核口径</span>
                 </button>
                 <button
-                  className="primary"
-                  onClick={() => attempt(confirmStep)}
+                  aria-pressed={designMode === "workflow"}
+                  onClick={() => setDesignMode("workflow")}
                 >
-                  {stage === 5 ? "记录交付确认" : "确认并进入下一步"}
+                  <strong>设计确认流程</strong>
+                  <span>期末污染整任务清零 · V4 口径</span>
                 </button>
               </div>
-            </section>
-            {scenario === "training" ? (
+            )}
+            {(scenario !== "training" || designMode !== "audit") && (
               <>
-                {defaults.audit && (
-                  <AuditWorkbench
-                    defaults={defaults.audit}
-                    events={defaults.auditEvents}
-                    mechanisms={defaults.auditMechanisms}
-                    busy={
-                      busy ||
-                      run?.status === "running" ||
-                      run?.status === "queued"
-                    }
-                    onRun={(input) => void solve("audit", input)}
-                  />
-                )}
-                <section className="hero">
+                <WorkflowTimeline
+                  state={workflow}
+                  stage={stage}
+                  onSelect={(i) => {
+                    setStage(i);
+                    requestAnimationFrame(() =>
+                      document
+                        .getElementById(workflowSteps[i].anchor)
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        }),
+                    );
+                  }}
+                  onCancel={() =>
+                    void attempt(async () =>
+                      setWorkflow(
+                        await api("/workflow/cancel", {
+                          executionId: workflow?.executionId,
+                        }),
+                      ),
+                    )
+                  }
+                />
+                <section className="workflow-guide" aria-label="当前流程阶段">
                   <div>
-                    <span className="eyebrow">TRAINING / CORRECT DELIVERY</span>
-                    <h2>从整体目标，走向可验证的设计。</h2>
-                    <p>
-                      故障、检测、恢复与污染共同决定最终交付。
-                      <br />
-                      比较方案时，始终回代相同口径的模型。
-                    </p>
+                    <span>第 {stage + 1} / 6 步</span>
+                    <h2>{workflowSteps[stage].name}</h2>
+                    <p>{workflowSteps[stage].hint}</p>
                   </div>
-                  <div className="hero-number">
-                    <span>整体目标</span>
-                    <strong>{pct(request.target)}</strong>
-                    <small>
-                      {request.cards.toLocaleString()} 卡 · {request.hours}{" "}
-                      小时窗口
-                    </small>
-                  </div>
-                </section>
-                <section className="paper" id="design-target">
-                  <div className="section-head">
-                    <h2>评估任务</h2>
-                    <span className="badge amber">示例参数 · 待校准</span>
-                  </div>
-                  <div className="fields">
-                    {[
-                      ["cards", "集群卡数"],
-                      ["target", "正确交付目标（0–1）"],
-                      ["hours", "观察窗口（小时）"],
-                      ["trials", "仿真轨迹数"],
-                      ["seed", "随机种子"],
-                    ].map(([k, label]) => (
-                      <label key={k}>
-                        {label}
-                        <input
-                          aria-label={label}
-                          type="number"
-                          step={k === "target" ? ".001" : "1"}
-                          value={request[k]}
-                          onChange={(e) => patch(k, Number(e.target.value))}
-                        />
-                      </label>
-                    ))}
-                    <label>
-                      产品代际
-                      <input
-                        value={request.generation ?? "参考代际"}
-                        onChange={(e) => patch("generation", e.target.value)}
-                      />
-                    </label>
-                  </div>
-                  <div className="presets">
+                  <div>
                     <button
-                      onClick={() => {
-                        setRequest({ ...request, cards: 10000, target: 0.99 });
-                      }}
+                      disabled={stage === 0}
+                      onClick={() => setStage(Math.max(0, stage - 1))}
                     >
-                      万卡 · 99%
+                      上一步
                     </button>
-                    <button
-                      onClick={() => {
-                        setRequest({
-                          ...request,
-                          cards: 100000,
-                          target: 0.943,
-                        });
-                      }}
-                    >
-                      十万卡 · 94.3%
-                    </button>
-                    <span>MTBF 单独记录；不能直接换算成正确交付比例。</span>
-                  </div>
-                  <p className="note">
-                    {request.cards === 10000 && request.target === 0.99
-                      ? "产品目标表：万卡 99%，MTBF 参考目标 31.5 小时。"
-                      : request.cards === 100000 && request.target === 0.943
-                        ? "产品目标表：十万卡 94.3%，MTBF 参考目标约 3 小时。"
-                        : "当前使用自定义规模或目标，请确认产品级要求。"}{" "}
-                    同规模不同方案与代际沿用相同目标；更改目标或窗口后需要重新确认预算。
-                  </p>
-                  <label>
-                    理想产出 / 小时（可选，用于记录产出量）
-                    <input
-                      aria-label="理想产出每小时"
-                      type="number"
-                      min="0.01"
-                      value={request.idealWorkPerHour ?? ""}
-                      placeholder="留空时使用卡数作为归一化理想能力"
-                      onChange={(e) => {
-                        if (e.target.value)
-                          patch("idealWorkPerHour", Number(e.target.value));
-                        else {
-                          const { idealWorkPerHour: _ideal, ...rest } = request;
-                          setRequest(rest);
-                        }
-                      }}
-                    />
-                  </label>
-                </section>
-                <section className="paper" id="design-system">
-                  <div className="section-head">
-                    <h2>系统结构与故障域</h2>
-                    <span className="eyebrow">PARAMETER-DRIVEN VIEW</span>
-                  </div>
-                  <div className="architecture">
-                    <div>
-                      训练任务<small>完整窗口交付</small>
-                    </div>
-                    <ArrowRight />
-                    <div>
-                      恢复域
-                      <small>{JSON.parse(modelJson).recoveryDomains} 个</small>
-                    </div>
-                    <ArrowRight />
-                    <div>
-                      机架 / 服务器
-                      <small>
-                        {JSON.parse(modelJson).serversPerRack} 台 /{" "}
-                        {JSON.parse(modelJson).cardsPerServer} 卡
-                      </small>
-                    </div>
-                  </div>
-                  <div className="hardware">
-                    {fitLabels.map((label, i) => (
-                      <label key={label}>
-                        {label}
-                        <input
-                          aria-label={label + " FIT"}
-                          type="number"
-                          value={JSON.parse(modelJson).fits?.[i] ?? 0}
-                          onChange={(e) => {
-                            const m = JSON.parse(modelJson);
-                            m.fits[i] = Number(e.target.value);
-                            applyModel(pretty(m));
-                          }}
-                        />
-                        <small>
-                          FIT / 卡 ·{" "}
-                          {i < 2 ? "硬、慢、静默故障" : "事件影响域可配置"}
-                        </small>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="note">
-                    专家 V4 的四个 FIT 索引依次是
-                    HBM、GPU、网络、其他。存储等独立组件需要明确字段映射或扩展模型，不能通过更改标签替代建模。
-                  </p>
-                  {request.assetRefs?.length > 0 && (
-                    <div className="bound-assets">
-                      <strong>
-                        已绑定 {request.assetRefs.length} 个冻结资产版本
-                      </strong>
-                      <p>
-                        手动修改模型参数会解除绑定，保留本次输入和历史来源，避免旧资产覆盖编辑。
-                      </p>
-                      <button
-                        onClick={() => {
-                          setRequest(
-                            editUnboundModel(request, JSON.parse(modelJson)),
-                          );
-                          setNotice("已解除冻结资产绑定；当前参数值保留。");
-                        }}
-                      >
-                        解除绑定，转为手动设计
-                      </button>
-                    </div>
-                  )}
-                  <h3>常用检测、恢复与拓扑参数</h3>
-                  <div className="fields model-fields">
-                    {[
-                      ["hardDetect", "硬故障检测覆盖率（%）"],
-                      ["slowDetect", "亚健康检测覆盖率（%）"],
-                      ["silentDetect", "静默故障检测覆盖率（%）"],
-                      ["hardSeconds", "硬故障检测与停顿（秒）"],
-                      ["intervalSeconds", "检查点间隔（秒）"],
-                      ["saveSeconds", "保存检查点（秒）"],
-                      ["recoveryDomains", "恢复域数量"],
-                      ["cardsPerServer", "每服务器卡数"],
-                      ["serversPerRack", "每机架服务器数"],
-                    ].map(([key, label]) => (
-                      <label key={key}>
-                        {label}
-                        <input
-                          aria-label={label}
-                          type="number"
-                          min="0"
-                          max={key.endsWith("Detect") ? 100 : undefined}
-                          step="any"
-                          value={JSON.parse(modelJson)[key] ?? ""}
-                          onChange={(e) =>
-                            applyModel(
-                              pretty({
-                                ...JSON.parse(modelJson),
-                                [key]: Number(e.target.value),
-                              }),
-                            )
-                          }
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <details>
-                    <summary>
-                      编辑完整模型参数 · 拓扑、恢复、检查点与覆盖率
-                    </summary>
-                    <ModelEditor value={modelJson} onApply={applyModel} />
-                    <p className="note">
-                      检测字段为百分数 0–100；FIT
-                      为每十亿设备小时；恢复单位由字段 Seconds / Minutes / Hours
-                      明确指定。
-                    </p>
-                  </details>
-                </section>
-                <div id="design-budget">
-                  <TargetBudget
-                    confirmedBudget={request.lossBudget}
-                    saveBudget={(budget) => {
-                      patch("lossBudget", budget);
-                      setNotice(
-                        "训练损失预算已保存，选择方法阶段仍待人工确认。",
-                      );
-                    }}
-                    target={request.target}
-                    hours={request.hours}
-                    openMethods={openAllocation}
-                  />
-                </div>
-                <section className="paper" id="design-mechanisms">
-                  <h2>可靠性机制方案</h2>
-                  <p className="note">
-                    选择后应用机制的参数补丁。组合收益经完整仿真计算，不能将单项收益直接相加。
-                  </p>
-                  <div className="factors">
-                    {defaults.factors.map((f: any) => (
-                      <label
-                        key={f.id}
-                        className={
-                          request.factors.includes(f.id) ? "checked" : ""
-                        }
-                      >
-                        <input
-                          type="checkbox"
-                          checked={request.factors.includes(f.id)}
-                          onChange={(e) =>
-                            patch(
-                              "factors",
-                              e.target.checked
-                                ? [...request.factors, f.id]
-                                : request.factors.filter(
-                                    (id: string) => id !== f.id,
-                                  ),
-                            )
-                          }
-                        />
-                        <span>
-                          {f.name}
-                          <small>
-                            {Object.entries(f.patch)
-                              .map(
-                                ([key, value]) =>
-                                  `${key}: ${JSON.parse(modelJson)[key] ?? "—"} → ${value}`,
-                              )
-                              .join("；")}
-                          </small>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="actions" id="design-evaluate">
                     <button
                       className="primary"
-                      disabled={
-                        busy || ["running", "queued"].includes(run?.status)
+                      onClick={() => attempt(confirmStep)}
+                    >
+                      {stage === 5 ? "记录交付确认" : "确认并进入下一步"}
+                    </button>
+                  </div>
+                </section>
+              </>
+            )}
+            {scenario === "training" ? (
+              <>
+                <div hidden={designMode !== "audit"}>
+                  {defaults.audit && (
+                    <AuditWorkbench
+                      defaults={defaults.audit}
+                      draft={auditDraft}
+                      onDraftChange={setAuditDraft}
+                      events={defaults.auditEvents}
+                      mechanisms={defaults.auditMechanisms}
+                      busy={
+                        busy ||
+                        run?.status === "running" ||
+                        run?.status === "queued"
                       }
-                      onClick={() =>
-                        attempt(() =>
-                          solve("training", {
-                            ...request,
-                            model: JSON.parse(modelJson),
-                          }),
+                      onRun={(input) =>
+                        void solve("audit", input).then(() =>
+                          requestAnimationFrame(() =>
+                            document
+                              .getElementById("design-result")
+                              ?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "start",
+                              }),
+                          ),
                         )
                       }
-                    >
-                      <Play size={16} /> 开始评估
-                    </button>
-                    <button
-                      disabled={busy}
-                      onClick={() => prepareTool("compare")}
-                    >
-                      比较基线与当前方案
-                    </button>
-                    <button
-                      disabled={busy}
-                      onClick={() => prepareTool("attribute")}
-                    >
-                      分析机制收益
-                    </button>
-                    {["running", "queued"].includes(run?.status) && (
+                    />
+                  )}
+                </div>
+                <div hidden={designMode !== "workflow"}>
+                  <section className="hero">
+                    <div>
+                      <span className="eyebrow">
+                        TRAINING / CORRECT DELIVERY
+                      </span>
+                      <h2>从整体目标，走向可验证的设计。</h2>
+                      <p>
+                        故障、检测、恢复与污染共同决定最终交付。
+                        <br />
+                        比较方案时，始终回代相同口径的模型。
+                      </p>
+                    </div>
+                    <div className="hero-number">
+                      <span>整体目标</span>
+                      <strong>{pct(request.target)}</strong>
+                      <small>
+                        {request.cards.toLocaleString()} 卡 · {request.hours}{" "}
+                        小时窗口
+                      </small>
+                    </div>
+                  </section>
+                  <section className="paper" id="design-target">
+                    <div className="section-head">
+                      <h2>评估任务</h2>
+                      <span className="badge amber">示例参数 · 待校准</span>
+                    </div>
+                    <div className="fields">
+                      {[
+                        ["cards", "集群卡数"],
+                        ["target", "正确交付目标（0–1）"],
+                        ["hours", "观察窗口（小时）"],
+                        ["trials", "仿真轨迹数"],
+                        ["seed", "随机种子"],
+                      ].map(([k, label]) => (
+                        <label key={k}>
+                          {label}
+                          <input
+                            aria-label={label}
+                            type="number"
+                            step={k === "target" ? ".001" : "1"}
+                            value={request[k]}
+                            onChange={(e) => patch(k, Number(e.target.value))}
+                          />
+                        </label>
+                      ))}
+                      <label>
+                        产品代际
+                        <input
+                          value={request.generation ?? "参考代际"}
+                          onChange={(e) => patch("generation", e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="presets">
                       <button
+                        onClick={() => {
+                          setRequest({
+                            ...request,
+                            cards: 10000,
+                            target: 0.99,
+                          });
+                        }}
+                      >
+                        万卡 · 99%
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRequest({
+                            ...request,
+                            cards: 100000,
+                            target: 0.943,
+                          });
+                        }}
+                      >
+                        十万卡 · 94.3%
+                      </button>
+                      <span>MTBF 单独记录；不能直接换算成正确交付比例。</span>
+                    </div>
+                    <p className="note">
+                      {request.cards === 10000 && request.target === 0.99
+                        ? "产品目标表：万卡 99%，MTBF 参考目标 31.5 小时。"
+                        : request.cards === 100000 && request.target === 0.943
+                          ? "产品目标表：十万卡 94.3%，MTBF 参考目标约 3 小时。"
+                          : "当前使用自定义规模或目标，请确认产品级要求。"}{" "}
+                      同规模不同方案与代际沿用相同目标；更改目标或窗口后需要重新确认预算。
+                    </p>
+                    <label>
+                      理想产出 / 小时（可选，用于记录产出量）
+                      <input
+                        aria-label="理想产出每小时"
+                        type="number"
+                        min="0.01"
+                        value={request.idealWorkPerHour ?? ""}
+                        placeholder="留空时使用卡数作为归一化理想能力"
+                        onChange={(e) => {
+                          if (e.target.value)
+                            patch("idealWorkPerHour", Number(e.target.value));
+                          else {
+                            const { idealWorkPerHour: _ideal, ...rest } =
+                              request;
+                            setRequest(rest);
+                          }
+                        }}
+                      />
+                    </label>
+                  </section>
+                  <section className="paper" id="design-system">
+                    <div className="section-head">
+                      <h2>系统结构与故障域</h2>
+                      <span className="eyebrow">PARAMETER-DRIVEN VIEW</span>
+                    </div>
+                    <div className="architecture">
+                      <div>
+                        训练任务<small>完整窗口交付</small>
+                      </div>
+                      <ArrowRight />
+                      <div>
+                        恢复域
+                        <small>
+                          {JSON.parse(modelJson).recoveryDomains} 个
+                        </small>
+                      </div>
+                      <ArrowRight />
+                      <div>
+                        机架 / 服务器
+                        <small>
+                          {JSON.parse(modelJson).serversPerRack} 台 /{" "}
+                          {JSON.parse(modelJson).cardsPerServer} 卡
+                        </small>
+                      </div>
+                    </div>
+                    <div className="hardware">
+                      {fitLabels.map((label, i) => (
+                        <label key={label}>
+                          {label}
+                          <input
+                            aria-label={label + " FIT"}
+                            type="number"
+                            value={JSON.parse(modelJson).fits?.[i] ?? 0}
+                            onChange={(e) => {
+                              const m = JSON.parse(modelJson);
+                              m.fits[i] = Number(e.target.value);
+                              applyModel(pretty(m));
+                            }}
+                          />
+                          <small>
+                            FIT / 卡 ·{" "}
+                            {i < 2 ? "硬、慢、静默故障" : "事件影响域可配置"}
+                          </small>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="note">
+                      专家 V4 的四个 FIT 索引依次是
+                      HBM、GPU、网络、其他。存储等独立组件需要明确字段映射或扩展模型，不能通过更改标签替代建模。
+                    </p>
+                    {request.assetRefs?.length > 0 && (
+                      <div className="bound-assets">
+                        <strong>
+                          已绑定 {request.assetRefs.length} 个冻结资产版本
+                        </strong>
+                        <p>
+                          手动修改模型参数会解除绑定，保留本次输入和历史来源，避免旧资产覆盖编辑。
+                        </p>
+                        <button
+                          onClick={() => {
+                            setRequest(
+                              editUnboundModel(request, JSON.parse(modelJson)),
+                            );
+                            setNotice("已解除冻结资产绑定；当前参数值保留。");
+                          }}
+                        >
+                          解除绑定，转为手动设计
+                        </button>
+                      </div>
+                    )}
+                    <h3>常用检测、恢复与拓扑参数</h3>
+                    <div className="fields model-fields">
+                      {[
+                        ["hardDetect", "硬故障检测覆盖率（%）"],
+                        ["slowDetect", "亚健康检测覆盖率（%）"],
+                        ["silentDetect", "静默故障检测覆盖率（%）"],
+                        ["hardSeconds", "硬故障检测与停顿（秒）"],
+                        ["intervalSeconds", "检查点间隔（秒）"],
+                        ["saveSeconds", "保存检查点（秒）"],
+                        ["recoveryDomains", "恢复域数量"],
+                        ["cardsPerServer", "每服务器卡数"],
+                        ["serversPerRack", "每机架服务器数"],
+                      ].map(([key, label]) => (
+                        <label key={key}>
+                          {label}
+                          <input
+                            aria-label={label}
+                            type="number"
+                            min="0"
+                            max={key.endsWith("Detect") ? 100 : undefined}
+                            step="any"
+                            value={JSON.parse(modelJson)[key] ?? ""}
+                            onChange={(e) =>
+                              applyModel(
+                                pretty({
+                                  ...JSON.parse(modelJson),
+                                  [key]: Number(e.target.value),
+                                }),
+                              )
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <details>
+                      <summary>
+                        编辑完整模型参数 · 拓扑、恢复、检查点与覆盖率
+                      </summary>
+                      <ModelEditor value={modelJson} onApply={applyModel} />
+                      <p className="note">
+                        检测字段为百分数 0–100；FIT
+                        为每十亿设备小时；恢复单位由字段 Seconds / Minutes /
+                        Hours 明确指定。
+                      </p>
+                    </details>
+                  </section>
+                  <div id="design-budget">
+                    <TargetBudget
+                      confirmedBudget={request.lossBudget}
+                      saveBudget={(budget) => {
+                        patch("lossBudget", budget);
+                        setNotice(
+                          "训练损失预算已保存，选择方法阶段仍待人工确认。",
+                        );
+                      }}
+                      target={request.target}
+                      hours={request.hours}
+                      openMethods={openAllocation}
+                    />
+                  </div>
+                  <section className="paper" id="design-mechanisms">
+                    <h2>可靠性机制方案</h2>
+                    <p className="note">
+                      选择后应用机制的参数补丁。组合收益经完整仿真计算，不能将单项收益直接相加。
+                    </p>
+                    <div className="factors">
+                      {defaults.factors.map((f: any) => (
+                        <label
+                          key={f.id}
+                          className={
+                            request.factors.includes(f.id) ? "checked" : ""
+                          }
+                        >
+                          <input
+                            type="checkbox"
+                            checked={request.factors.includes(f.id)}
+                            onChange={(e) =>
+                              patch(
+                                "factors",
+                                e.target.checked
+                                  ? [...request.factors, f.id]
+                                  : request.factors.filter(
+                                      (id: string) => id !== f.id,
+                                    ),
+                              )
+                            }
+                          />
+                          <span>
+                            {f.name}
+                            <small>
+                              {Object.entries(f.patch)
+                                .map(
+                                  ([key, value]) =>
+                                    `${key}: ${JSON.parse(modelJson)[key] ?? "—"} → ${value}`,
+                                )
+                                .join("；")}
+                            </small>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="actions" id="design-evaluate">
+                      <button
+                        className="primary"
+                        disabled={
+                          busy || ["running", "queued"].includes(run?.status)
+                        }
                         onClick={() =>
-                          attempt(async () =>
-                            setRun(await api(`/runs/${run.id}/cancel`, {})),
+                          attempt(() =>
+                            solve("training", {
+                              ...request,
+                              model: JSON.parse(modelJson),
+                            }),
                           )
                         }
                       >
-                        <Square size={14} /> 取消计算
+                        <Play size={16} /> 开始评估
                       </button>
-                    )}
-                    <span>
-                      {run?.status === "running"
-                        ? `正在计算 · ${Math.round(run.progress * 100)}%`
-                        : changed
-                          ? "输入已改变；已有结果需重算"
-                          : "固定种子 · 输入快照 · 结果可重放"}
-                    </span>
-                  </div>
-                </section>
+                      <button
+                        disabled={busy}
+                        onClick={() => prepareTool("compare")}
+                      >
+                        比较基线与当前方案
+                      </button>
+                      <button
+                        disabled={busy}
+                        onClick={() => prepareTool("attribute")}
+                      >
+                        分析机制收益
+                      </button>
+                      {["running", "queued"].includes(run?.status) && (
+                        <button
+                          onClick={() =>
+                            attempt(async () =>
+                              setRun(await api(`/runs/${run.id}/cancel`, {})),
+                            )
+                          }
+                        >
+                          <Square size={14} /> 取消计算
+                        </button>
+                      )}
+                      <span>
+                        {run?.status === "running"
+                          ? `正在计算 · ${Math.round(run.progress * 100)}%`
+                          : changed
+                            ? "输入已改变；已有结果需重算"
+                            : "固定种子 · 输入快照 · 结果可重放"}
+                      </span>
+                    </div>
+                  </section>
+                </div>
               </>
             ) : (
               <section className="paper">
@@ -1293,6 +1405,11 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
               </section>
             )}
             <div id="design-result">
+              {auditChanged && designMode === "audit" && (
+                <p className="audit-verdict uncertain" role="status">
+                  审核输入已改变；下方结果与下载报告保留上次运行快照，请重新运行后比较。
+                </p>
+              )}
               <Result run={run} onApplyCandidate={applyCandidate} />
             </div>
             {run &&
@@ -1537,6 +1654,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                                       p.modelBinding.value ?? p.value;
                                   setModelJson(pretty(m));
                                   setPage("workbench");
+                                  setDesignMode("workflow");
                                 })
                               }
                             >
@@ -1774,6 +1892,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                             });
                             setModelJson(pretty(model));
                             setPage("workbench");
+                            setDesignMode("workflow");
                             setStage(3);
                           } else {
                             setPage("catalogs");
@@ -2083,6 +2202,11 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                               attempt(async () => {
                                 setRun(await api(`/runs/${r.id}/replay`, {}));
                                 setPage("workbench");
+                                setDesignMode(
+                                  r.operation === "audit"
+                                    ? "audit"
+                                    : "workflow",
+                                );
                               })
                             }
                           >
@@ -2191,17 +2315,35 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         context={{
           scenario,
           summary: {
-            target: request.target,
-            cards: request.cards,
-            hours: request.hours,
+            target:
+              designMode === "audit" && scenario === "training"
+                ? auditDraft?.request.target
+                : request.target,
+            cards:
+              designMode === "audit" && scenario === "training"
+                ? auditDraft?.request.cards
+                : request.cards,
+            hours:
+              designMode === "audit" && scenario === "training"
+                ? auditDraft?.request.hours
+                : request.hours,
             generation: request.generation,
             metric:
               scenario === "training"
-                ? "correct-delivery"
+                ? designMode === "audit"
+                  ? "training.retained-clean-progress"
+                  : "correct-delivery"
                 : "system-probability",
+            designInputPath:
+              designMode === "audit" && scenario === "training"
+                ? "auditDraft（request + model/policy JSON + overrides/hardware JSON）"
+                : "request",
             inputRevision: designRevision.current,
           },
-          step: workflowSteps[stage].id,
+          step:
+            designMode === "audit" && scenario === "training"
+              ? "audit"
+              : workflowSteps[stage].id,
           runId: run?.id,
         }}
         onNotice={setNotice}

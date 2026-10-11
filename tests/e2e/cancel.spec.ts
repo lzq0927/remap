@@ -15,7 +15,7 @@ test("cancelling a new run retains the previous completed evaluation", async ({
   page,
   taskId,
 }) => {
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await page.getByLabel("仿真轨迹数").fill("4");
   await page.getByLabel("观察窗口（小时）").fill("24");
   await page.getByRole("button", { name: "开始评估", exact: true }).click();

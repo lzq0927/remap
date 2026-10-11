@@ -14,18 +14,17 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
     .getByText("内网中断数据替换与硬件降 FIT", { exact: true })
     .click();
   await panel
-    .getByLabel("基线事件更新", { exact: true })
-    .fill(
-      JSON.stringify([
-        {
-          id: "CORE-hard",
-          fit: 420,
-          source: "synthetic browser fixture",
-          evidence: "scenario",
-          rateBasis: "npu-equivalent-hour",
-        },
-      ]),
-    );
+    .getByLabel("基线事件更新事件", { exact: true })
+    .selectOption("CORE-hard");
+  await panel.getByLabel("基线事件更新FIT", { exact: true }).fill("420");
+  await panel
+    .getByLabel("基线事件更新来源", { exact: true })
+    .fill("synthetic browser fixture");
+  await panel
+    .getByRole("group", { name: "基线事件更新", exact: true })
+    .getByRole("button", { name: "加入更新" })
+    .click();
+  await panel.getByLabel("同时对比万卡、十万卡、二十万卡、五十万卡").check();
   await panel.getByRole("button", { name: "运行事件与机制审核" }).click();
   await expect(
     page.getByText("事件与机制收益审核 · 保留干净检查点", { exact: true }),
@@ -40,6 +39,44 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   expect(html).toContain("CORE-hard");
   expect(html).toContain("独立故障事件库");
   expect(html).toContain("关键参数敏感性");
+  const preview = await page.context().newPage();
+  await preview.setContent(html);
+  await expect(preview.getByText("从产出缺口，定位设计重点")).toBeVisible();
+  await preview.getByLabel("摘要规模").selectOption("500000");
+  await expect(preview.locator('[data-summary-scale="500000"]')).toBeVisible();
+  await expect(preview.locator('[data-summary-scale="10000"]')).toBeHidden();
+  const library = preview.locator("section").filter({
+    has: preview.getByRole("heading", {
+      name: "04 / 独立故障事件库",
+      exact: true,
+    }),
+  });
+  await library.getByLabel("事件类型", { exact: true }).selectOption("中断");
+  await library.getByLabel("筛选表格").fill("CORE-hard");
+  await expect(library.locator("tbody tr:visible")).toHaveCount(1);
+  await expect(library.getByRole("status")).toHaveText("1 / 54 条");
+  await preview.getByRole("button", { name: "展开机制明细" }).click();
+  await expect(preview.locator("section>details:not([open])")).toHaveCount(0);
+  await preview.emulateMedia({ media: "print" });
+  await expect(library.locator("tbody tr:visible")).toHaveCount(54);
+  await preview.close();
+  await page.getByLabel("结果规模").selectOption("500000");
+  await expect(
+    page.getByText("产出损失去了哪里", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "审核输入已改变；下方结果与下载报告保留上次运行快照，请重新运行后比较。",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+  await panel.getByLabel("审核产出目标（0–1）", { exact: true }).fill("0.99");
+  await expect(
+    page.getByText(
+      "审核输入已改变；下方结果与下载报告保留上次运行快照，请重新运行后比较。",
+      { exact: true },
+    ),
+  ).toBeVisible();
   const run = (
     await (await request.get(`/api/tasks/${taskId}/runs`)).json()
   ).find((r: any) => r.operation === "audit");
@@ -50,4 +87,43 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   expect(detail.result.events.find((e: any) => e.id === "CORE-hard").fit).toBe(
     420,
   );
+});
+
+test("audit layout is readable on mobile and metric switching preserves current edits", async ({
+  page,
+  taskId,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?task=" + taskId);
+  await page.getByLabel("审核卡数", { exact: true }).fill("20000");
+  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await expect(page.getByLabel("集群卡数", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "事件与机制审核" }).click();
+  await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+    "20000",
+  );
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/tasks/${taskId}/design`)).json())
+          ?.auditDraft?.request?.cards,
+    )
+    .toBe(20000);
+  await page.reload();
+  await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+    "20000",
+  );
+  await page.getByRole("button", { name: "资产库", exact: true }).click();
+  await page
+    .getByRole("button", { name: "可靠性设计工作台", exact: true })
+    .click();
+  await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+    "20000",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });

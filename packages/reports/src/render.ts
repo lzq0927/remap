@@ -1,5 +1,10 @@
 import type { Run } from "../../contracts/src/types";
 import { auditSections } from "./audit";
+import {
+  auditVisuals,
+  reportEnhancementCss,
+  reportInteractionScript,
+} from "./audit-visuals";
 type Table = { heads: string[]; rows: unknown[][] };
 type Section = {
   title: string;
@@ -689,7 +694,9 @@ export function report(run: Run, format = "md") {
   return (
     '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escape(title) +
-    "</title><style>body{max-width:1320px;margin:32px auto;padding:0 24px;font:15px/1.8 system-ui,sans-serif;color:#182d35;background:#f5f6f2}header{background:#163c37;color:white;padding:36px;border-radius:16px}header p{color:#c7dbd4}h1{font-size:32px;line-height:1.4}h2{margin:0 0 20px;color:#176451}section{background:white;border:1px solid #dce3df;border-radius:12px;margin:24px 0;padding:24px;scroll-margin-top:20px}nav{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}nav a{color:#176451;padding:6px 12px;background:#e7eee8;border-radius:8px;text-decoration:none}small{color:#526b63}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}th,td{padding:10px 12px;border-bottom:1px solid #dce3df;text-align:left;vertical-align:top}th{background:#eef3ef}tr:nth-child(even){background:#fafbf8}pre{white-space:pre-wrap;word-break:break-word;background:#eef3ef;padding:20px}summary{cursor:pointer;font-weight:650;padding:12px 0}.chart-row{display:flex;gap:12px;align-items:center;margin:12px 0}.chart-row span{width:210px}.track{flex:1;background:#edf1ea;height:14px;border-radius:8px;overflow:hidden}.bar{height:100%;background:#b78756}.combined{background:#258a75}.chart-row strong{width:90px}@media(max-width:640px){body{padding:0 10px}header,section{padding:18px}.chart-row span{width:115px;font-size:12px}}@media print{body{margin:0;background:white}nav{display:none}header{background:white;color:#182d35;border-bottom:3px solid #137968}section{border:0;padding:10px 0}.table-wrap{overflow:visible}details>*{display:block!important}section,table{break-inside:auto}tr{break-inside:avoid}}</style></head><body><header><p>ReMAP / RELIABILITY MODELING AND ANALYSIS PLATFORM</p><h1>" +
+    "</title><style>body{max-width:1320px;margin:32px auto;padding:0 24px;font:15px/1.8 system-ui,sans-serif;color:#182d35;background:#f5f6f2}header{background:#163c37;color:white;padding:36px;border-radius:16px}header p{color:#c7dbd4}h1{font-size:32px;line-height:1.4}h2{margin:0 0 20px;color:#176451}section{background:white;border:1px solid #dce3df;border-radius:12px;margin:24px 0;padding:24px;scroll-margin-top:20px}nav{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}nav a{color:#176451;padding:6px 12px;background:#e7eee8;border-radius:8px;text-decoration:none}small{color:#526b63}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}th,td{padding:10px 12px;border-bottom:1px solid #dce3df;text-align:left;vertical-align:top}th{background:#eef3ef}tr:nth-child(even){background:#fafbf8}pre{white-space:pre-wrap;word-break:break-word;background:#eef3ef;padding:20px}summary{cursor:pointer;font-weight:650;padding:12px 0}.chart-row{display:flex;gap:12px;align-items:center;margin:12px 0}.chart-row span{width:210px}.track{flex:1;background:#edf1ea;height:14px;border-radius:8px;overflow:hidden}.bar{height:100%;background:#b78756}.combined{background:#258a75}.chart-row strong{width:90px}@media(max-width:640px){body{padding:0 10px}header,section{padding:18px}.chart-row span{width:115px;font-size:12px}}@media print{body{margin:0;background:white}nav{display:none}header{background:white;color:#182d35;border-bottom:3px solid #137968}section{border:0;padding:10px 0}.table-wrap{overflow:visible}details>*{display:block!important}section,table{break-inside:auto}tr{break-inside:avoid}}" +
+    reportEnhancementCss +
+    "</style></head><body><header><p>ReMAP / RELIABILITY MODELING AND ANALYSIS PLATFORM</p><h1>" +
     escape(title) +
     "</h1><p>" +
     escape(metadata) +
@@ -702,14 +709,18 @@ export function report(run: Run, format = "md") {
       )
       .join("") +
     "</nav>" +
+    '<div class="report-actions"><button id="report-print" type="button">打印 / 保存 PDF</button><button id="report-expand" type="button" aria-expanded="false">展开机制明细</button></div>' +
+    (isAudit ? auditVisuals(result) : "") +
     chart +
     sectionHtml +
-    "<details><summary>输入与资产快照</summary><pre>" +
+    '<details class="report-evidence"><summary>输入与资产快照</summary><pre>' +
     escape(JSON.stringify(run.input, null, 2)) +
-    "</pre></details><details><summary>完整结果和诊断</summary><pre>" +
+    '</pre></details><details class="report-evidence"><summary>完整结果和诊断</summary><pre>' +
     escape(JSON.stringify(result ?? run.error ?? null, null, 2)) +
-    "</pre></details><details><summary>模型版本、来源与运行事件</summary><pre>" +
+    '</pre></details><details class="report-evidence"><summary>模型版本、来源与运行事件</summary><pre>' +
     escape(JSON.stringify(provenance, null, 2)) +
-    "</pre></details></body></html>"
+    "</pre></details>" +
+    reportInteractionScript +
+    "</body></html>"
   );
 }

@@ -15,7 +15,7 @@ test("target, budget, workflow and allocation stay consistent after refresh", as
   page,
   taskId,
 }) => {
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await page.getByLabel("正确交付目标（0–1）").fill(".995");
   await page.getByLabel("集群卡数").fill("10000");
   await expect(page.getByLabel("正确交付目标（0–1）")).toHaveValue(".995");
@@ -63,7 +63,9 @@ test("target, budget, workflow and allocation stay consistent after refresh", as
       ),
     )
     .toBe(false);
-  await page.getByRole("button", { name: "可靠性设计工作台", exact: true }).click();
+  await page
+    .getByRole("button", { name: "可靠性设计工作台", exact: true })
+    .click();
   await page.getByLabel("正确交付目标（0–1）").fill(".95");
   await expect(
     page.getByText("目标或窗口已改变，旧预算已失效，请重新确认。"),
@@ -74,7 +76,7 @@ test("published bindings can be reviewed, manual GPU FIT edits are not overwritt
   taskId,
   request,
 }) => {
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await page.getByRole("button", { name: "资产库", exact: true }).click();
   await page
     .locator(".asset-list")
@@ -87,7 +89,9 @@ test("published bindings can be reviewed, manual GPU FIT edits are not overwritt
     .getByLabel("我已核对资产的发生率口径、适用条件及模型字段映射")
     .check();
   await page.getByRole("button", { name: "将已校验版本应用到训练" }).click();
-  await page.getByRole("button", { name: "可靠性设计工作台", exact: true }).click();
+  await page
+    .getByRole("button", { name: "可靠性设计工作台", exact: true })
+    .click();
   await expect(page.getByText(/已绑定 1 个冻结资产版本/)).toBeVisible();
   await page.getByLabel("GPU FIT", { exact: true }).fill("1200");
   await expect(page.getByRole("status")).toContainText("已解除资产绑定");
@@ -117,7 +121,7 @@ test("CSV template imports as reviewable library drafts and version history rema
   const csv = await (
     await request.get("/api/templates/fault-modes.csv")
   ).body();
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await page.getByRole("button", { name: "输入与来源", exact: true }).click();
   await page.locator("input[type=file]").setInputFiles({
     name: "fault-modes.csv",
@@ -151,7 +155,7 @@ test("locally installed OpenCode is the embedded UI with native model and API co
     "Requires installed local OpenCode",
   );
   test.setTimeout(90000);
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await page.getByRole("button", { name: "新建关联会话" }).click();
   const frame = page.frameLocator('iframe[title="本地官方 OpenCode Web"]');
   await expect(
@@ -218,7 +222,7 @@ test("analysis candidates without factors remain editable and cannot replace for
       runId: run.id,
     },
   });
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await page.getByRole("button", { name: "记录交付确认" }).click();
   await expect(page.getByRole("alert")).toContainText(
     "训练设计交付需要当前设计的训练仿真结果",
@@ -263,7 +267,7 @@ test("late mapping from another input cannot change parameters or provenance", a
     await blocked;
     await route.continue();
   });
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await page.getByRole("button", { name: "输入与来源", exact: true }).click();
   await page
     .locator(".asset-list")

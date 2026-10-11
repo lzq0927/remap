@@ -15,7 +15,7 @@ test("training evaluation, evidence snapshot, report, changed input and cancella
   page,
   taskId,
 }) => {
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await expect(
     page.getByRole("heading", { name: "从整体目标，走向可验证的设计。" }),
   ).toBeVisible();
@@ -46,7 +46,7 @@ test("catalog publishing preserves immutable versions and import confirms struct
   page,
   taskId,
 }) => {
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await page.getByRole("button", { name: "资产库", exact: true }).click();
   await page.getByRole("button", { name: "新建资产" }).click();
   await page

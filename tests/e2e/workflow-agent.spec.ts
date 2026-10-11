@@ -25,7 +25,7 @@ test("Agent stage assets appear centrally and human review gates the same real s
       data: { inputRevision: design.revision, mode: "auto-to-review" },
     })
   ).json();
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   for (const stepId of ["clarify", "describe", "select", "prepare"]) {
     flow = await (
       await request.post(prefix + "/workflow", {
@@ -103,7 +103,7 @@ test("archived direct task URL returns to task management for restoration", asyn
   taskId,
 }) => {
   await request.post("/api/tasks/" + taskId + "/archive", { data: {} });
-  await page.goto("/?task=" + taskId);
+  await page.goto("/?view=workflow&task=" + taskId);
   await expect(
     page.getByRole("heading", { name: "可靠性设计任务" }),
   ).toBeVisible();
