@@ -1,0 +1,2 @@
+import tseslint from 'typescript-eslint';
+export default tseslint.config({ ignores: ['node_modules/**', '**/dist/**', 'artifacts/**', 'dist/**', 'references/**', 'data/**', 'release/**', 'test-results/**', 'playwright-report/**', 'packages/solvers/src/vendor/**', 'solvers/ctmc/.python-deps/**', '.opencode/**'] }, ...tseslint.configs.recommended, { rules: { '@typescript-eslint/no-explicit-any': 'off', '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }] } });

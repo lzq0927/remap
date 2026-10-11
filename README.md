@@ -1,1 +1,95 @@
-# remap
+# ReMAP：可靠性设计工作台
+
+Reliability Modeling and Analysis Platform — 系统可靠性建模评估验证平台。
+
+本地单用户多任务可靠性设计工作台，支持 AI 训练集群和传统系统。AI 系统与 NTN 扩展入口尚未实现。数值求解独立于 Agent，OpenCode 的模型和提供商由官方界面管理。
+
+## 安装与启动
+
+公司内网部署与持续开发请先阅读 [内网开发指南](docs/内网开发指南.md)。通用核心版本单向导入内网，企业代码、模型配置和真实资产留在内网；实现范围和验收见 [实施计划](docs/superpowers/plans/2026-10-11-internal-development-plan.md)。
+
+从 GitHub 导入的新电脑请按 [Git 拉取与内网部署](docs/Git拉取与内网部署.md) 操作。功能范围、模块接口和待扩展能力见 [ReMAP 优化与发布审查](docs/2026-10-11-ReMAP优化与发布审查.md)。
+
+需要 Node.js 24 或更新版本、pnpm 11。依赖版本由锁文件固定。Python/SciPy 仅供 CTMC；OpenCode 仅供 Agent 功能。
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm bootstrap
+pnpm run doctor
+pnpm dev
+```
+
+没有安装 Node 依赖时，也可运行 `node scripts/launch.mjs bootstrap --install`。使用已缓存依赖时可追加 `--offline`。
+
+开发界面默认 [127.0.0.1:5173](http://127.0.0.1:5173)，API 默认 [127.0.0.1:4178](http://127.0.0.1:4178)。生产启动先运行 `pnpm build`，再运行 `pnpm start`，直接打开 API 地址。端口和数据目录由软件目录的 `.env` 配置；bootstrap 保留已有配置与 Skill。
+
+也可从其他当前目录执行 `node "<软件目录>/scripts/launch.mjs" start`。启动器从自身位置定位依赖、静态资源、模板和数据根，不使用开发者目录。
+
+## 新建任务并评估
+
+1. 打开任务主页，明确新建或打开任务；首页不会自动选择上次任务。
+2. 在任务内选择产品场景，调整目标、窗口、结构、机制和输入来源。
+3. 保存训练损失预算，逐步人工确认前四个流程阶段。保存预算不会自动签认方法阶段。
+4. 执行评估并查看计算过程、采样区间和限制。未确认前序阶段时仍可做独立评估；正式交付需在当前流程中重新评估并人工确认。
+5. 下载报告、记录方案反馈。任务输入、私有资产、运行、流程和关联会话分别保存。
+
+任务可重命名、复制、归档和重新打开。任务包的导出/导入入口位于主页；历史运行和输入摘要保留，导入生成独立任务，新机器需要重新关联 OpenCode 会话。
+
+## 本地 OpenCode
+
+```powershell
+pnpm agent
+```
+
+启动脚本检测项目内已安装 OpenCode、`OPENCODE_BIN` 或 PATH。已有服务时配置 `OPENCODE_URL`；脚本检测健康服务后保留它。可用 `START_AGENT=1` 同开发服务启动。Agent 离线时仍可做本地数值评估。
+
+在工作台创建具名主会话或专题会话，列表仅显示当前任务绑定的会话。点击「同步当前设计」只写入摘要；完整设计由任务 MCP 工具读取。在官方输入框运行 `/sd-dfr-remap`。模型、API Key、自定义 Base URL 在官方设置中配置，工作台不会代替官方提供商选择。
+
+非结构化提取模型使用 `.env` 中的 `MODEL_BASE_URL`、`MODEL_API_KEY` 和 `MODEL_ID`，与原生 OpenCode 提供商分开。doctor 不发起模型请求；指定 GLM 的真实对话、流式和工具调用尚未验收。
+
+## 资产与数值边界
+
+训练主指标是正确交付产出比例，终态污染清零，MTBF 单独记录。保留专家 V4、RBD/FTA/BDD 共享事件求解、CTMC、比较、搜索、敏感性、Shapley 和子模型分配。
+
+私有资产校验并冻结后，可核对适用条件并应用到训练。示例和公共资产只读，复制到任务后保留来源/版本。可提交公共库候选；公共发布当前未启用，需要独立审核身份与发布批准。冻结版本与历史运行快照保持不变。
+
+真实输入可使用 JSON/CSV/XLSX，模板见 [templates](templates)。文件监听限定在各任务的 `workspace/inputs`，实际目录见任务界面；文件变化追加到该任务的待确认输入。旧全局 `WATCH_ROOTS` 配置已弃用。数学求解可复现不等于产品参数已校准，达标结论仍受证据与模型假设限制。
+
+CTMC 可选环境（全量数值测试和发布验收需要此依赖）：
+
+```powershell
+python -m pip install --target solvers/ctmc/.python-deps -r solvers/ctmc/requirements.txt
+pnpm run doctor
+```
+
+可在本机 `.env` 指定 `PYTHON_EXECUTABLE`。Windows 也检测 `py -3`；缺少 Python/SciPy 会报告 CTMC 不可用，其他求解器仍可使用。
+
+## 迁移与软件分发
+
+先启动 API，再使用任务 CLI：
+
+```powershell
+pnpm task:export <taskId> <任务包.json>
+pnpm task:import <任务包.json> "新的任务名"
+pnpm task:migrate --dry-run
+pnpm task:migrate --apply
+pnpm bootstrap --task <taskId>
+pnpm run doctor --task <taskId>
+```
+
+旧数据迁移默认只预检。实际迁移前停止旧服务，保留原数据库；新 API 生成备份和迁移清单，同一源重复迁移不会复制第二份。未完成旧运行按中断语义处理，不宣称自动续算。CLI 默认连接回环 API；`RELIABILITY_API_URL` 可调整端口。
+
+```powershell
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm test:e2e
+pnpm build
+pnpm export:release
+pnpm verify:portable
+pnpm verify:release
+```
+
+软件包输出到 `release/rem-prototype-0.1`，包含源代码、构建后界面、Skill、模板和清单，排除用户任务、凭据、本机配置和依赖目录。目标机器需安装锁定的 Node 依赖，可选择安装 Python 和 OpenCode。此包不是免安装可执行程序。
+
+`verify:portable` 在本机含空格/中文的新目录中检查发布清单、启动与任务往返；它不等同于另一台物理电脑或另一 Agent 的验收。独立 MCP 网关需要连接评估 API；完整软件包才包含领域服务与求解器。依赖与边界见 [部署与迁移](docs/部署与迁移.md)，操作演示见[使用指南](docs/2026-10-11-评估系统使用指南.md)。数值方法见 [numerical-methods](docs/numerical-methods.md)。

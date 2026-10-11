@@ -1,0 +1,11 @@
+{
+  "name": "sd-dfr-remap",
+  "version": "0.2.0",
+  "entry": "SKILL.md",
+  "references": ["references/workflow.md"],
+  "protocol": "MCP",
+  "requires": { "server": "sd-dfr-remap", "version": "0.2.0", "taskBinding": true },
+  "agentAdapters": { "opencode": "../../.opencode/commands/sd-dfr-remap.md" },
+  "confirmation": "human-in-workbench",
+  "primaryScenario": "training.correct-delivery"
+}

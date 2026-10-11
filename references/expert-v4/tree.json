@@ -1,0 +1,795 @@
+{
+  "sha": "683afe829313bfdcb249bc593e48df5b29813666",
+  "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/trees/683afe829313bfdcb249bc593e48df5b29813666",
+  "tree": [
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "51b7c602add510130a3cf62382e35e5032e0aaf0",
+      "size": 75,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/51b7c602add510130a3cf62382e35e5032e0aaf0"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "51caef74fad911719032509a024c59e99fd26361",
+      "size": 6621,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/51caef74fad911719032509a024c59e99fd26361"
+    },
+    {
+      "path": "Shapley_五十万卡贡献排名.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3ee602ea90b16bf5ae6ac8b60422c443a0984526",
+      "size": 136991,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/3ee602ea90b16bf5ae6ac8b60422c443a0984526"
+    },
+    {
+      "path": "Shapley_五十万卡贡献排名.svg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5faa5b9588369dcf53b6b8940c236df9e85fe187",
+      "size": 6979,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/5faa5b9588369dcf53b6b8940c236df9e85fe187"
+    },
+    {
+      "path": "Shapley_规模对比.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fbafc3f8eeae47735e2fe8c4a4ba4b4a3c8ab89e",
+      "size": 191999,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/fbafc3f8eeae47735e2fe8c4a4ba4b4a3c8ab89e"
+    },
+    {
+      "path": "Shapley_规模对比.svg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0fcff5a8338ab47a73f9682e0947cb1572f9595e",
+      "size": 16569,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/0fcff5a8338ab47a73f9682e0947cb1572f9595e"
+    },
+    {
+      "path": "Shapley_静默检出率.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d2f52dd1385e9b5bca76456e7280e8053c895edb",
+      "size": 87206,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/d2f52dd1385e9b5bca76456e7280e8053c895edb"
+    },
+    {
+      "path": "Shapley_静默检出率.svg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cfe4abd613f2605399032c03de92943c9cee1c39",
+      "size": 5783,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/cfe4abd613f2605399032c03de92943c9cee1c39"
+    },
+    {
+      "path": "Shapley交互验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0b006ccb2381314b8f4f514f67373b075e8df816",
+      "size": 986,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/0b006ccb2381314b8f4f514f67373b075e8df816"
+    },
+    {
+      "path": "Shapley参数示例.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "957d036f0dd21d3184692f84d69a3b013a8ab57e",
+      "size": 1126,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/957d036f0dd21d3184692f84d69a3b013a8ab57e"
+    },
+    {
+      "path": "Shapley计算说明.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5838309a16762ffcac261e78c7d1998726e2b2d1",
+      "size": 6892,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/5838309a16762ffcac261e78c7d1998726e2b2d1"
+    },
+    {
+      "path": "Shapley贡献结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "89626a06f2780c5748fa075ccf2ebef081532b55",
+      "size": 791909,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/89626a06f2780c5748fa075ccf2ebef081532b55"
+    },
+    {
+      "path": "Shapley贡献计算.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d3ff5f7cd5ce51fbdfa2683e22765c57ed1c0571",
+      "size": 9334,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/d3ff5f7cd5ce51fbdfa2683e22765c57ed1c0571"
+    },
+    {
+      "path": "Shapley验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b05a6ac989dca10c2099f0c43f4511e308d7fce3",
+      "size": 1695,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/b05a6ac989dca10c2099f0c43f4511e308d7fce3"
+    },
+    {
+      "path": "V4_产出损失账本.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4315ea7951cec22dcb8223d8dca8db74af71dcb5",
+      "size": 83850,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/4315ea7951cec22dcb8223d8dca8db74af71dcb5"
+    },
+    {
+      "path": "V4_产出损失账本.svg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3fdc62167557055a75e716b363177f5496cc64f6",
+      "size": 6447,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/3fdc62167557055a75e716b363177f5496cc64f6"
+    },
+    {
+      "path": "V4_系统故障域.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2a8b11a719204e174c1bf01d9a19ac4fa2a08f1d",
+      "size": 91399,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/2a8b11a719204e174c1bf01d9a19ac4fa2a08f1d"
+    },
+    {
+      "path": "V4_系统故障域.svg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d3706712979ce4bcd1efc6d951811ae94073d265",
+      "size": 2673,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/d3706712979ce4bcd1efc6d951811ae94073d265"
+    },
+    {
+      "path": "V4交互验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0b006ccb2381314b8f4f514f67373b075e8df816",
+      "size": 986,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/0b006ccb2381314b8f4f514f67373b075e8df816"
+    },
+    {
+      "path": "V4数值验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8694349bdf3f9a355d571cb67fbe04286785e65e",
+      "size": 562,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/8694349bdf3f9a355d571cb67fbe04286785e65e"
+    },
+    {
+      "path": "V4更新与模型契约.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "87f2238b024641cd50cf55e0dc1edccd114d26a6",
+      "size": 10128,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/87f2238b024641cd50cf55e0dc1edccd114d26a6"
+    },
+    {
+      "path": "V4模型验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a8fa6b0775da0ffd2daf02cbe9d1ef872b133fb8",
+      "size": 1237,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/a8fa6b0775da0ffd2daf02cbe9d1ef872b133fb8"
+    },
+    {
+      "path": "catalogs",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d78cc32dd0d7abb085e15c6486620e519809f96c",
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/trees/d78cc32dd0d7abb085e15c6486620e519809f96c"
+    },
+    {
+      "path": "catalogs/event-constraints.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f66b2c18d7fd13d5b88c555a3d1d83220f374a0a",
+      "size": 2585,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/f66b2c18d7fd13d5b88c555a3d1d83220f374a0a"
+    },
+    {
+      "path": "catalogs/review-2026-10-09",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "55fe19b6641c6a4f0592433e12d3155d61c5d75c",
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/trees/55fe19b6641c6a4f0592433e12d3155d61c5d75c"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e0b9ee0710a122c1091dcf147e705ab5b0121c78",
+      "size": 3085,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/e0b9ee0710a122c1091dcf147e705ab5b0121c78"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/analyze.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "066c4ff935a60d4ed22a3529fd12d6ab4169b342",
+      "size": 13795,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/066c4ff935a60d4ed22a3529fd12d6ab4169b342"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/engine.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5ea30ff6b9a4da83923b2468480957492f6116ca",
+      "size": 9675,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/5ea30ff6b9a4da83923b2468480957492f6116ca"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/events.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "955c645f35d073e161a8e9423724edbdc2f1f331",
+      "size": 78554,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/955c645f35d073e161a8e9423724edbdc2f1f331"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/inputs.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "25f1374245998ebb6b67745616a5b5c0ae0acfcd",
+      "size": 84986,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/25f1374245998ebb6b67745616a5b5c0ae0acfcd"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/mechanism-policy.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d6f19ac2956bf3de618df52f1a7980448e00aa1f",
+      "size": 533,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/d6f19ac2956bf3de618df52f1a7980448e00aa1f"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/mechanisms.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "553d2dc4631ff8e1dc079680e5fa7fedf7b01850",
+      "size": 18177,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/553d2dc4631ff8e1dc079680e5fa7fedf7b01850"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/reference.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f80427ecd6e208381d7521f079b078fe5885b03d",
+      "size": 5783,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/f80427ecd6e208381d7521f079b078fe5885b03d"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/render.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3eff920f4f734c3334b6e2ca8859543efcdf39f4",
+      "size": 26119,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/3eff920f4f734c3334b6e2ca8859543efcdf39f4"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/results.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cf3d475d78862fc4a56120cfc71c61eb98740607",
+      "size": 821954,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/cf3d475d78862fc4a56120cfc71c61eb98740607"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/review-checks.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "842c20af7883313be1d8f9abd4773ccde433b09d",
+      "size": 1195,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/842c20af7883313be1d8f9abd4773ccde433b09d"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/review.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "82504e21c229bde34888813ed753cfb6238e33cf",
+      "size": 3297,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/82504e21c229bde34888813ed753cfb6238e33cf"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/target90-results.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f363b58dc0d2b0403565a0ac25aa1c866342e6c7",
+      "size": 31970,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/f363b58dc0d2b0403565a0ac25aa1c866342e6c7"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/target90.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "14f86505a19088d4f12a7c59b4c5a8b733677112",
+      "size": 2516,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/14f86505a19088d4f12a7c59b4c5a8b733677112"
+    },
+    {
+      "path": "catalogs/review-2026-10-09/故障事件与可靠性机制收益审核.html",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "322b525a4354199ee777b2bca818965b8c8b7dbb",
+      "size": 518687,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/322b525a4354199ee777b2bca818965b8c8b7dbb"
+    },
+    {
+      "path": "catalogs/故障事件库.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "742bf2051d557c42f3b62d48f90c8fd8d2702182",
+      "size": 29733,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/742bf2051d557c42f3b62d48f90c8fd8d2702182"
+    },
+    {
+      "path": "package.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e3bccf27759aebb4cc573d63c79730ee4275c23c",
+      "size": 487,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/e3bccf27759aebb4cc573d63c79730ee4275c23c"
+    },
+    {
+      "path": "三类故障与恢复模型审视.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9d4cd8504a8311b95e39dbdab085a923aa482932",
+      "size": 24903,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/9d4cd8504a8311b95e39dbdab085a923aa482932"
+    },
+    {
+      "path": "三类故障仿真引擎.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "aeb21399b287073ceeead507e82d35887ed6c8b3",
+      "size": 10601,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/aeb21399b287073ceeead507e82d35887ed6c8b3"
+    },
+    {
+      "path": "三类故障公式复核结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ee4b46973731d4f8b7e33a4dc7ec4efa37695a87",
+      "size": 2074,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/ee4b46973731d4f8b7e33a4dc7ec4efa37695a87"
+    },
+    {
+      "path": "三类故障可用度交互评估.html",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5f01f46a7a18dd879b18fee36a4644cf81fc1499",
+      "size": 71813,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/5f01f46a7a18dd879b18fee36a4644cf81fc1499"
+    },
+    {
+      "path": "五十万卡_局部容错后改进排名.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "546d1c5dde48e2f407cf04487c84ff5fa6b82130",
+      "size": 148826,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/546d1c5dde48e2f407cf04487c84ff5fa6b82130"
+    },
+    {
+      "path": "五十万卡_改进方向排名.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "89f51138a7fbc22b449279e2ae5e12aa1687a24f",
+      "size": 163125,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/89f51138a7fbc22b449279e2ae5e12aa1687a24f"
+    },
+    {
+      "path": "五十万卡_改进方向排名.svg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0967a531b30f9ee62a767295fc7525b4e71a8f54",
+      "size": 7817,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/0967a531b30f9ee62a767295fc7525b4e71a8f54"
+    },
+    {
+      "path": "五十万卡_静默检出率收益.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bc6ea07edb184de29ca4c1cb39cdfb198e37aa66",
+      "size": 81502,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/bc6ea07edb184de29ca4c1cb39cdfb198e37aa66"
+    },
+    {
+      "path": "五十万卡_静默检出率收益.svg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5b97efd2cfc33a60f4a58e2e2467d5705c34008e",
+      "size": 6016,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/5b97efd2cfc33a60f4a58e2e2467d5705c34008e"
+    },
+    {
+      "path": "交互验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b1cb071a90bf754d15e44fd7a61cbf857a4dece0",
+      "size": 1346,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/b1cb071a90bf754d15e44fd7a61cbf857a4dece0"
+    },
+    {
+      "path": "历史版本",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "100302b5f3f0590279252be43d65ca37930faca8",
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/trees/100302b5f3f0590279252be43d65ca37930faca8"
+    },
+    {
+      "path": "历史版本/V3",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "ef5fe22f9fe965dddf8e798d0e1d2d2d5d1c4548",
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/trees/ef5fe22f9fe965dddf8e798d0e1d2d2d5d1c4548"
+    },
+    {
+      "path": "历史版本/V3/Shapley交互验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "63bd953b0951e5f7508672969f7a0561a510bcd4",
+      "size": 670,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/63bd953b0951e5f7508672969f7a0561a510bcd4"
+    },
+    {
+      "path": "历史版本/V3/Shapley贡献结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0794988292f27c51b3848b5d90a6c75174cb64f7",
+      "size": 734639,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/0794988292f27c51b3848b5d90a6c75174cb64f7"
+    },
+    {
+      "path": "历史版本/V3/Shapley贡献计算.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0e8c5c48a2bc00fdc0818dbdb8ada919382d05cd",
+      "size": 6966,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/0e8c5c48a2bc00fdc0818dbdb8ada919382d05cd"
+    },
+    {
+      "path": "历史版本/V3/月度训练仿真引擎.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "645642e8ac3513e4f3eb67e7322527cab222b20c",
+      "size": 11665,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/645642e8ac3513e4f3eb67e7322527cab222b20c"
+    },
+    {
+      "path": "历史版本/V3/正确有效产出改进分析.html",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e59add3e3c33929255c84a5998a0639aa6d28fa0",
+      "size": 782067,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/e59add3e3c33929255c84a5998a0639aa6d28fa0"
+    },
+    {
+      "path": "可靠性场景V4.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bdf4ceae22ab7abec10e2ab2d28f8a09723ef05b",
+      "size": 2797,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/bdf4ceae22ab7abec10e2ab2d28f8a09723ef05b"
+    },
+    {
+      "path": "可靠性评估系统架构评审与演进建议.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e8f7bccd80e132772f5cf83967097b64189a6ab2",
+      "size": 13897,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/e8f7bccd80e132772f5cf83967097b64189a6ab2"
+    },
+    {
+      "path": "场景与证据.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bfe675b30abf63397886d34c98d46e07fc6e8d9d",
+      "size": 2050,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/bfe675b30abf63397886d34c98d46e07fc6e8d9d"
+    },
+    {
+      "path": "复核三类故障公式.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4a289c8300ddadc753b28f2d34384f171674c43a",
+      "size": 3960,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/4a289c8300ddadc753b28f2d34384f171674c43a"
+    },
+    {
+      "path": "复核静默交付口径.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0787221513badedfaf3e4508bd52182a727bcad3",
+      "size": 2841,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/0787221513badedfaf3e4508bd52182a727bcad3"
+    },
+    {
+      "path": "复核静默交付改进排名.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f12fb3d1fce6cd664bcd562c6c60d3902f97fff9",
+      "size": 1943,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/f12fb3d1fce6cd664bcd562c6c60d3902f97fff9"
+    },
+    {
+      "path": "报告扩展界面.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "66c81fbf306ca62e8543c71970baf3547eed20f3",
+      "size": 11688,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/66c81fbf306ca62e8543c71970baf3547eed20f3"
+    },
+    {
+      "path": "报告样式.css",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3ca5ef5e035c41f5cef4d9236c152a3dbd8a24c7",
+      "size": 5859,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/3ca5ef5e035c41f5cef4d9236c152a3dbd8a24c7"
+    },
+    {
+      "path": "报告模板.html",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "59a1716d535dcc2e74e79461b0957d5492505e45",
+      "size": 13525,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/59a1716d535dcc2e74e79461b0957d5492505e45"
+    },
+    {
+      "path": "报告界面.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c13b4e898353e7fe75c7906a40a5cd13d51b1b64",
+      "size": 16103,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/c13b4e898353e7fe75c7906a40a5cd13d51b1b64"
+    },
+    {
+      "path": "改进分析交互验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "20e6c03dc0ce1ed4021ded409147851f7a64160c",
+      "size": 703,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/20e6c03dc0ce1ed4021ded409147851f7a64160c"
+    },
+    {
+      "path": "改进分析数值验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f744338b6031355499eb4600e42f88a1edb96fd2",
+      "size": 681,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/f744338b6031355499eb4600e42f88a1edb96fd2"
+    },
+    {
+      "path": "改进方向计算.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3f77035405dcc39c49179eb82547ee8b2752430c",
+      "size": 6818,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/3f77035405dcc39c49179eb82547ee8b2752430c"
+    },
+    {
+      "path": "故障台账格式示例.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b8c57861d371c96dbfa5fc344299fdf9d6e86526",
+      "size": 721,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/b8c57861d371c96dbfa5fc344299fdf9d6e86526"
+    },
+    {
+      "path": "数值验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2b13a227bd68b724880748472b6569764ea9019b",
+      "size": 9267,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/2b13a227bd68b724880748472b6569764ea9019b"
+    },
+    {
+      "path": "新版交互验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "392c32df096d1940cb80bbaede5387f9651978f1",
+      "size": 605,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/392c32df096d1940cb80bbaede5387f9651978f1"
+    },
+    {
+      "path": "新版引擎验证结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d6d1de4c9cdefa631e52ad5298f11bb8a9c7cbed",
+      "size": 1297,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/d6d1de4c9cdefa631e52ad5298f11bb8a9c7cbed"
+    },
+    {
+      "path": "新版默认评估结果.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5629b1844983e8de696f110102db581927684a56",
+      "size": 9418,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/5629b1844983e8de696f110102db581927684a56"
+    },
+    {
+      "path": "月度训练仿真引擎.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "993b876322b67a4eecddf56816cbc88b896fead8",
+      "size": 21084,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/993b876322b67a4eecddf56816cbc88b896fead8"
+    },
+    {
+      "path": "构建评估报告.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ea7075e5e37abdd0904621eabefeab8016c107a1",
+      "size": 1833,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/ea7075e5e37abdd0904621eabefeab8016c107a1"
+    },
+    {
+      "path": "校准故障台账.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4ad174c34baff1f0cfc01b3c5f2813ed3795bbc9",
+      "size": 2756,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/4ad174c34baff1f0cfc01b3c5f2813ed3795bbc9"
+    },
+    {
+      "path": "正确有效产出改进分析.html",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "467a2ff84683a3fa5a229b4d72c406f7949229e7",
+      "size": 567185,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/467a2ff84683a3fa5a229b4d72c406f7949229e7"
+    },
+    {
+      "path": "正确有效产出改进分析数据.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "633bff40dec3472121eb5a54976c828966706219",
+      "size": 152368,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/633bff40dec3472121eb5a54976c828966706219"
+    },
+    {
+      "path": "第一版模型说明.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3061d8d119fb408a42a0dd1049f5b0e940e0ad1f",
+      "size": 11233,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/3061d8d119fb408a42a0dd1049f5b0e940e0ad1f"
+    },
+    {
+      "path": "规模_四种改进方案.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d839a20b8fa23c911b24db05a03a69323cd6b78c",
+      "size": 161531,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/d839a20b8fa23c911b24db05a03a69323cd6b78c"
+    },
+    {
+      "path": "规模_四种改进方案.svg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7eca3138537bf20c5f5f1d5c45c5d3c2adda6d38",
+      "size": 13125,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/7eca3138537bf20c5f5f1d5c45c5d3c2adda6d38"
+    },
+    {
+      "path": "计算Shapley贡献.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7218f88eaedf1519fb348b2f0b1dbd52ef03c5c0",
+      "size": 2196,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/7218f88eaedf1519fb348b2f0b1dbd52ef03c5c0"
+    },
+    {
+      "path": "集群可用度建模分析报告.html",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dd1f6e3aab03f431c0fce6212d0cb81f8f5f42de",
+      "size": 78344,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/dd1f6e3aab03f431c0fce6212d0cb81f8f5f42de"
+    },
+    {
+      "path": "静默交付复核交互验证.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a914ff7720c462c8a0e56b0c24e8457299137552",
+      "size": 184,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/a914ff7720c462c8a0e56b0c24e8457299137552"
+    },
+    {
+      "path": "静默错误_analytic_复核.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "480d3fce35c9e67de1322e7e42261ac9262e2385",
+      "size": 67461,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/480d3fce35c9e67de1322e7e42261ac9262e2385"
+    },
+    {
+      "path": "静默错误_joint_复核.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8f8654bb6ef58afc5e0b7f623c19214c32fdb2ab",
+      "size": 60203,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/8f8654bb6ef58afc5e0b7f623c19214c32fdb2ab"
+    },
+    {
+      "path": "静默错误交付口径复核.html",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c84fd08defb24db2515714d4d33288d0ff1adc9e",
+      "size": 65518,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/c84fd08defb24db2515714d4d33288d0ff1adc9e"
+    },
+    {
+      "path": "静默错误交付口径复核数据.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "01461208c33c0a96c8b01d6ee16d85296429e374",
+      "size": 70539,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/01461208c33c0a96c8b01d6ee16d85296429e374"
+    },
+    {
+      "path": "验证Shapley贡献.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "125b0c4979107af74ee2dde646acd5ad13e5f0b6",
+      "size": 3431,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/125b0c4979107af74ee2dde646acd5ad13e5f0b6"
+    },
+    {
+      "path": "验证V4交互.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "542a72daabd3f6a7bda80350036beb2c0e097e1a",
+      "size": 8222,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/542a72daabd3f6a7bda80350036beb2c0e097e1a"
+    },
+    {
+      "path": "验证V4模型.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cff29262e3803377cf7df8babda52f8c9f8fd0f8",
+      "size": 6823,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/cff29262e3803377cf7df8babda52f8c9f8fd0f8"
+    },
+    {
+      "path": "验证V4结果.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0b369cb3c17c173f91193d14b0ef13e2690068a3",
+      "size": 2430,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/0b369cb3c17c173f91193d14b0ef13e2690068a3"
+    },
+    {
+      "path": "验证三类故障引擎.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "65a912e3ffdc265335747c503bef341880bc4ea4",
+      "size": 3592,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/65a912e3ffdc265335747c503bef341880bc4ea4"
+    },
+    {
+      "path": "验证报告.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6eb9739c36d8804a49059598725628aec8759738",
+      "size": 4359,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/6eb9739c36d8804a49059598725628aec8759738"
+    },
+    {
+      "path": "验证改进分析.cjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d532e911d4941ee693e765a6b958148ec48d7ac2",
+      "size": 4547,
+      "url": "https://api.github.com/repos/zy009197/ai-cluster-reliability/git/blobs/d532e911d4941ee693e765a6b958148ec48d7ac2"
+    }
+  ],
+  "truncated": false
+}

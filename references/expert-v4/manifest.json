@@ -1,0 +1,64 @@
+{
+  "metric": "delivery = (unresolved corruption ? 0 : correct) / hours",
+  "entrypoint": "正确有效产出改进分析.html",
+  "modelVersion": "4.0-domain-ledger",
+  "files": [
+    {
+      "path": "场景与证据.js",
+      "sha256": "ff6991c85e030dd560337c17c83ee04c7a1505538337340ae7b61f1f271c9d74",
+      "bytes": 2050
+    },
+    {
+      "path": "可靠性场景V4.json",
+      "sha256": "92b4fcdfe59998534f7a3f07062ce69e14fc52930a5939ea617645ce25a76343",
+      "bytes": 2797
+    },
+    {
+      "path": "月度训练仿真引擎.js",
+      "sha256": "e41d96cda3f04073757da5d69effaf4d9d9a8a70320d5ecb37544d11eec3be80",
+      "bytes": 21084
+    },
+    {
+      "path": "正确有效产出改进分析.html",
+      "sha256": "eea16c59b63da8a562ea3c5381305f042837d5b885aac074c9b6224846817d3a",
+      "bytes": 567185
+    },
+    {
+      "path": "正确有效产出改进分析数据.json",
+      "sha256": "a79aba94d1beedd8808e1c138d0440728c77e61a04df4f50d761b95442caf26e",
+      "bytes": 152368
+    },
+    {
+      "path": "baseline.json",
+      "sha256": "6d6f6e7b0012085df11881ba123a717e4176e151866bf2af7f1fcbb4a403f07b",
+      "bytes": 1032
+    },
+    {
+      "path": "config.json",
+      "sha256": "f6a21d6d540afe1d18810110f8157b1051e26d0195cc002276e19acb1f6c73bd",
+      "bytes": 1178
+    },
+    {
+      "path": "package.json",
+      "sha256": "086e2f8db73f5f7806c6d05a3e95bedbce35686090916709264e37dec387b912",
+      "bytes": 487
+    },
+    {
+      "path": "Shapley贡献计算.js",
+      "sha256": "5992f5793e542a8602d205872ed7b711021efbf8882cff603f88786d9dce4bee",
+      "bytes": 9334
+    },
+    {
+      "path": "tree.json",
+      "sha256": "5a5eec81b0dadfe444f147ba2c08aa1e582f1268ce0c41d69f3a4d9660a4414b",
+      "bytes": 31744
+    },
+    {
+      "path": "V4更新与模型契约.md",
+      "sha256": "8c09535799a963b37782c504543982cdf5471b570c227f07a9233d73bbbe3458",
+      "bytes": 10128
+    }
+  ],
+  "repository": "https://github.com/zy009197/ai-cluster-reliability",
+  "commit": "683afe829313bfdcb249bc593e48df5b29813666"
+}

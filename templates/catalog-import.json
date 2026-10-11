@@ -1,0 +1,27 @@
+[
+  {
+    "kind": "failure-mode",
+    "name": "GPU 硬故障示例",
+    "payload": {
+      "fit": 1000,
+      "rateBasis": "device-hour",
+      "scope": "card",
+      "modelBinding": { "array": "fits", "index": 0 },
+      "source": {
+        "document": "请填写实测/厂家证据",
+        "location": "页/行/单元格"
+      },
+      "evidenceStatus": "illustrative"
+    }
+  },
+  {
+    "kind": "mechanism",
+    "name": "硬故障即时检测示例",
+    "payload": {
+      "patch": { "hardDetect": 99 },
+      "modeIds": [],
+      "conditions": { "requires": "请填写部署条件" },
+      "evidenceStatus": "illustrative"
+    }
+  }
+]

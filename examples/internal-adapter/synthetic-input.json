@@ -1,0 +1,18 @@
+{
+  "faults": [
+    {
+      "synthetic_name": "Synthetic GPU",
+      "synthetic_fit": "42",
+      "synthetic_basis": "device-hour"
+    },
+    { "synthetic_name": "Synthetic missing rate" }
+  ],
+  "parameters": [
+    {
+      "synthetic_field": "hardSeconds",
+      "synthetic_value": "60",
+      "synthetic_unit": "s"
+    }
+  ],
+  "ambiguities": []
+}

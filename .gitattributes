@@ -1,0 +1,4 @@
+* text=auto eol=lf
+# Keep expert reference and vendored numerical source bytes identical to provenance hashes.
+/references/expert-v4/** -text
+/packages/solvers/src/vendor/** -text

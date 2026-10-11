@@ -1,0 +1,21 @@
+# Reliability MCP 0.2
+
+独立 MCP 网关，标准 stdio 协议，不依赖 React 或 OpenCode。
+计算和数据持久化仍由可靠性 API 服务负责；此包不是离线数值引擎。
+
+从源码运行：`node --import tsx packages/mcp-runtime/src/stdio.ts`。
+分发包运行：安装 package.json 依赖后 `node dist/stdio.mjs`。
+
+在 Agent 的 MCP 配置中设置 `RELIABILITY_API_URL`、`RELIABILITY_TASK_ID`、
+`RELIABILITY_TASK_TOKEN`。每条连接只绑定一个任务。令牌由任务服务生成，
+不得写入共享 Skill、公共资产或任务导出。OpenCode 使用工作台生成的
+`launch.ts` 读取本机凭据；其他 Agent 可从本地凭据文件加载环境变量。
+
+工具发现通过 `tools/list`；参数为 `{id?,revision?,query?,body?}`。
+Agent 可读取、准备草稿、运行实验、写阶段产物及提交公共候选；
+输入确认、阶段签认、公共发布均不由 Agent 授权。
+
+`input_mapping` 参数为 `{id}`，读取用户已确认输入的映射预览。未确认返回
+`INPUT_UNCONFIRMED`。内网管理员适配预览可包含 `adapter`（标识、固定版本、
+入口模块 SHA-256）和任务私有 `previewId`，资产草稿保留适配来源。工具不会
+自动应用补丁、创建资产、冻结版本或确认流程；不得从 Agent 请求注册模块。

@@ -1,0 +1,2 @@
+kind,name,fit,rateBasis,scope
+failure-mode,示例GPU故障模式,1000,device-hour,card

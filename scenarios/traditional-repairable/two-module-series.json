@@ -1,0 +1,15 @@
+{
+  "id": "traditional.two-module-series",
+  "name": "两模块可修复串联系统",
+  "metricIds": ["task-reliability", "steady-state-availability"],
+  "model": {
+    "hours": 10,
+    "topology": "series",
+    "modules": [
+      {"id":"A","failureRate":0.01,"repairRate":1},
+      {"id":"B","failureRate":0.01,"repairRate":1}
+    ]
+  },
+  "expected": {"availability":0.9802960494069208,"taskReliability":0.8187307530779818},
+  "assumptions": ["独立二状态模块", "指数故障与修复时间", "时间单位为小时"]
+}

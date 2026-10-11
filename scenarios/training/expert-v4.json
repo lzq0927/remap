@@ -1,0 +1,15 @@
+{
+  "id": "training.expert-v4",
+  "name": "专家 V4 月度训练正确交付",
+  "modelVersion": "4.0-domain-ledger",
+  "metricId": "training.correct-delivery",
+  "sourceCommit": "683afe829313bfdcb249bc593e48df5b29813666",
+  "sourceEntry": "正确有效产出改进分析.html#precomputed",
+  "request": {"cards":10000,"hours":720,"trials":128,"seed":9137,"target":0.99},
+  "baseline": {"intervalSeconds":7200,"saveSeconds":10,"silentDetect":0,"mode":"global"},
+  "semantics": "delivery = (terminal unresolved corruption ? 0 : correct) / hours",
+  "configSource": "references/expert-v4/config.json",
+  "modelSource": "references/expert-v4/baseline.json",
+  "evidenceSource": "references/expert-v4/场景与证据.js",
+  "uncertainty": "Monte Carlo error only; model parameters are scenario assumptions"
+}

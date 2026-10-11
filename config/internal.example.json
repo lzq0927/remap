@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0.0",
+  "allowedOrigins": ["https://llm.company.example"],
+  "provider": {
+    "id": "company",
+    "name": "企业内网模型",
+    "baseURL": "https://llm.company.example/v1",
+    "models": { "internal-model": { "name": "企业模型" } },
+    "defaultModel": "internal-model",
+    "apiKeyEnv": "COMPANY_MODEL_API_KEY"
+  }
+}

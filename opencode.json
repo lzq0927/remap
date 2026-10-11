@@ -1,0 +1,5 @@
+{
+  "$schema":"https://opencode.ai/config.json",
+  "mcp":{"reliability":{"type":"local","command":["node","--import","tsx","packages/mcp-runtime/src/stdio.ts"],"enabled":false}},
+  "permission":{"external_directory":"ask"}
+}

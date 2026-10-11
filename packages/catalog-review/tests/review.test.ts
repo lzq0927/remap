@@ -1,0 +1,32 @@
+import { afterEach, expect, test } from "vitest";
+import { Store } from "../../assets/src/store";
+import { CatalogReviewService } from "../src/service";
+const stores: Store[] = [];
+afterEach(() => stores.splice(0).forEach((s) => s.close()));
+test("public publication requires an independent reviewer and content-bound evidence checks", () => {
+  const source = new Store(":memory:"), shared = new Store(":memory:"); stores.push(source, shared);
+  const asset = source.create("failure-mode", "Example", { fit: 100, rateBasis: "device-hour", source: "field evidence", conditions: "specified generation", evidenceStatus: "validated" });
+  source.transition(asset.id, asset.revision, "validated");
+  const review = new CatalogReviewService(shared);
+  const candidate = review.submit("task-a", source.get(asset.id, asset.revision), "author");
+  const checks = { units: true, evidence: true, applicability: true, privacy: true, reproducibility: true };
+  expect(() => review.decide(candidate.id, { decision: "approved", contentHash: candidate.contentHash, checks, reason: "checked" }, { id: "author", role: "reviewer" })).toThrow(/INDEPENDENT_REVIEW_REQUIRED/);
+  expect(() => review.decide(candidate.id, { decision: "approved", contentHash: "stale", checks, reason: "checked" }, { id: "reviewer-b", role: "reviewer" })).toThrow(/REVISION_CONFLICT/);
+  expect(() => review.decide(candidate.id, { decision: "approved", contentHash: candidate.contentHash, checks: { ...checks, evidence: false }, reason: "checked" }, { id: "reviewer-b", role: "reviewer" })).toThrow(/REVIEW_INCOMPLETE/);
+  expect(() => review.decide(candidate.id, { decision: "approved", contentHash: candidate.contentHash, checks, reason: "checked" }, { id: "agent", role: "agent" })).toThrow(/REVIEWER_REQUIRED/);
+  const approved = review.decide(candidate.id, { decision: "approved", contentHash: candidate.contentHash, checks, reason: "checked" }, { id: "reviewer-b", role: "reviewer" });
+  expect(approved.state).toBe("published");
+  expect(shared.get(approved.publicAsset!.id, approved.publicAsset!.revision).state).toBe("published");
+  expect(shared.documents("catalog-review-audit").length).toBe(2);
+});
+test("illustrative assets and private refs cannot be automatically promoted", () => {
+  const source = new Store(":memory:"), shared = new Store(":memory:"); stores.push(source, shared);
+  const review = new CatalogReviewService(shared);
+  const asset = source.create("mechanism", "Unverified", { patch: { hardDetect: 99 }, evidenceStatus: "illustrative" });
+  source.transition(asset.id, 1, "validated");
+  const candidate = review.submit("task-a", source.get(asset.id, asset.revision), "author");
+  const checks = { units: true, evidence: true, applicability: true, privacy: true, reproducibility: true };
+  expect(() => review.decide(candidate.id, { decision: "approved", contentHash: candidate.contentHash, checks, reason: "checked" }, { id: "reviewer", role: "reviewer" })).toThrow(/EVIDENCE_REQUIRED/);
+  expect(review.decide(candidate.id, { decision: "rejected", contentHash: candidate.contentHash, reason: "missing evidence" }, { id: "reviewer", role: "reviewer" }).state).toBe("rejected");
+  expect(shared.list()).toHaveLength(0);
+});
