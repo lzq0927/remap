@@ -36,7 +36,7 @@ function simulate(cards,stage,seed,p=config,opts={}){
       let failed=0;
       for(const node of (opts.recoveryOrder??['replay','elastic','process'])) {
       if(node==='replay'&&opts.replay&&event.replay){
-        if(tech()<P['R-REPLAY'].success){pause('hard',delay,P['R-REPLAY'].successSeconds);return;}
+        if(tech()<P['R-REPLAY'].success){pause('hard',delay,failed+P['R-REPLAY'].successSeconds);return;}
         failed+=P['R-REPLAY'].failureSeconds;
       }
       if(node==='elastic'&&opts.elastic&&event.elastic){

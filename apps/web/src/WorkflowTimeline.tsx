@@ -28,11 +28,13 @@ const labels: Record<string, string> = {
 };
 export default function WorkflowTimeline({
   state,
+  steps = workflowSteps,
   stage,
   onSelect,
   onCancel,
 }: {
   state?: WorkflowState;
+  steps?: typeof workflowSteps;
   stage: number;
   onSelect: (stage: number) => void;
   onCancel: () => void;
@@ -63,7 +65,7 @@ export default function WorkflowTimeline({
         ref={navigation}
       >
         <div className="steps">
-          {workflowSteps.map((step, i) => {
+          {steps.map((step, i) => {
             const current = state?.steps.find((s) => s.id === step.id);
             return (
               <button

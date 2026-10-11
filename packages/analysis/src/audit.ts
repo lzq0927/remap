@@ -6,11 +6,17 @@ import sourcePolicy from "../../../references/expert-review-2026-10-09/mechanism
 import sourceMechanisms from "../../../references/expert-review-2026-10-09/mechanisms.json";
 import { summarize } from "../../solvers/src/statistics";
 import { shapleyValues } from "./index";
+import {
+  auditTarget,
+  validateAuditDesign,
+  auditDesignReview,
+  auditBudgetDefaults,
+} from "./audit-design";
 
 const createEngine = createRequire(import.meta.url)(
   "../../solvers/src/vendor/review-engine.cjs",
 );
-export const AUDIT_VERSION = "review-retained-progress.v1";
+export const AUDIT_VERSION = "review-retained-progress.v2";
 export const AUDIT_METRIC = "training.retained-clean-progress";
 const commit = "683afe829313bfdcb249bc593e48df5b29813666";
 const rateBasis = "npu-equivalent-hour";
@@ -38,6 +44,10 @@ export interface AuditRequest {
   trials: number;
   seed: number;
   target: number;
+  targets?: Record<string, number>;
+  lossBudgetWeights?: Record<string, number>;
+  verifyRecommendation?: boolean;
+  verificationTrials?: number;
   scales?: number[];
   mechanisms?: string[];
   attribution?: boolean;
@@ -89,7 +99,10 @@ export function getAuditDefaults() {
     hours: 720,
     trials: 128,
     seed: sourceConfig.seed,
-    target: 0.9,
+    target: 0.99,
+    lossBudgetWeights: { ...auditBudgetDefaults },
+    verifyRecommendation: true,
+    verificationTrials: 64,
     scales: [10000],
     mechanisms: ["sdcDetect", "step", "replay", "process", "elastic", "fast"],
     attribution: true,
@@ -191,6 +204,19 @@ export function resolveAudit(request: AuditRequest) {
       "scales must contain the selected cards and 1..5 unique sizes",
     );
   scales.forEach((n) => numberIn(n, 1, 1000000, "scale", true));
+  validateAuditDesign(request, scales);
+  if (
+    request.verifyRecommendation !== undefined &&
+    typeof request.verifyRecommendation !== "boolean"
+  )
+    throw new Error("verifyRecommendation must be boolean");
+  numberIn(
+    request.verificationTrials ?? 64,
+    2,
+    2048,
+    "verificationTrials",
+    true,
+  );
   const model: Record<string, any> = {
     ...sourceConfig,
     horizonHours: request.hours,
@@ -287,6 +313,9 @@ export function resolveAudit(request: AuditRequest) {
     candidateEvents.reduce((s, e) => s + e.fit, 0),
   );
   const sampleRuns =
+    ((request.verifyRecommendation ?? false)
+      ? 2 * (request.verificationTrials ?? 64)
+      : 0) +
     (17 + (request.candidateFitOverrides?.length ? 1 : 0)) * request.trials +
     ((request.attribution ?? true) && mechanisms.length
       ? 2 ** mechanisms.length * attributionTrials
@@ -334,6 +363,7 @@ export function audit(
     trials: number,
     selectedEngine = engine,
     ledgerEnabled = true,
+    seedOffset = 0,
   ) => {
     const values: number[] = [],
       ledger: Record<string, number> = {},
@@ -344,7 +374,7 @@ export function audit(
       const r = selectedEngine.simulate(
         cards,
         2,
-        (request.seed + Math.imul(i + 1, 2654435761)) >>> 0,
+        (request.seed + Math.imul(i + 1 + seedOffset, 2654435761)) >>> 0,
         params,
         { ...opts, recoveryOrder },
       );
@@ -362,7 +392,7 @@ export function audit(
     }
     return {
       cards,
-      statistics: summarize(values, request.target),
+      statistics: summarize(values, auditTarget(request, cards)),
       availability,
       ledger,
       perEvent,
@@ -396,6 +426,7 @@ export function audit(
   const doSensitivity =
     (request.sensitivity ?? true) && mechanisms.includes("sdcDetect");
   const total =
+    ((request.verifyRecommendation ?? false) ? 2 : 0) +
     scales.length *
       (definitions.length +
         ((request.attribution ?? true) && mechanisms.length
@@ -419,6 +450,7 @@ export function audit(
         0,
       );
       rows.push({
+        target: auditTarget(request, cards),
         id: def.id,
         name: def.name,
         ...sampled,
@@ -548,6 +580,86 @@ export function audit(
   const combined = rows.find(
     (r) => r.cards === request.cards && r.id === "combined",
   );
+  const costOf = (ids: string[]) =>
+    ids.every((id) => request.costs?.[id] !== undefined)
+      ? ids.reduce((sum, id) => sum + request.costs![id], 0)
+      : null;
+  const coalitionAudit = attribution.find((a) => a.cards === request.cards);
+  const candidates = (
+    coalitionAudit
+      ? coalitionAudit.coalitions.map((c: any) => ({
+          mechanisms: c.factors,
+          statistics: c.statistics,
+        }))
+      : rows
+          .filter(
+            (r) =>
+              r.cards === request.cards && ["base", "combined"].includes(r.id),
+          )
+          .map((r) => ({
+            mechanisms: r.id === "base" ? [] : mechanisms,
+            statistics: r.statistics,
+          }))
+  ).map((c: any) => ({ ...c, cost: costOf(c.mechanisms) }));
+  const costsComplete = candidates.every((c: any) => c.cost !== null);
+  candidates.sort((a: any, b: any) => {
+    const passes = (c: any) => c.statistics.ciLow >= request.target;
+    if (passes(a) !== passes(b)) return passes(a) ? -1 : 1;
+    if (passes(a) && costsComplete && a.cost !== b.cost) return a.cost - b.cost;
+    return (
+      b.statistics.mean - a.statistics.mean ||
+      a.mechanisms.length - b.mechanisms.length
+    );
+  });
+  const chosen = candidates[0];
+  let verification: any = null;
+  if (request.verifyRecommendation ?? false) {
+    const trials = request.verificationTrials ?? 64;
+    const independentBase = sample(
+      request.cards,
+      {},
+      trials,
+      engine,
+      false,
+      1000000,
+    );
+    onProgress?.(++completed, total);
+    const checked = sample(
+      request.cards,
+      Object.fromEntries(chosen.mechanisms.map((id: string) => [id, true])),
+      trials,
+      engine,
+      false,
+      1000000,
+    );
+    onProgress?.(++completed, total);
+    verification = {
+      trials,
+      seedOffset: 1000000,
+      statistics: checked.statistics,
+      baseline: independentBase.statistics,
+      delta: summarize(
+        checked.values.map((v, i) => v - independentBase.values[i]),
+        0,
+      ),
+      status:
+        checked.statistics.ciLow >= request.target
+          ? "supported"
+          : checked.statistics.ciHigh < request.target
+            ? "below"
+            : "uncertain",
+    };
+  }
+  const recommendation = {
+    scope: coalitionAudit
+      ? "selected-mechanism-subsets"
+      : "baseline-and-selected-combination",
+    candidateCount: candidates.length,
+    chosen,
+    shortlist: candidates.slice(0, 8),
+    verification,
+    rule: "优先区间下限达到目标的候选；候选成本均已提供时优先较低成本，否则按均值排序。候选仅限当前已选机制的子集，不代表全局最优；载入后需重新评估其他规模。",
+  };
   const totalFit = events.reduce((s, e) => s + e.fit, 0);
   const metadata = events.map((event) => ({
     ...event,
@@ -564,6 +676,13 @@ export function audit(
     modelVersion: AUDIT_VERSION,
     request: structuredClone(request),
     rows,
+    designReview: auditDesignReview(
+      { ...request, mechanisms },
+      rows,
+      model,
+      policy,
+    ),
+    recommendation,
     attribution,
     sensitivity,
     events: metadata,

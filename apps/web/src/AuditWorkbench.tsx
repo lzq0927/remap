@@ -1,37 +1,19 @@
+import {
+  auditLossBudgetLabels,
+  auditBudgetDefaults,
+} from "../../../packages/analysis/src/audit-design";
 import { useEffect, useState } from "react";
 import { EventEditor, NumericParameters } from "./AuditEditors";
 import type { AuditRequest } from "../../../packages/analysis/src/audit";
 
-export interface AuditDraft {
-  request: AuditRequest;
-  overrides: string;
-  hardware: string;
-  model: string;
-  policy: string;
-  allScales: boolean;
-}
-export function auditDraftInput(draft: AuditDraft): AuditRequest {
-  const { request, overrides, hardware, model, policy, allScales } = draft;
-  const eventOverrides = JSON.parse(overrides),
-    candidateFitOverrides = JSON.parse(hardware);
-  if (!Array.isArray(eventOverrides) || !Array.isArray(candidateFitOverrides))
-    throw new Error("事件更新必须是数组");
-  return {
-    ...request,
-    scales: allScales
-      ? [...new Set([request.cards, 10000, 100000, 200000, 500000])]
-      : [request.cards],
-    model: JSON.parse(model),
-    policy: JSON.parse(policy),
-    eventOverrides,
-    candidateFitOverrides,
-    costs: Object.fromEntries(
-      Object.entries(request.costs ?? {}).filter(([id]) =>
-        request.mechanisms?.includes(id),
-      ),
-    ),
-  };
-}
+import {
+  auditDraftInput,
+  type AuditDraft,
+} from "../../../packages/contracts/src/audit-draft";
+export {
+  auditDraftInput,
+  type AuditDraft,
+} from "../../../packages/contracts/src/audit-draft";
 export default function AuditWorkbench({
   defaults,
   draft,
@@ -98,22 +80,13 @@ export default function AuditWorkbench({
       <p className="audit-lead">
         哪些故障消耗了训练产出？哪些措施值得组合？在同一组故障假设下比较基线、单项和组合，形成可复核的设计依据。
       </p>
-      <div className="audit-journey">
-        <span>
-          <b>01</b> 确定目标与基线
-        </span>
-        <span>
-          <b>02</b> 选择工程措施
-        </span>
-        <span>
-          <b>03</b> 比较收益与证据
-        </span>
-      </div>
       <div className="audit-context">
         <strong>本次衡量：窗口结束时保留的正确计算进度</strong>
         <span>外网参考参数 · 中断数据待内网校准 · 机制能力为待验证假设</span>
       </div>
-      <h3 className="audit-step-title">01 / 评估范围</h3>
+      <h3 id="audit-scope" className="audit-step-title">
+        01 / 评估范围
+      </h3>
       <div className="fields">
         {[
           ["cards", "审核卡数", 1, 1000000],
@@ -140,6 +113,31 @@ export default function AuditWorkbench({
         ))}
       </div>
       <div className="fields">
+        <label>
+          <input
+            type="checkbox"
+            checked={request.verifyRecommendation ?? false}
+            onChange={(e) =>
+              setRequest({ ...request, verifyRecommendation: e.target.checked })
+            }
+          />
+          独立种子复核建议组合
+        </label>
+        <label>
+          独立复核轨迹数
+          <input
+            type="number"
+            min="2"
+            max="2048"
+            value={request.verificationTrials ?? 64}
+            onChange={(e) =>
+              setRequest({
+                ...request,
+                verificationTrials: Number(e.target.value),
+              })
+            }
+          />
+        </label>
         <label>
           <input
             type="checkbox"
@@ -189,6 +187,99 @@ export default function AuditWorkbench({
           </select>
         </label>
       </div>
+      {allScales && (
+        <div className="fields" aria-label="分规模目标">
+          {[...new Set([request.cards, 10000, 100000, 200000, 500000])]
+            .filter((n) => n !== request.cards)
+            .map((n) => (
+              <label key={n}>
+                {n.toLocaleString()} 卡目标（0–1）
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.001"
+                  value={request.targets?.[String(n)] ?? request.target}
+                  onChange={(e) =>
+                    setRequest({
+                      ...request,
+                      targets: {
+                        ...request.targets,
+                        [String(n)]: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
+            ))}
+          <p className="note">
+            未单独设置的规模沿用主目标；目标由需求给定，不由 MTBF 推导。
+          </p>
+        </div>
+      )}
+      <section id="audit-budget" aria-label="损失预算分配">
+        <h3>损失预算分配</h3>
+        <p>
+          允许总损失 =（1 − 目标）× 窗口。六项预算用于追踪缺口，不是直接降低 FIT
+          的比例；工程措施需再经正向仿真验证。
+        </p>
+        <p>
+          当前规模允许损失{" "}
+          <strong>
+            {((1 - request.target) * request.hours).toFixed(3)} 小时
+          </strong>
+          ；权重合计{" "}
+          <strong>
+            {(
+              Object.values(request.lossBudgetWeights ?? {}).reduce(
+                (a, b) => a + b,
+                0,
+              ) * 100
+            ).toFixed(2)}
+            %
+          </strong>
+          （需为 100%）。
+        </p>
+        <div className="fields">
+          {Object.entries(auditLossBudgetLabels).map(([id, name]) => (
+            <label key={id}>
+              {name}预算（%）
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={
+                  Math.round((request.lossBudgetWeights?.[id] ?? 0) * 10000) /
+                  100
+                }
+                onChange={(e) =>
+                  setRequest({
+                    ...request,
+                    lossBudgetWeights: {
+                      ...request.lossBudgetWeights,
+                      [id]: Number(e.target.value) / 100,
+                    },
+                  })
+                }
+              />
+            </label>
+          ))}
+        </div>
+        <button
+          onClick={() =>
+            setRequest({
+              ...request,
+              lossBudgetWeights: { ...auditBudgetDefaults },
+            })
+          }
+        >
+          载入参考预算
+        </button>
+        <p className="note">
+          参考权重为设计假设，请按产品优先级调整并在流程中确认。
+        </p>
+      </section>
       <fieldset className="mechanism-picker">
         <legend>02 / 选择组合措施</legend>
         <p className="note">
@@ -228,7 +319,7 @@ export default function AuditWorkbench({
         Shapley 的加入顺序用于分摊收益，物理恢复顺序由上面的恢复链决定。无检测时
         step 不能自行发现静默错误；机制改变后果，不自动降低源 FIT。
       </p>
-      <details>
+      <details id="audit-parameters">
         <summary>基线参数、机制目标与成本</summary>
         <h3>当前基线</h3>
         {parsedModel && (
@@ -315,12 +406,14 @@ export default function AuditWorkbench({
           等效运行小时；器件物理 FIT
           不可直接混用。内网真实数据只在公司内部部署中录入。
         </p>
+        <span id="audit-evidence" />
         <EventEditor
           title="基线事件更新"
           events={events}
           value={overrides}
           onChange={setOverrides}
         />
+
         <EventEditor
           title="硬件改进目标"
           events={events}

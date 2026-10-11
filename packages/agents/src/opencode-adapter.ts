@@ -46,7 +46,10 @@ export class OpenCodeAdapter implements WorkspaceAgentPort {
       method: method ?? (body ? "POST" : "GET"),
       headers,
       body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(body ? 120000 : 4000),
+      // Project metadata may cold-start Skill/MCP; global health stays fail-fast.
+      signal: AbortSignal.timeout(
+        body ? 120000 : path.startsWith("/global/") ? 4000 : 20000,
+      ),
     });
     if (!response.ok) throw new Error("OpenCode HTTP " + response.status);
     return response.json();

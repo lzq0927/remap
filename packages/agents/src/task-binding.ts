@@ -131,7 +131,7 @@ async function prepare(tasks: TaskServices, taskId: string, apiUrl: string) {
       ? internalOpenCodeConfig(policy)
       : {
           provider: {
-            "bigmodel-coding": bigmodelProvider,
+            "zhipuai-coding-plan": bigmodelProvider,
             ...previous.provider,
           },
         }),

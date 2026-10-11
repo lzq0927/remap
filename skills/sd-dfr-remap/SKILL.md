@@ -13,7 +13,7 @@ description: Guide reliability target allocation, architecture and failure model
 
 Equal/ARINC/AGREE/Availability 从总体子模型指标向下分配设计预算。AGREE近似公式按 ∏Rᵢ^Eᵢ 回合成；训练产出需互斥损失预算与正向仿真，不能直接串联。先明确故障场景及降低FIT/检测/恢复措施，再用Shapley分摊组合增益。Shapley的加入顺序不是物理恢复链；收益确实可加时无需复杂分摊，统计独立本身不足以证明可加。固定延迟与周期检查点使用DES；指数驻留时间等条件成立时才选CTMC。
 
-审核是独立实验，不传旧V4的executionId，也不代替已有流程的人工确认。使用 run_status 读取实际结果，再通过 report_export 导出HTML事件与机制审核报告，报告保留事件来源、损失账本、条件收益、组合贡献、敏感性和待校准项。
+审核可独立试算，也可作为 activeAssessment=audit 的正式六阶段流程。design_get.assessment 是服务端从草稿归一化得到的当前指标与输入，valid=false 时先修复输入；严禁使用 design_get.request 的旧 V4 参数代替审核参数。前四阶段由用户确认后，audit 使用 assessment.input、当前 executionId 和 inputRevision 正式计算；其他试算不传 executionId。切换指标、目标或草稿会使原流程过期，必须重新确认。六项 lossBudgetWeights 合计为 1；分规模目标见 targets。建议组合仅在已选机制子集中筛选，独立种子复核与筛选分开；载入建议须由用户确认，再评估所有目标规模。使用 run_status 读取实际结果，再通过 report_export 导出HTML事件与机制审核报告，报告保留事件来源、损失账本、条件收益、组合贡献、敏感性和待校准项。
 
 先调用 task_current、design_get、workflow_state，核对本连接绑定的 taskId、设计 revision 和当前 executionId。再通过 model_defaults、catalog_search、run_status 读取目标、模型和资产，不凭聊天重建已有事实。不得切换到另一个任务或自建全局连接。
 
@@ -30,7 +30,7 @@ Agent 将当前阶段产物保存为 awaiting-review，工作台中间会实时�
 5. evaluate：正式计算必须调用 analysis_solve，轮询 run_status。Equal/ARINC/AGREE/Availability 用于适用的子模型，多方法比较后必须回代相同全模型。训练主目标不可直接串联相乘。mechanism 组合收益通过 compare/attribute 求解；search 采用独立种子复核，不把未找到方案称为数学不可行。
 6. validate-deliver：核对模型版本、输入摘要、资产快照、种子、数值回归、损失账本和证据。报告均值、置信区间、P05/P50/P95、单窗口达标比例。均值区间仅计采样误差。使用 report_export 输出报告、feedback_record 记录用户选择。
 
-正式训练评估仅在前四阶段已 confirmed 时调用 analysis_solve({body:{operation:'training',input:<design_get.request>,executionId:<current.executionId>,inputRevision:<design.revision>}})。必须使用完整已保存 request，包含固化资产引用，不自行改写。compare/search/FTA 等其他试算不传 executionId，保存为独立实验；不能替代正式训练交付。
+以下为旧 V4 工作流的操作（审核工作流见上节）：正式训练评估仅在前四阶段已 confirmed 时调用 analysis_solve({body:{operation:'training',input:<design_get.request>,executionId:<current.executionId>,inputRevision:<design.revision>}})。必须使用完整已保存 request，包含固化资产引用，不自行改写。compare/search/FTA 等其他试算不传 executionId，保存为独立实验；不能替代正式训练交付。
 
 公共或示例资产需先复制到任务私有库，再核对与冻结版本。示例 evidenceStatus=illustrative 不能变为产品验证。Agent 可 catalog_create 草稿、catalog_validate 校验，用户在工作台验证并冻结；catalog_submit 仅提交候选，独立审核通过前不能进入公共发布库。输入文件解析亦为待确认，input_confirm 需要用户操作。
 

@@ -11,6 +11,7 @@ import AuditResult from "./AuditResult";
 export interface ResultViewProps {
   run: Run | null | undefined;
   onApplyCandidate?: (request: TrainingRequest) => void;
+  onApplyAudit?: (request: any) => void;
 }
 const statusNames: Record<string, string> = {
   queued: "等待运行",
@@ -718,13 +719,15 @@ function Ctmc({ result }: { result: any }) {
 }
 function ResultBody({
   result,
+  onApplyAudit,
   onApplyCandidate,
 }: {
   result: any;
+  onApplyAudit?: ResultViewProps["onApplyAudit"];
   onApplyCandidate?: ResultViewProps["onApplyCandidate"];
 }) {
   if (result?.kind === "expert-review-audit")
-    return <AuditResult result={result} />;
+    return <AuditResult result={result} onApply={onApplyAudit} />;
   if (result?.statistics && result?.ledger) return <Training result={result} />;
   if (result?.contributions) return <Attribution result={result} />;
   if (result?.status && searchNames[result.status])
@@ -806,7 +809,11 @@ function Snapshot({
     </details>
   );
 }
-export default function ResultView({ run, onApplyCandidate }: ResultViewProps) {
+export default function ResultView({
+  run,
+  onApplyCandidate,
+  onApplyAudit,
+}: ResultViewProps) {
   const { url } = useTaskApi();
   if (!run) return null;
   const succeeded = run.status === "succeeded",
@@ -852,7 +859,11 @@ export default function ResultView({ run, onApplyCandidate }: ResultViewProps) {
         </p>
       )}
       {result && (
-        <ResultBody result={result} onApplyCandidate={onApplyCandidate} />
+        <ResultBody
+          result={result}
+          onApplyCandidate={onApplyCandidate}
+          onApplyAudit={onApplyAudit}
+        />
       )}
       <Snapshot run={run} result={result} warnings={warnings} />
       <details>

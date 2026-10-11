@@ -1,3 +1,4 @@
+import { designAssessment } from "./design-assessment";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
@@ -354,12 +355,19 @@ export async function buildApp(options: BuildAppOptions = {}) {
       revision: _revision,
       ...content
     } = req.body;
-    const inputHash = hash({
-      request: content.request,
-      scenario: content.scenario,
-    });
+    const assessment = designAssessment(content);
+    const inputHash = hash(
+      content.activeAssessment === "audit"
+        ? {
+            request: assessment.valid ? assessment.input : content.auditDraft,
+            scenario: content.scenario,
+            metricId: assessment.metricId,
+          }
+        : { request: content.request, scenario: content.scenario },
+    );
     return store.putDocument("design", {
       ...content,
+      assessment,
       revision: currentRevision + (previous?.inputHash === inputHash ? 0 : 1),
       inputHash,
       savedAt: new Date().toISOString(),

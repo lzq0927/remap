@@ -12,7 +12,7 @@ export function auditSummary(r: any, cards = r.request.cards) {
   const combined = r.rows.find(
     (x: any) => x.cards === cards && x.id === "combined",
   );
-  const target = r.request.target;
+  const target = r.request.targets?.[String(cards)] ?? r.request.target;
   const status =
     combined.statistics.ciLow >= target
       ? "supported"

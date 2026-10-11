@@ -1,13 +1,21 @@
 import { useState } from "react";
 import { auditSummary } from "../../../packages/reports/src/audit-summary";
 const pct = (v: number) => (v * 100).toFixed(3) + "%";
-export default function AuditResult({ result: r }: { result: any }) {
+export default function AuditResult({
+  result: r,
+  onApply,
+}: {
+  result: any;
+  onApply?: (request: any) => void;
+}) {
   const [scale, setScale] = useState(r.request.cards);
   const cards = r.rows.some((x: any) => x.cards === scale)
     ? scale
     : r.request.cards;
   const s = auditSummary(r, cards);
   const selected = r.rows.filter((row: any) => row.cards === cards);
+  const budget = r.designReview?.scales.find((x: any) => x.cards === cards);
+  const recommendation = r.recommendation;
   const a = r.attribution.find((row: any) => row.cards === cards);
   return (
     <>
@@ -60,6 +68,100 @@ export default function AuditResult({ result: r }: { result: any }) {
           <small>目标 {pct(s.target)}；pp 为百分点</small>
         </div>
       </div>
+      {budget && (
+        <section aria-label="预算与实际损失">
+          <h3>预算与实际损失</h3>
+          <p>
+            允许损失 {budget.allowedHours.toFixed(3)} 小时；实际{" "}
+            {budget.actualLossHours.toFixed(3)} 小时；
+            {budget.excessHours > 0 ? "超出" : "余量"}{" "}
+            {Math.abs(budget.excessHours).toFixed(3)} 小时。
+          </p>
+          <p className="note">
+            无故障参考产出：基线 {pct(r.designReview.baselineNoFault)}
+            ，所选检查点策略 {pct(r.designReview.selectedNoFault)}
+            。这是保存开销参考，不是任意故障与机制下的可行性上界。
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>损失项</th>
+                  <th>预算 / 小时</th>
+                  <th>实际 / 小时</th>
+                  <th>建议核查</th>
+                </tr>
+              </thead>
+              <tbody>
+                {budget.items.map((x: any) => (
+                  <tr key={x.id}>
+                    <td>{x.name}</td>
+                    <td>{x.allowedHours?.toFixed(3) ?? "未分配"}</td>
+                    <td>
+                      {x.actualHours.toFixed(3)}
+                      {x.excessHours > 0 ? " · 超预算" : ""}
+                    </td>
+                    <td>{x.action}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+      {recommendation && (
+        <section aria-label="候选决策与独立复核">
+          <h3>候选决策与独立复核</h3>
+          <p>
+            {r.request.cards.toLocaleString()} 卡 · 已比较{" "}
+            {recommendation.candidateCount} 个候选。{recommendation.rule}
+          </p>
+          <p>
+            建议组合：
+            <strong>
+              {recommendation.chosen.mechanisms
+                .map(
+                  (id: string) =>
+                    r.rows.find((m: any) => m.id === id)?.name ?? id,
+                )
+                .join(" + ") || "基线"}
+            </strong>
+            ；筛选均值 {pct(recommendation.chosen.statistics.mean)}；成本{" "}
+            {recommendation.chosen.cost ?? "未完整提供"}。
+          </p>
+          {recommendation.verification ? (
+            <p>
+              独立复核 {recommendation.verification.trials} 条轨迹：
+              {pct(recommendation.verification.statistics.mean)}，95% 均值区间{" "}
+              {pct(recommendation.verification.statistics.ciLow)} ～{" "}
+              {pct(recommendation.verification.statistics.ciHigh)}。结论：
+              {
+                (
+                  {
+                    supported: "采样支持达到目标",
+                    below: "仍低于目标",
+                    uncertain: "目标附近，证据不足",
+                  } as any
+                )[recommendation.verification.status]
+              }
+              。此复核不替代现场数据验证。
+            </p>
+          ) : (
+            <p>尚未执行独立复核，筛选数据不能同时作为独立验证证据。</p>
+          )}
+          <button
+            disabled={!onApply}
+            onClick={() =>
+              onApply?.({
+                ...r.request,
+                mechanisms: recommendation.chosen.mechanisms,
+              })
+            }
+          >
+            载入建议组合，重新确认
+          </button>
+        </section>
+      )}
       <h3>产出损失去了哪里</h3>
       <p className="note">
         橙色为基线，绿色为组合；全部折算为单作业窗口的等效计算小时。
@@ -127,7 +229,7 @@ export default function AuditResult({ result: r }: { result: any }) {
       <h3>单项与组合对照</h3>
       <p>
         {cards.toLocaleString()} 卡 · {r.request.hours} 小时 · 目标{" "}
-        {pct(r.request.target)}。基线、单项与组合使用同一批种子。
+        {pct(s.target)}。基线、单项与组合使用同一批种子。
       </p>
       <div className="table-wrap">
         <table>

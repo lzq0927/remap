@@ -4,6 +4,7 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   request,
   taskId,
 }) => {
+  test.setTimeout(90000);
   await page.goto("/?task=" + taskId);
   const panel = page.getByRole("region", { name: "故障事件与机制收益审核" });
   await expect(panel).toBeVisible();
@@ -25,10 +26,38 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
     .getByRole("button", { name: "加入更新" })
     .click();
   await panel.getByLabel("同时对比万卡、十万卡、二十万卡、五十万卡").check();
+  await panel.getByLabel("100,000 卡目标（0–1）").fill("0.943");
+  for (let step = 0; step < 4; step++)
+    await page
+      .getByRole("button", { name: "确认并进入下一步", exact: true })
+      .click();
+  await expect(
+    page.getByRole("heading", { name: "计算与权衡", exact: true }),
+  ).toBeVisible();
   await panel.getByRole("button", { name: "运行事件与机制审核" }).click();
   await expect(
     page.getByText("事件与机制收益审核 · 保留干净检查点", { exact: true }),
   ).toBeVisible({ timeout: 30000 });
+  await expect(
+    page.getByRole("region", { name: "预算与实际损失" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "候选决策与独立复核" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "确认并进入下一步", exact: true })
+    .click();
+  await page.getByRole("button", { name: "记录交付确认", exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/tasks/${taskId}/workflow`)).json())
+          .status,
+    )
+    .toBe("succeeded");
+  await expect(
+    page.getByRole("button", { name: "本流程已交付", exact: true }),
+  ).toBeDisabled();
   const link = page.getByRole("link", { name: "下载报告", exact: true });
   await expect(link).toBeVisible();
   const url = await link.getAttribute("href");
@@ -39,6 +68,8 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   expect(html).toContain("CORE-hard");
   expect(html).toContain("独立故障事件库");
   expect(html).toContain("关键参数敏感性");
+  expect(html).toContain("候选选择与独立验证");
+  expect(html).toContain("94.3%");
   const preview = await page.context().newPage();
   await preview.setContent(html);
   await expect(preview.getByText("从产出缺口，定位设计重点")).toBeVisible();
@@ -60,6 +91,8 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   await preview.emulateMedia({ media: "print" });
   await expect(library.locator("tbody tr:visible")).toHaveCount(54);
   await preview.close();
+  await page.getByLabel("结果规模").selectOption("100000");
+  await expect(page.getByText(/100,000 卡 · 24 小时 · 目标 94.300%/)).toBeVisible();
   await page.getByLabel("结果规模").selectOption("500000");
   await expect(
     page.getByText("产出损失去了哪里", { exact: true }),
@@ -70,7 +103,7 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
       { exact: true },
     ),
   ).toHaveCount(0);
-  await panel.getByLabel("审核产出目标（0–1）", { exact: true }).fill("0.99");
+  await panel.getByLabel("审核产出目标（0–1）", { exact: true }).fill("0.98");
   await expect(
     page.getByText(
       "审核输入已改变；下方结果与下载报告保留上次运行快照，请重新运行后比较。",
@@ -87,6 +120,23 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   expect(detail.result.events.find((e: any) => e.id === "CORE-hard").fit).toBe(
     420,
   );
+  await page
+    .getByRole("button", { name: "载入建议组合，重新确认", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/tasks/${taskId}/design`)).json())
+          .assessment.input.mechanisms,
+    )
+    .toEqual(detail.result.recommendation.chosen.mechanisms);
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/tasks/${taskId}/workflow`)).json())
+          .stale,
+    )
+    .toBe(true);
 });
 
 test("audit layout is readable on mobile and metric switching preserves current edits", async ({

@@ -1,3 +1,5 @@
+import { getAuditDefaults } from "../../packages/analysis/src/audit";
+import { draftFromAuditRequest } from "../../packages/contracts/src/audit-draft";
 import { expect, test, vi } from "vitest";
 import Fastify from "fastify";
 import { readFile } from "node:fs/promises";
@@ -33,10 +35,10 @@ test("native OpenCode sessions are named and scoped to task directories", async 
     return {};
   });
   native.get("/provider", async () => ({
-    connected: ["bigmodel-coding"],
+    connected: ["zhipuai-coding-plan"],
     all: [
       {
-        id: "bigmodel-coding",
+        id: "zhipuai-coding-plan",
         name: "Coding",
         options: { apiKey: "synthetic-do-not-return" },
         models: { "glm-5.3": { id: "glm-5.3", name: "GLM-5.3" } },
@@ -104,10 +106,41 @@ test("native OpenCode sessions are named and scoped to task directories", async 
     });
     expect(contexts[0].noReply).toBe(true);
     expect(contexts[0].parts[0].text).not.toContain("not-in-summary");
+    const auditDraft = draftFromAuditRequest({
+      ...getAuditDefaults(),
+      cards: 20000,
+      scales: [20000],
+      target: 0.943,
+    });
+    const saved = (
+      await app.inject({
+        method: "POST",
+        url: prefix + "/design",
+        payload: {
+          activeAssessment: "audit",
+          scenario: "training",
+          request: { cards: 999, target: 0.1 },
+          auditDraft,
+        },
+      })
+    ).json();
+    expect(saved.assessment.valid).toBe(true);
+    await app.inject({
+      method: "POST",
+      url: prefix + "/agent/" + session.sessionId + "/context",
+      payload: { cards: 123 },
+    });
+    expect(contexts[1].parts[0].text).toContain(
+      "training.retained-clean-progress",
+    );
+    expect(contexts[1].parts[0].text).toContain("20000");
+    expect(contexts[1].parts[0].text).not.toContain('"cards":999');
     const config = JSON.parse(
       await readFile(join(a.workspacePath, "opencode.json"), "utf8"),
     );
-    expect(config.provider["bigmodel-coding"].models["glm-5.3"]).toBeDefined();
+    expect(
+      config.provider["zhipuai-coding-plan"].models["glm-5.3"],
+    ).toBeDefined();
     expect(JSON.stringify(config)).not.toContain(
       app.taskServices.getAgentCredential(a.id),
     );
@@ -179,7 +212,7 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
       const providers = (await app.inject(prefix + "/agent/providers")).json();
       expect(
         providers.providers
-          .find((p: any) => p.id === "bigmodel-coding")
+          .find((p: any) => p.id === "zhipuai-coding-plan")
           .models.some((m: any) => m.id === "glm-5.3"),
       ).toBe(true);
     } finally {

@@ -111,15 +111,24 @@ export function registerAgentRoutes(
     const { task, store } = tasks.resolve(req.params.taskId),
       design = store.documents("design").at(-1);
     if (!design) throw new DomainError("INPUT_UNCONFIRMED", "请先保存当前设计");
+    const assessment = design.assessment;
+    const input =
+      assessment?.input ??
+      (design.activeAssessment === "audit" ? {} : design.request);
     const summary = {
       taskId: task.id,
       taskName: task.name,
       inputRevision: design.revision,
-      cards: design.request.cards,
-      target: design.request.target,
-      hours: design.request.hours,
+      operation: assessment?.operation ?? "training",
+      metricId: assessment?.metricId ?? "training.correct-delivery",
+      valid: assessment?.valid ?? true,
+      issues: assessment?.issues ?? [],
+      cards: input.cards,
+      target: input.target,
+      targets: input.targets,
+      hours: input.hours,
       instruction:
-        "调用 task_current 与 design_get 读取完整设计及流程，禁止使用其他任务数据",
+        "调用 task_current 与 design_get 读取完整设计及流程；审核使用 assessment.input，valid=false 时先修复草稿，禁止退回旧 V4 参数或使用其他任务数据",
     };
     await agent(task.id).addContext(req.params.id, summary);
     store.putDocument("agent-context", {

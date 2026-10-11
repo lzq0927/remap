@@ -159,14 +159,14 @@ test("locally installed OpenCode is the embedded UI with native model and API co
   await page.getByRole("button", { name: "新建关联会话" }).click();
   const frame = page.frameLocator('iframe[title="本地官方 OpenCode Web"]');
   await expect(
-    frame.getByRole("button", { name: /^(Big Pickle|GLM-5\.3)$/ }),
+    frame.getByRole("button", { name: /^(Big Pickle|GLM-5\.3(?: Highspeed)?)$/ }),
   ).toBeVisible({ timeout: 30000 });
   await page.getByRole("button", { name: "同步当前设计" }).click();
   await expect(page.getByRole("status")).toContainText("尚未调用模型");
   await expect(frame.getByText(/ReMAP 任务摘要/).first()).toBeVisible({
     timeout: 15000,
   });
-  await frame.getByRole("button", { name: /^(Big Pickle|GLM-5\.3)$/ }).click();
+  await frame.getByRole("button", { name: /^(Big Pickle|GLM-5\.3(?: Highspeed)?)$/ }).click();
   await page.screenshot({ path: "artifacts/native-opencode-models.png" });
   await expect(frame.getByText(/^(管理模型|Manage models)$/)).toBeVisible();
   await page.getByRole("button", { name: "官方设置", exact: true }).click();

@@ -406,5 +406,59 @@ export function auditSections(r: any): AuditSection[] {
         },
       ],
     });
+  if (r.designReview)
+    sections.splice(2, 0, {
+      title: "目标预算与实际缺口",
+      paragraphs: [
+        `无故障保存开销参考：基线 ${pct(r.designReview.baselineNoFault)}，所选检查点策略 ${pct(r.designReview.selectedNoFault)}；该参考不是任意机制下的可行性上界。`,
+        "各规模目标由需求给定；六项损失互斥记账，预算不是故障率缩放。超预算项需结合故障证据和机制适用性落实措施，再正向复算。",
+      ],
+      tables: r.designReview.scales.map((s: any) => ({
+        heads: [
+          `${num(s.cards, 0)} 卡 · 目标 ${pct(s.target)}`,
+          "预算/小时",
+          "实际/小时",
+          "超预算/小时",
+          "工程核查",
+        ],
+        rows: s.items.map((x: any) => [
+          x.name,
+          num(x.allowedHours),
+          num(x.actualHours),
+          num(x.excessHours),
+          x.action,
+        ]),
+      })),
+    });
+  if (r.recommendation) {
+    const rec = r.recommendation,
+      v = rec.verification;
+    sections.push({
+      title: "候选选择与独立验证",
+      paragraphs: [
+        rec.rule,
+        `筛选范围：${num(selected, 0)} 卡，${rec.candidateCount} 个候选；硬件 FIT 候选另列，不参与本次机制子集筛选。`,
+        v
+          ? `独立复核 ${v.trials} 条轨迹，种子索引偏移 ${v.seedOffset}；均值 ${pct(v.statistics.mean)}，95% 均值区间 ${ci(v.statistics)}，结论 ${v.status === "supported" ? "采样支持达标" : v.status === "below" ? "低于目标" : "证据不足"}。条件于输入模型，不能替代产品实测。`
+          : "未执行独立复核；筛选数据不是独立验证证据。",
+      ],
+      tables: [
+        {
+          heads: ["候选机制", "筛选均值", "95% 均值区间", "成本"],
+          rows: rec.shortlist.map((c: any) => [
+            c.mechanisms
+              .map(
+                (id: string) =>
+                  r.rows.find((m: any) => m.id === id)?.name ?? id,
+              )
+              .join(" + ") || "基线",
+            pct(c.statistics.mean),
+            ci(c.statistics),
+            num(c.cost),
+          ]),
+        },
+      ],
+    });
+  }
   return sections;
 }

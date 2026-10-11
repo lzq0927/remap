@@ -1,3 +1,4 @@
+import { draftFromAuditRequest } from "../../../packages/contracts/src/audit-draft";
 import { useEffect, useState, useRef, useMemo } from "react";
 import {
   Activity,
@@ -319,6 +320,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         session,
         runId: run?.id,
         auditDraft,
+        activeAssessment: scenario === "training" ? designMode : "workflow",
       }
     : undefined;
   const flushDesign = () => {
@@ -422,6 +424,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     session,
     run?.id,
     auditDraft,
+    designMode,
   ]);
   useEffect(() => {
     if (run?.status === "succeeded") setLastComplete(run);
@@ -438,6 +441,10 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       ]);
       if (disposed) return;
       setAuditDraft(design?.auditDraft);
+      if (design && !new URLSearchParams(location.search).has("view"))
+        setDesignMode(
+          design.activeAssessment ?? (design.auditDraft ? "audit" : "workflow"),
+        );
       setDefaults(d);
       const restored = design?.request ?? d.training;
       setRequest({ ...restored, factors: restored.factors ?? [] });
@@ -477,16 +484,28 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
   }, [kind, search]);
   useEffect(() => {
     if (!run || !["queued", "running"].includes(run.status)) return;
-    let disposed = false;
-    const refresh = () =>
-      api("/runs/" + run.id)
+    let disposed = false,
+      refreshing = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    // Thousands of progress events must not queue thousands of full result reads.
+    const refresh = () => {
+      if (disposed || refreshing) return;
+      refreshing = true;
+      void api("/runs/" + run.id)
         .then((updated) => {
           if (!disposed)
             setRun((current: any) =>
               current?.id === run.id ? updated : current,
             );
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          if (!disposed)
+            refreshTimer = setTimeout(() => {
+              refreshing = false;
+            }, 250);
+        });
+    };
     const stream = new EventSource(url(`/runs/${run.id}/events`));
     stream.onmessage = refresh;
     stream.onerror = () => {};
@@ -494,6 +513,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     return () => {
       disposed = true;
       stream.close();
+      clearTimeout(refreshTimer);
       clearInterval(interval);
     };
   }, [run?.id, run?.status]);
@@ -549,7 +569,10 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         !state.stale &&
         state.inputRevision === saved.revision &&
         state.steps.slice(0, 4).every((s: any) => s.status === "confirmed");
-      const formal = ready && scenario === "training" && op === "training";
+      const formal =
+        ready &&
+        scenario === "training" &&
+        op === (saved.assessment?.operation ?? "training");
       const r = await api("/runs", {
         operation: op,
         input: data,
@@ -612,32 +635,90 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     setStage(4);
     setNotice("候选已回代当前设计，尚未重新计算；请检查参数后执行评估。");
   }
+  const [auditEpoch, setAuditEpoch] = useState(0);
+  function applyAuditCandidate(value: any) {
+    setAuditDraft(draftFromAuditRequest(value));
+    setAuditEpoch((n) => n + 1);
+    setDesignMode("audit");
+    setPage("workbench");
+    setStage(0);
+    setNotice(
+      "建议组合已载入草稿。输入版本已改变，请重新确认目标、预算、参数并评估；旧结果保留供比较。",
+    );
+  }
+  const activeSteps =
+    scenario === "training" && designMode === "audit"
+      ? workflowSteps.map((step, i) => ({
+          ...step,
+          name: [
+            "目标与口径",
+            "故障与证据",
+            "预算与措施",
+            "参数核对",
+            "计算与权衡",
+            "验证与交付",
+          ][i],
+          hint: [
+            "明确各规模目标与正确进度指标，目标由产品需求给定。",
+            "核对事件来源、FIT 基准与机制适用范围。",
+            "确认六项互斥损失预算，选择降 FIT 与检测恢复措施。",
+            "核对恢复顺序、采样数、来源与独立复核设置。",
+            "执行正式审核，核对缺口、组合收益与候选方案。",
+            "检查独立复核和待校准项，导出报告并人工确认交付。",
+          ][i],
+          anchor: [
+            "audit-scope",
+            "audit-evidence",
+            "audit-budget",
+            "audit-parameters",
+            "design-result",
+            "design-result",
+          ][i],
+        }))
+      : workflowSteps;
   async function confirmStep() {
+    const auditMode = scenario === "training" && designMode === "audit";
     if (
-      !Number.isFinite(request.target) ||
-      request.target < 0 ||
-      request.target > 1 ||
-      !Number.isSafeInteger(request.cards) ||
-      request.cards < 1 ||
-      !Number.isFinite(request.hours) ||
-      request.hours <= 0
+      !auditMode &&
+      (!Number.isFinite(request.target) ||
+        request.target < 0 ||
+        request.target > 1 ||
+        !Number.isSafeInteger(request.cards) ||
+        request.cards < 1 ||
+        !Number.isFinite(request.hours) ||
+        request.hours <= 0)
     )
       throw new Error("请先修正目标、卡数与窗口。");
-    if (stage === 2 && scenario === "training" && !request.lossBudget)
+    if (
+      !auditMode &&
+      stage === 2 &&
+      scenario === "training" &&
+      !request.lossBudget
+    )
       throw new Error("请先确认训练损失预算，或选择已明确指标的子模型方法。");
     if (
+      !auditMode &&
       stage === 2 &&
       scenario === "training" &&
       !budgetIsCurrent(request.lossBudget, request.target, request.hours)
     )
       throw new Error("目标或窗口已变更，请重新确认预算。");
-    if (stage >= 4 && (run?.status !== "succeeded" || changed))
+    if (
+      stage >= 4 &&
+      (run?.status !== "succeeded" || (auditMode ? auditChanged : changed))
+    )
       throw new Error("请先完成一次评估，再审视结果并交付。");
-    if (stage >= 4 && scenario === "training" && run.operation !== "training")
+    if (
+      stage >= 4 &&
+      scenario === "training" &&
+      run.operation !== (auditMode ? "audit" : "training")
+    )
       throw new Error(
         "训练设计交付需要当前设计的训练仿真结果；子模型或方案权衡结果不能替代正式评估。",
       );
     const saved = await flushDesign();
+    if (auditMode && !saved.assessment?.valid)
+      throw new Error(saved.assessment?.issues?.join("；") ?? "请修正审核草稿");
     let state = await api("/workflow");
     if (!state.executionId || state.stale || state.status !== "active") {
       state = await api("/workflow/start", {
@@ -667,7 +748,9 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
           data:
             stage >= 4
               ? { runId: run.id, inputHash: run.inputHash }
-              : currentDesign(),
+              : auditMode
+                ? saved.assessment.input
+                : currentDesign(),
         },
       ],
       notes: "用户确认当前阶段；产品模型与参数证据需独立验证。",
@@ -911,7 +994,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   })
                 }
               >
-                打开 Agent 关联评估
+                打开流程关联评估
               </button>
             )}
             <button aria-label="关闭提示" onClick={() => setNotice("")}>
@@ -977,16 +1060,17 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 </button>
               </div>
             )}
-            {(scenario !== "training" || designMode !== "audit") && (
+            {
               <>
                 <WorkflowTimeline
                   state={workflow}
+                  steps={activeSteps}
                   stage={stage}
                   onSelect={(i) => {
                     setStage(i);
                     requestAnimationFrame(() =>
                       document
-                        .getElementById(workflowSteps[i].anchor)
+                        .getElementById(activeSteps[i].anchor)
                         ?.scrollIntoView({
                           behavior: "smooth",
                           block: "start",
@@ -1006,8 +1090,8 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 <section className="workflow-guide" aria-label="当前流程阶段">
                   <div>
                     <span>第 {stage + 1} / 6 步</span>
-                    <h2>{workflowSteps[stage].name}</h2>
-                    <p>{workflowSteps[stage].hint}</p>
+                    <h2>{activeSteps[stage].name}</h2>
+                    <p>{activeSteps[stage].hint}</p>
                   </div>
                   <div>
                     <button
@@ -1018,19 +1102,27 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                     </button>
                     <button
                       className="primary"
+                      disabled={
+                        workflow?.status === "succeeded" && !workflow.stale
+                      }
                       onClick={() => attempt(confirmStep)}
                     >
-                      {stage === 5 ? "记录交付确认" : "确认并进入下一步"}
+                      {workflow?.status === "succeeded" && !workflow.stale
+                        ? "本流程已交付"
+                        : stage === 5
+                          ? "记录交付确认"
+                          : "确认并进入下一步"}
                     </button>
                   </div>
                 </section>
               </>
-            )}
+            }
             {scenario === "training" ? (
               <>
                 <div hidden={designMode !== "audit"}>
                   {defaults.audit && (
                     <AuditWorkbench
+                      key={auditEpoch}
                       defaults={defaults.audit}
                       draft={auditDraft}
                       onDraftChange={setAuditDraft}
@@ -1410,7 +1502,11 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   审核输入已改变；下方结果与下载报告保留上次运行快照，请重新运行后比较。
                 </p>
               )}
-              <Result run={run} onApplyCandidate={applyCandidate} />
+              <Result
+                run={run}
+                onApplyCandidate={applyCandidate}
+                onApplyAudit={applyAuditCandidate}
+              />
             </div>
             {run &&
               ["cancelled", "failed"].includes(run.status) &&
@@ -2151,7 +2247,11 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 </button>
               </div>
             </section>
-            <Result run={run} onApplyCandidate={applyCandidate} />
+            <Result
+              run={run}
+              onApplyCandidate={applyCandidate}
+              onApplyAudit={applyAuditCandidate}
+            />
           </>
         )}
         {page === "runs" && (
@@ -2223,7 +2323,11 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 </table>
               </div>
             </section>
-            <Result run={run} onApplyCandidate={applyCandidate} />
+            <Result
+              run={run}
+              onApplyCandidate={applyCandidate}
+              onApplyAudit={applyAuditCandidate}
+            />
             {run && <FeedbackPanel run={run} />}
           </>
         )}

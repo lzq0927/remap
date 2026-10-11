@@ -42,6 +42,19 @@ export function registerWorkflowRoutes(
   });
   app.post(base + "/workflow", async (req: any) => {
     const context = tasks.authorize(req, req.params.taskId);
+    const savedDesign = context.store.documents("design").at(-1);
+    if (
+      req.body?.status === "confirmed" &&
+      savedDesign?.activeAssessment === "audit"
+    ) {
+      if (!savedDesign.assessment?.valid)
+        throw new DomainError("INPUT_UNCONFIRMED", "请修正审核草稿后确认");
+      if (
+        ["select", "prepare"].includes(req.body.stepId) &&
+        !savedDesign.assessment.input.lossBudgetWeights
+      )
+        throw new DomainError("INPUT_UNCONFIRMED", "请先分配六项损失预算");
+    }
     if (
       req.body?.status === "confirmed" &&
       ["evaluate", "validate-deliver"].includes(req.body.stepId)
@@ -57,7 +70,8 @@ export function registerWorkflowRoutes(
       const design = context.store.documents("design").at(-1);
       if (
         run.status !== "succeeded" ||
-        (design?.scenario === "training" && run.operation !== "training")
+        (design?.scenario === "training" &&
+          run.operation !== (design?.assessment?.operation ?? "training"))
       )
         throw new DomainError(
           "INPUT_UNCONFIRMED",
@@ -142,8 +156,10 @@ export function registerWorkflowRoutes(
       );
     if (
       design?.scenario === "training" &&
-      (req.body.operation !== "training" ||
-        hash(req.body.input) !== hash(design.request))
+      ((!design.assessment?.valid && design.activeAssessment === "audit") ||
+        req.body.operation !== (design.assessment?.operation ?? "training") ||
+        hash(req.body.input) !==
+          hash(design.assessment?.input ?? design.request))
     )
       throw new DomainError(
         "INPUT_REVISION_CONFLICT",
