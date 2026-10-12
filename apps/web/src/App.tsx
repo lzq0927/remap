@@ -255,6 +255,9 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
   const [agentVisible, setAgentVisible] = useState(
     new URLSearchParams(location.search).get("view") === "workflow",
   );
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [page, designMode, scenario]);
   const [kind, setKind] = useState("failure-mode"),
     [assets, setAssets] = useState<any[]>([]),
     [examples, setExamples] = useState<any[]>([]),
@@ -383,7 +386,6 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 workflowRef.current?.executionId === state.executionId
               ) {
                 setRun(value);
-                setNotice("当前任务流程已更新，请核对阶段资产与关联评估。");
               }
             })
             .catch((e) => !stopped && setError(e.message));
@@ -671,11 +673,30 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
             "audit-evidence",
             "audit-budget",
             "audit-parameters",
-            "design-result",
+            "audit-run",
             "design-result",
           ][i],
         }))
       : workflowSteps;
+  const [confirming, setConfirming] = useState(false);
+  function selectStep(index: number) {
+    setStage(index);
+    requestAnimationFrame(() => {
+      const target = document.getElementById(activeSteps[index].anchor);
+      if (!target) return;
+      for (
+        let parent: HTMLElement | null = target;
+        parent;
+        parent = parent.parentElement
+      )
+        if (parent instanceof HTMLDetailsElement) parent.open = true;
+      requestAnimationFrame(() => {
+        target.scrollIntoView({ behavior: "instant", block: "start" });
+        target.setAttribute("tabindex", "-1");
+        target.focus({ preventScroll: true });
+      });
+    });
+  }
   async function confirmStep() {
     const auditMode = scenario === "training" && designMode === "audit";
     if (
@@ -729,13 +750,13 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     }
     const first = state.steps.findIndex((s: any) => s.status !== "confirmed");
     if (stage !== first) {
-      setStage(first);
+      selectStep(first);
       throw new Error("请按顺序确认阶段；输入变更后需要从目标重新确认。");
     }
     if (stage >= 4 && state.runId !== run?.id) {
       throw new Error("请在当前流程确认前四个阶段后重新执行正式评估。");
     }
-    const step = workflowSteps[stage];
+    const step = activeSteps[stage];
     const next = await api("/workflow", {
       executionId: state.executionId,
       expectedRevision: state.revision,
@@ -756,8 +777,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       notes: "用户确认当前阶段；产品模型与参数证据需独立验证。",
     });
     setWorkflow(next);
-    setStage(Math.min(5, stage + 1));
-    setNotice(step.name + "已确认并记录。");
+    selectStep(Math.min(5, stage + 1));
   }
   function openAllocation() {
     setOperation("allocate");
@@ -1013,6 +1033,11 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   if (!design) return;
                   designRevision.current = design.revision;
                   setAuditDraft(design.auditDraft);
+                  setAuditEpoch((n) => n + 1);
+                  setDesignMode(
+                    design.activeAssessment ??
+                      (design.auditDraft ? "audit" : "workflow"),
+                  );
                   setRequest({
                     ...design.request,
                     factors: design.request.factors ?? [],
@@ -1060,63 +1085,29 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 </button>
               </div>
             )}
-            {
-              <>
-                <WorkflowTimeline
-                  state={workflow}
-                  steps={activeSteps}
-                  stage={stage}
-                  onSelect={(i) => {
-                    setStage(i);
-                    requestAnimationFrame(() =>
-                      document
-                        .getElementById(activeSteps[i].anchor)
-                        ?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "start",
-                        }),
-                    );
-                  }}
-                  onCancel={() =>
-                    void attempt(async () =>
-                      setWorkflow(
-                        await api("/workflow/cancel", {
-                          executionId: workflow?.executionId,
-                        }),
-                      ),
-                    )
-                  }
-                />
-                <section className="workflow-guide" aria-label="当前流程阶段">
-                  <div>
-                    <span>第 {stage + 1} / 6 步</span>
-                    <h2>{activeSteps[stage].name}</h2>
-                    <p>{activeSteps[stage].hint}</p>
-                  </div>
-                  <div>
-                    <button
-                      disabled={stage === 0}
-                      onClick={() => setStage(Math.max(0, stage - 1))}
-                    >
-                      上一步
-                    </button>
-                    <button
-                      className="primary"
-                      disabled={
-                        workflow?.status === "succeeded" && !workflow.stale
-                      }
-                      onClick={() => attempt(confirmStep)}
-                    >
-                      {workflow?.status === "succeeded" && !workflow.stale
-                        ? "本流程已交付"
-                        : stage === 5
-                          ? "记录交付确认"
-                          : "确认并进入下一步"}
-                    </button>
-                  </div>
-                </section>
-              </>
-            }
+            {scenario === "training" && (
+              <WorkflowTimeline
+                state={workflow}
+                steps={activeSteps}
+                stage={stage}
+                onSelect={selectStep}
+                pending={confirming}
+                error={error}
+                onConfirm={() => {
+                  setConfirming(true);
+                  void attempt(confirmStep).finally(() => setConfirming(false));
+                }}
+                onCancel={() =>
+                  void attempt(async () =>
+                    setWorkflow(
+                      await api("/workflow/cancel", {
+                        executionId: workflow?.executionId,
+                      }),
+                    ),
+                  )
+                }
+              />
+            )}
             {scenario === "training" ? (
               <>
                 <div hidden={designMode !== "audit"}>
@@ -1497,6 +1488,15 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
               </section>
             )}
             <div id="design-result">
+              {!run && stage === 5 && scenario === "training" && (
+                <section className="paper">
+                  <h2>尚无可交付的评估结果</h2>
+                  <p>
+                    先完成前四步核对并执行评估，再检查结果、导出报告和确认交付。
+                  </p>
+                  <button onClick={() => selectStep(4)}>前往计算</button>
+                </section>
+              )}
               {auditChanged && designMode === "audit" && (
                 <p className="audit-verdict uncertain" role="status">
                   审核输入已改变；下方结果与下载报告保留上次运行快照，请重新运行后比较。

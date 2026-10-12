@@ -9,6 +9,7 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   const panel = page.getByRole("region", { name: "故障事件与机制收益审核" });
   await expect(panel).toBeVisible();
   await panel.getByLabel("审核窗口（小时）", { exact: true }).fill("24");
+  await panel.getByText("基线参数、机制目标与成本", { exact: true }).click();
   await panel.getByLabel("每场景轨迹数", { exact: true }).fill("8");
   await panel.getByLabel("每组合轨迹数", { exact: true }).fill("8");
   await panel
@@ -92,7 +93,9 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   await expect(library.locator("tbody tr:visible")).toHaveCount(54);
   await preview.close();
   await page.getByLabel("结果规模").selectOption("100000");
-  await expect(page.getByText(/100,000 卡 · 24 小时 · 目标 94.300%/)).toBeVisible();
+  await expect(
+    page.getByText(/100,000 卡 · 24 小时 · 目标 94.300%/),
+  ).toBeVisible();
   await page.getByLabel("结果规模").selectOption("500000");
   await expect(
     page.getByText("产出损失去了哪里", { exact: true }),
