@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { auditSummary } from "../../../packages/reports/src/audit-summary";
+import {
+  auditSummary,
+  auditScaleSummary,
+} from "../../../packages/reports/src/audit-summary";
 import {
   auditChartCss,
   auditGainChart,
@@ -19,6 +22,7 @@ export default function AuditResult({
     ? scale
     : r.request.cards;
   const s = auditSummary(r, cards);
+  const overview = auditScaleSummary(r);
   const selected = r.rows.filter((row: any) => row.cards === cards);
   const budget = r.designReview?.scales.find((x: any) => x.cards === cards);
   const recommendation = r.recommendation;
@@ -26,6 +30,13 @@ export default function AuditResult({
   return (
     <>
       <h3>事件与机制收益审核 · 保留干净检查点</h3>
+      {overview.total > 1 && (
+        <p className="note">
+          本次核对 {overview.total} 个规模：采样支持 {overview.supported}{" "}
+          个，低于目标 {overview.below} 个，证据不足 {overview.uncertain}{" "}
+          个。下方判读针对当前查看规模，不代表所有规模达标。
+        </p>
+      )}
       <label className="audit-scale">
         查看规模
         <select

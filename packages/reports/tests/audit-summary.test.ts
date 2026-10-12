@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { auditSummary } from "../src/audit-summary";
+import { auditSummary, auditScaleSummary } from "../src/audit-summary";
 const row = (
   id: string,
   cards: number,
@@ -48,4 +48,13 @@ it("ranks exclusive event losses separately from common checkpoint saving and co
     ["b", 5],
   ]);
   expect(result.internal).toBe(1);
+});
+it("does not imply that a passing selected scale meets the other scale requirements", () => {
+  expect(auditSummary(fixture).status).toBe("supported");
+  expect(auditScaleSummary(fixture)).toEqual({
+    total: 2,
+    supported: 1,
+    below: 1,
+    uncertain: 0,
+  });
 });

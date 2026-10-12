@@ -107,3 +107,21 @@ it("keeps negative gains on the left of zero with the same scale and escapes SVG
   expect(html).not.toContain("<img");
   expect(html).toContain("&lt;img");
 });
+it("uses the isolated expert scenario as the current point and keeps the overall target out of its parameter scan", () => {
+  const r: any = fixture();
+  r.rows.push({
+    id: "sdcStep",
+    name: "静默检测＋step 恢复",
+    cards: 10000,
+    statistics: stats(0.89),
+    delta: stats(0.07),
+  });
+  r.sensitivity = r.sensitivity.map((s: any) => ({
+    ...s,
+    scenarioId: "sdcStep",
+  }));
+  const html = auditSensitivityCurves(r);
+  expect(html).toContain('data-value="0.97" data-mean="0.89"');
+  expect(html).not.toContain("目标 99%");
+  expect(html).toContain("静默检测＋step 恢复");
+});

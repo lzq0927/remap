@@ -148,21 +148,46 @@ export function auditSensitivityCurves(r: any) {
       label: "漏检兜底发现时延 · 小时",
       format: (v: number) => num(v) + " h",
     },
+    {
+      parameter: "elasticSyncSeconds",
+      title: "弹性全局协调暂停对正确产出的影响",
+      current: r.config.policy["R-ELASTIC"]?.syncSeconds ?? 1,
+      label: "全局协调暂停 · 秒",
+      format: (v: number) => num(v) + " s",
+    },
+    {
+      parameter: "stepSeconds",
+      title: "step 回滚上限对正确产出的影响",
+      current: r.config.policy["R-SDC"]?.stepSeconds ?? 1,
+      label: "step 回滚上限 · 秒",
+      format: (v: number) => num(v) + " s",
+    },
   ]
     .map(({ parameter, title, current, label, format }) => {
       const scanned = r.sensitivity.filter(
         (row: any) => row.parameter === parameter,
       );
       if (!scanned.length) return "";
+      const reference =
+        r.rows.find(
+          (row: any) =>
+            row.cards === r.request.cards &&
+            row.id === (scanned[0].scenarioId ?? "combined"),
+        ) ?? base;
+      current = scanned[0].currentValue ?? current;
       const points: Point[] = scanned
         .filter((row: any) => row.value !== current)
         .map((row: any) => ({ x: row.value, statistics: row.statistics }));
-      points.push({ x: current, statistics: base.statistics, current: true });
+      points.push({
+        x: current,
+        statistics: reference.statistics,
+        current: true,
+      });
       return lineChart({
         title,
         series: [
           {
-            name: `${num(r.request.cards)} 卡 · 所选机制组合`,
+            name: `${num(r.request.cards)} 卡 · ${reference.name ?? "所选机制组合"}`,
             color: "#16816a",
             points,
           },
@@ -170,10 +195,12 @@ export function auditSensitivityCurves(r: any) {
         xLabel: label,
         formatX: format,
         target:
-          base.target ??
-          r.request.targets?.[String(r.request.cards)] ??
-          r.request.target,
-        note: `${num(r.request.cards)} 卡，保持其他输入不变；空心点为当前输入 ${format(current)}。纵轴局部缩放以便观察变化，细竖线为 95% 均值区间；连线只连接已计算点，不能据此认定单调性或工程可实现性。`,
+          scanned[0].scenarioId && scanned[0].scenarioId !== "combined"
+            ? undefined
+            : (reference.target ??
+              r.request.targets?.[String(r.request.cards)] ??
+              r.request.target),
+        note: `${num(r.request.cards)} 卡，${reference.name ?? "所选机制组合"}，保持情景内其他输入不变；空心点为当前输入 ${format(current)}。纵轴局部缩放以便观察变化，细竖线为 95% 均值区间；连线只连接已计算点。参考单项情景不替代所选组合的达标判读。`,
       });
     })
     .join("");

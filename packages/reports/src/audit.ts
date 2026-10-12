@@ -1,5 +1,5 @@
 import { auditSummary } from "./audit-summary";
-import { parameterLabels } from "./audit-labels";
+import { parameterLabels, sensitivityLabels } from "./audit-labels";
 const num = (v: any, digits = 3) =>
   typeof v === "number" && Number.isFinite(v)
     ? v.toLocaleString("zh-CN", { maximumFractionDigits: digits })
@@ -39,22 +39,84 @@ export type AuditTable = {
   heads: string[];
   rows: unknown[][];
   eventSources?: EventSource[];
+  scaleRows?: { cards: number; rows: unknown[][] }[];
+  scaleLabel?: string;
 };
 export interface AuditSection {
   title: string;
   paragraphs?: string[];
   tables?: AuditTable[];
   collapsed?: boolean;
-  visual?: "overview" | "sensitivity";
+  visual?: "overview" | "sensitivity" | "method";
 }
 export function auditSections(r: any): AuditSection[] {
   const selected = r.request.cards,
-    hours = r.request.hours,
-    base = r.rows.find(
-      (row: any) => row.cards === selected && row.id === "base",
-    );
+    hours = r.request.hours;
   const selectedRows = r.rows.filter((row: any) => row.cards === selected),
     p = r.config.model;
+  const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
+    (a, b) => a - b,
+  );
+  const hardFit = r.events
+    .filter((e: any) => e.type === "hard")
+    .reduce((n: number, e: any) => n + e.fit, 0);
+  const eventRows = (cards: number) => {
+    const row = r.rows.find((x: any) => x.cards === cards && x.id === "base");
+    const denominator = Object.values(row.perEvent).reduce(
+      (s: number, v: any) => s + loss(v),
+      0,
+    );
+    return r.events.map((e: any) => {
+      const x = row.perEvent[e.id] ?? {};
+      return [
+        e.id,
+        e.domain + " · " + e.description,
+        types[e.type],
+        num(e.fit, 6),
+        num(e.fit > 0 ? 1e9 / (cards * e.fit) : null),
+        pct(e.share),
+        pct(e.withinTypeShare),
+        num(x.events ?? 0),
+        x.events ? num((x.downtime / x.events) * 60) : "未观察到",
+        num(x.downtime ?? 0),
+        num(loss(x) - (x.downtime ?? 0)),
+        denominator ? pct(loss(x) / denominator) : "—",
+        {
+          "internal-measured": "内部观测",
+          "external-prior": "外网先验",
+          scenario: "方案假设",
+        }[e.evidence as string] ?? e.evidence,
+      ];
+    });
+  };
+  const impactRows = (cards: number, scenario: string, eventIds: string[]) => {
+    const a = r.rows.find((x: any) => x.cards === cards && x.id === "base"),
+      b = r.rows.find((x: any) => x.cards === cards && x.id === scenario);
+    return [
+      ...r.events.map((e: any) => {
+        const x = a.perEvent[e.id] ?? {},
+          y = b.perEvent[e.id] ?? {};
+        return [
+          e.id,
+          eventIds.includes(e.id) ? "是" : "间接影响",
+          num(x.downtime ?? 0),
+          num(y.downtime ?? 0),
+          num(loss(x) - (x.downtime ?? 0)),
+          num(loss(y) - (y.downtime ?? 0)),
+          num(loss(x) - loss(y)),
+        ];
+      }),
+      [
+        "公共保存开销",
+        "独立计账",
+        "—",
+        "—",
+        num(a.ledger.save),
+        num(b.ledger.save),
+        num(a.ledger.save - b.ledger.save),
+      ],
+    ];
+  };
   const classification = ["hard", "slow", "sdc"].map((type) => {
     const events = r.events.filter((e: any) => e.type === type),
       total = events.reduce((s: number, e: any) => s + e.fit, 0);
@@ -93,6 +155,69 @@ export function auditSections(r: any): AuditSection[] {
       tables: [
         {
           heads: [
+            "单作业规模",
+            "正确有效产出目标",
+            "中断 MTBF / h",
+            "基线运行可用度",
+            "组合运行可用度",
+            "组合正确有效产出",
+            "目标判读",
+          ],
+          rows: scales.map((cards) => {
+            const s = auditSummary(r, cards);
+            return [
+              num(cards, 0),
+              pct(s.target),
+              num(hardFit > 0 ? 1e9 / (cards * hardFit) : null),
+              pct(s.base.availability),
+              pct(s.combined.availability),
+              pct(s.combined.statistics.mean),
+              s.statusLabel,
+            ];
+          }),
+        },
+        {
+          heads: ["参数 / 行为", "当前基线", "本轮处理"],
+          rows: [
+            [
+              "统计对象",
+              `单一作业、全部卡参加，${num(hours)} 小时有限窗口`,
+              "多规模独立比较；运行可用度与正确有效产出分别报告",
+            ],
+            [
+              "保存策略",
+              `${num(p.checkpointComputeSeconds)} 秒计算 / ${num(p.checkpointSaveSeconds)} 秒阻塞保存`,
+              "停机不保存；step / 重执行保留周期相位，持久化保存与易失状态不混同",
+            ],
+            [
+              "中断发现",
+              `${pct(p.detectProbability)} 在 ${num(p.detectSeconds)} 秒发现，其余 ${num(p.timeoutSeconds)} 秒超时`,
+              "检测优化另作单项，不重复领取既有检测收益",
+            ],
+            [
+              "自动恢复与人工兜底",
+              `${num(p.recoveryAttemptSeconds / 60)} 分钟尝试，成功率 ${pct(p.recoverySuccess)}；失败额外 ${num(p.manualAdditionalSeconds / 60)} 分钟`,
+              `平均尝试与人工 ${num((p.recoveryAttemptSeconds + (1 - p.recoverySuccess) * p.manualAdditionalSeconds) / 60)} 分钟，不含检测；有限窗口实际停机另行统计`,
+            ],
+            [
+              "亚健康",
+              `降速 ${pct(p.slowLoss)}；${pct(p.slowDetectProbability)} 在 ${num(p.slowDetectHours * 60)} 分钟发现，漏检持续 ${num(p.slowLifetimeHours)} 小时`,
+              "检出后保存当前进度并恢复，零回滚；带污染的状态仍带污染",
+            ],
+            [
+              "静默兜底",
+              `${num(p.sdcDelayHours)} 小时发现；即时检测为新增候选能力`,
+              "回到错误前最后干净检查点；同一污染期合并，期末保留之前正确进度",
+            ],
+            [
+              "事件分配",
+              `${r.events.length} 条事件 / ${new Set(r.events.map((e: any) => e.domain)).size} 个硬件或根因域`,
+              "总占比和类内占比来自冻结 FIT；0 FIT 保留为预算假设，不当作无风险",
+            ],
+          ],
+        },
+        {
+          heads: [
             "事件类型",
             "合计 FIT",
             "总占比",
@@ -105,6 +230,7 @@ export function auditSections(r: any): AuditSection[] {
     },
     {
       title: "02 / 目标分配、计算逻辑与收益分摊",
+      visual: "method",
       paragraphs: [
         "先明确整体指标，再分配子模型目标，落实降 FIT 或检测/恢复等工程措施，正向计算具体场景，最后做组合收益与权衡。",
         "Availability：独立稳态串联 A=∏Aᵢ，在 −ln(A) 预算上分配。Equal：共同任务窗口下均分 −ln(R)/T 故障率预算。ARINC：按基线故障率等比缩放。",
@@ -114,6 +240,8 @@ export function auditSections(r: any): AuditSection[] {
         "离散事件仿真处理固定发现时延、周期检查点、污染合并与局部容量损失。存在先后顺序不等于 CTMC；恒定转移率、指数停留时间成立时才适用 CTMC，其他持续时间可用半马尔科夫或仿真。",
         "Shapley 对各组合的边际增益取加权平均，不分配顶层设计指标，也不改变物理恢复顺序。统计独立不自动意味着收益可加；若价值函数确实可加，直接比较单项即可。",
         "窗口小时 = 正确进度 + 全局停机 + 保存阻塞 + 降速 + 局部容量损失 + 已回滚进度 + 期末污染；重算耗时已在后续时间中体现，不重复扣账。",
+        "A运行 = 1 − 全局停机 / 窗口；A有效 = 期末保留的正确进度 / 窗口。当前目标约束 A有效。中断 MTBF = 10⁹ /（卡数 × 中断 FIT 总量），与全类型事件 MTBF 不同；MTBF 本身不能推出正确有效产出目标。",
+        `基线无故障保存占比约 ${pct(p.checkpointSaveSeconds / (p.checkpointComputeSeconds + p.checkpointSaveSeconds))}，普通中断回滚距离参考约 ${(p.checkpointComputeSeconds / 120).toFixed(3)} 分钟；仍须通过有限窗口仿真核算。DP 按可用域数 / ${r.config.policy["R-ELASTIC"].domains} 折算容量，依赖其余域可继续产生可保留进度，未建模梯度同步阻塞、重分片、收敛、备用容量耗尽和跨域共因。`,
       ],
     },
     {
@@ -131,6 +259,8 @@ export function auditSections(r: any): AuditSection[] {
             "组合正确产出 / 区间",
             "基线停机 h",
             "保存 h",
+            "降速 h",
+            "局部容量 h",
             "回滚 h",
             "期末污染 h",
           ],
@@ -147,6 +277,8 @@ export function auditSections(r: any): AuditSection[] {
                 pct(c.statistics.mean) + " / " + ci(c.statistics),
                 num(x.ledger.downtime),
                 num(x.ledger.save),
+                num(x.ledger.slowdown),
+                num(x.ledger.localLoss),
                 num(x.ledger.rollback),
                 num(x.ledger.terminalInvalid),
               ];
@@ -208,32 +340,9 @@ export function auditSections(r: any): AuditSection[] {
               }[e.evidence as string] ?? e.evidence,
             note: e.note,
           })),
-          rows: r.events.map((e: any) => {
-            const x = base.perEvent[e.id] ?? {},
-              denominator = Object.values(base.perEvent).reduce(
-                (s: number, v: any) => s + loss(v),
-                0,
-              );
-            return [
-              e.id,
-              e.domain + " · " + e.description,
-              types[e.type],
-              num(e.fit, 6),
-              num(e.mtbfHours),
-              pct(e.share),
-              pct(e.withinTypeShare),
-              num(x.events ?? 0),
-              x.events ? num((x.downtime / x.events) * 60) : "未观察到",
-              num(x.downtime ?? 0),
-              num(loss(x) - (x.downtime ?? 0)),
-              denominator ? pct(loss(x) / denominator) : "—",
-              {
-                "internal-measured": "内部观测",
-                "external-prior": "外网先验",
-                scenario: "方案假设",
-              }[e.evidence as string] ?? e.evidence,
-            ];
-          }),
+          rows: eventRows(selected),
+          scaleLabel: "事件库规模",
+          scaleRows: scales.map((cards) => ({ cards, rows: eventRows(cards) })),
         },
       ],
     },
@@ -293,30 +402,12 @@ export function auditSections(r: any): AuditSection[] {
                 "启用后计算损失 h",
                 "减少总损失 h",
               ],
-              rows: [
-                ...r.events.map((e: any) => {
-                  const a = base.perEvent[e.id] ?? {},
-                    b = single.perEvent[e.id] ?? {};
-                  return [
-                    e.id,
-                    m.eventIds.includes(e.id) ? "是" : "否",
-                    num(a.downtime ?? 0),
-                    num(b.downtime ?? 0),
-                    num(loss(a) - (a.downtime ?? 0)),
-                    num(loss(b) - (b.downtime ?? 0)),
-                    num(loss(a) - loss(b)),
-                  ];
-                }),
-                [
-                  "公共保存开销",
-                  "独立计账",
-                  "—",
-                  "—",
-                  num(base.ledger.save),
-                  num(single.ledger.save),
-                  num(base.ledger.save - single.ledger.save),
-                ],
-              ],
+              rows: impactRows(selected, codes[m.id], m.eventIds),
+              scaleLabel: "逐事件对照规模",
+              scaleRows: scales.map((cards) => ({
+                cards,
+                rows: impactRows(cards, codes[m.id], m.eventIds),
+              })),
             },
           ]
         : [
@@ -337,6 +428,7 @@ export function auditSections(r: any): AuditSection[] {
     title: "06 / 组合贡献与条件依赖",
     paragraphs: [
       "组合增益不等于单项之和；保留负贡献。成对交互只描述相对空组合的二阶差分，不包含全部高阶交互。Shapley 的加入顺序不代表实际恢复链的先后顺序。",
+      "φᵢ = Σₛ |S|! (m−|S|−1)! / m! × [A(S∪{i})−A(S)]；Σφᵢ = A(全部启用措施)−A(空组合基线)。枚举全部子集不代表模型和参数无误差；step 单独无收益，也可能因为依赖检测而分得组合贡献。",
     ],
   });
   for (const a of r.attribution)
@@ -348,11 +440,12 @@ export function auditSections(r: any): AuditSection[] {
       ],
       tables: [
         {
-          heads: ["机制", "Shapley 贡献", "95% 区间"],
+          heads: ["机制", "Shapley 贡献", "95% 区间", "新增正确计算 h / 窗口"],
           rows: a.contributions.map((c: any) => [
             c.name,
             pp(c.statistics.mean),
             pp(c.statistics.ciLow) + " ～ " + pp(c.statistics.ciHigh),
+            num(c.statistics.mean * hours),
           ]),
         },
         {
@@ -376,10 +469,22 @@ export function auditSections(r: any): AuditSection[] {
     title: "07 / 关键参数敏感性",
     visual: "sensitivity",
     paragraphs: [
-      "保持所选组合其他参数不变，相对当前组合进行配对比较。只在组合启用静默检测时扫描；结果不直接证明工程可实现。曲线只使用本次冻结结果，专家报告中其他参数的曲线不作为本次运行数据。",
+      r.request.sensitivityMode === "expert-reference"
+        ? "专家审核口径：静默检出率和 step 上限在“静默检测＋step”情景下扫描，弹性暂停在“DP 弹性单项”情景下扫描。每组保持其他输入不变，相对本组当前参数进行配对比较，与所选组合达标判断分别解释。"
+        : "所选组合口径：保持已选措施及其他输入不变，相对当前组合进行配对比较；只有启用了对应机制才扫描相关参数。",
+      "曲线只使用本次冻结结果。0% / 100% 检出率用于边界核查，不代表已实现能力；均值区间仅反映抽样误差。",
+      (() => {
+        const sdcFit = r.events
+          .filter((e: any) => e.type === "sdc")
+          .reduce((n: number, e: any) => n + e.fit, 0);
+        const coreShare = sdcFit
+          ? (r.events.find((e: any) => e.id === "CORE-sdc")?.fit ?? 0) / sdcFit
+          : 0;
+        return `当前 Core 占静默事件 ${pct(coreShare)}。如果 ${pct(r.config.policy["D-SDC"].coverage)} 的检出能力仅覆盖 Core，则全系统覆盖率最多约 ${pct(coreShare * r.config.policy["D-SDC"].coverage)}；必须逐条证明非零 SDC 事件的覆盖，不能直接替代全系统检出率。step 秒数同样是待校准输入。`;
+      })(),
       ...(!r.sensitivity?.length
         ? [
-            "本次未计算敏感性。需启用静默检测和敏感性分析后重新评估，才会生成参数曲线与对照表。",
+            "本次未计算敏感性。选择比较口径并启用敏感性分析后重新评估，才会生成实际曲线与对照表。",
           ]
         : []),
     ],
@@ -387,21 +492,27 @@ export function auditSections(r: any): AuditSection[] {
       {
         heads: [
           "参数",
+          "比较情景",
           "取值",
           "正确产出",
           "95% 均值区间",
-          "相对当前组合提升",
+          "相对本组当前参数提升",
           "提升区间",
+          "期末污染 h",
+          "停机 h",
+          "局部容量损失 h",
         ],
         rows: (r.sensitivity ?? []).map((s: any) => [
-          s.parameter === "sdcCoverage"
-            ? "全系统静默即时检出率"
-            : "漏检兜底发现时延（小时）",
+          sensitivityLabels[s.parameter] ?? s.parameter,
+          s.scenarioName ?? "所选机制组合",
           s.parameter === "sdcCoverage" ? pct(s.value) : num(s.value),
           pct(s.statistics.mean),
           ci(s.statistics),
           pp(s.delta.mean),
           pp(s.delta.ciLow) + " ～ " + pp(s.delta.ciHigh),
+          num(s.ledger?.terminalInvalid),
+          num(s.ledger?.downtime),
+          num(s.ledger?.localLoss),
         ]),
       },
     ],
@@ -416,6 +527,21 @@ export function auditSections(r: any): AuditSection[] {
       "优先校准中断总率、CORE-hard 等细分占比和重执行/弹性覆盖；静默和亚健康暂保留外网证据。只更新中断事件不会按旧总比例重缩放其余两类。",
       "重点扫描全系统静默检出率、漏检兜底时延、恢复耗时和检查点周期；Core 内检出率与全系统覆盖率不同，不能直接替代。",
       ...r.warnings,
+      "本次自动核查只证明模型内数值和记账一致性。真实产品仍需验证误报、检测开销、带宽、备用容量、多作业、共因故障、寿命分布、SDC 长尾、训练收敛和 DP 重构。原专家回归由工程测试执行，不把上游历史“通过”记录充作本次内网数据认证。",
+    ],
+    tables: [
+      {
+        heads: ["本次结果自动核查", "状态", "依据"],
+        rows: r.reviewChecks?.map((c: any) => [
+          c.name,
+          { passed: "通过", failed: "未通过", "not-run": "未执行" }[
+            c.status as string
+          ] ?? c.status,
+          c.detail,
+        ]) ?? [
+          ["历史运行", "未保存核查记录", "保留原结果；不补写本次运行认证"],
+        ],
+      },
     ],
   });
   if (r.candidateEvents.length)
@@ -433,6 +559,41 @@ export function auditSections(r: any): AuditSection[] {
               num(r.events.find((x: any) => x.id === e.id).fit),
               num(e.fit),
               e.source,
+            ]),
+        },
+      ],
+    });
+  if (r.request.eventOverrides?.length)
+    sections.push({
+      title: "本次基线数据更新记录",
+      paragraphs: [
+        "下列记录取自本次冻结输入；更新中断事件时，未提交的静默与亚健康事件保留外网先验。总占比、类内占比及中断 MTBF 随本次 FIT 重新计算，需求目标保持用户给定值。",
+      ],
+      tables: [
+        {
+          heads: [
+            "事件",
+            "参考 FIT",
+            "本次 FIT",
+            "本次总占比",
+            "本次类内占比",
+            "证据等级",
+          ],
+          rows: r.events
+            .filter((e: any) =>
+              r.request.eventOverrides.some((p: any) => p.id === e.id),
+            )
+            .map((e: any) => [
+              e.id,
+              num(e.referenceFit),
+              num(e.fit),
+              pct(e.share),
+              pct(e.withinTypeShare),
+              e.evidence === "internal-measured"
+                ? "内部观测"
+                : e.evidence === "scenario"
+                  ? "方案假设"
+                  : "外网先验",
             ]),
         },
       ],

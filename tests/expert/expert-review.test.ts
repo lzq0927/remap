@@ -16,6 +16,8 @@ const original = require("../../references/expert-review-2026-10-09/engine.cjs")
 const createEngine = require("../../packages/solvers/src/vendor/review-engine.cjs");
 const small = () => ({
   ...getAuditDefaults(),
+  scales: [10000],
+  targets: undefined,
   hours: 24,
   trials: 8,
   attribution: false,
@@ -71,6 +73,8 @@ it("reproduces the expert HTML data baseline at 10000 cards over 4000 trajectori
   const result = audit({
     ...getAuditDefaults(),
     trials: 4000,
+    scales: [10000],
+    targets: undefined,
     mechanisms: [],
     attribution: false,
     sensitivity: false,
@@ -204,6 +208,7 @@ it("rejects ambiguous rate units, missing provenance and excessive work", () => 
       ...getAuditDefaults(),
       cards: 1000000,
       scales: [1000000],
+      targets: undefined,
       trials: 8192,
     }),
   ).toThrow(/budget/);
@@ -233,7 +238,7 @@ it("exports complete event/mechanism tables with safe HTML and actual sensitivit
       createdAt: "2026-10-11",
       events: [],
     };
-  expect(r.sensitivity).toHaveLength(5);
+  expect(r.sensitivity).toHaveLength(16);
   const html = report(run, "html");
   expect(html).toContain("可靠性设计与评估报告 · 专家审核口径");
   expect(html).toContain("training.retained-clean-progress");

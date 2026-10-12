@@ -71,3 +71,17 @@ export function auditSummary(r: any, cards = r.request.cards) {
           : "继续用独立种子复核，并以实测数据校准中断事件和机制能力；本次采样通过不等于现场达标。",
   };
 }
+/** A selected scale's success must never be presented as success of every requirement. */
+export function auditScaleSummary(r: any) {
+  const summaries = [
+    ...new Set<number>(
+      r.rows.filter((x: any) => x.id === "combined").map((x: any) => x.cards),
+    ),
+  ].map((cards) => auditSummary(r, cards));
+  return {
+    total: summaries.length,
+    supported: summaries.filter((s) => s.status === "supported").length,
+    below: summaries.filter((s) => s.status === "below").length,
+    uncertain: summaries.filter((s) => s.status === "uncertain").length,
+  };
+}

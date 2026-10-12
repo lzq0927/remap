@@ -5,6 +5,7 @@ import {
 import { useEffect, useState } from "react";
 import { EventEditor, NumericParameters } from "./AuditEditors";
 import type { AuditRequest } from "../../../packages/analysis/src/audit";
+import { changeAuditCards } from "../../../packages/contracts/src/audit-presets";
 
 import {
   auditDraftInput,
@@ -43,7 +44,9 @@ export default function AuditWorkbench({
   const [policy, setPolicy] = useState(
     draft?.policy ?? JSON.stringify(defaults.policy, null, 2),
   );
-  const [allScales, setAllScales] = useState(draft?.allScales ?? false);
+  const [allScales, setAllScales] = useState(
+    draft?.allScales ?? (defaults.scales?.length ?? 0) > 1,
+  );
   useEffect(() => {
     onDraftChange({ request, overrides, hardware, model, policy, allScales });
   }, [request, overrides, hardware, model, policy, allScales, onDraftChange]);
@@ -103,12 +106,22 @@ export default function AuditWorkbench({
               step={key === "target" ? 0.001 : key === "hours" ? 0.01 : 1}
               value={(request as any)[key]}
               onChange={(e) =>
-                setRequest({ ...request, [key]: Number(e.target.value) })
+                setRequest(
+                  key === "cards"
+                    ? changeAuditCards(request, Number(e.target.value))
+                    : { ...request, [key]: Number(e.target.value) },
+                )
               }
             />
           </label>
         ))}
       </div>
+      <p className="note">
+        默认正确有效产出目标：万卡 99%、十万卡 95%、二十万卡 90%、五十万卡
+        80%；分别对应专家参考中断 MTBF 约 30、3、1.5、0.6
+        小时。目标由需求给定，MTBF
+        来自中断事件率；内网更新事件率后重新计算，二者不互相推导。
+      </p>
       <div className="fields">
         <label>
           <input
@@ -145,7 +158,7 @@ export default function AuditWorkbench({
               </label>
             ))}
           <p className="note">
-            未单独设置的规模沿用主目标；目标由需求给定，不由 MTBF 推导。
+            可分别编辑各规模目标；切换审核卡数保留已编辑目标。其他自定义规模默认沿用当前目标。
           </p>
         </div>
       )}
@@ -396,7 +409,36 @@ export default function AuditWorkbench({
                 setRequest({ ...request, sensitivity: e.target.checked })
               }
             />
-            扫描静默检出率与兜底时延
+            扫描静默检出率、兜底时延、弹性暂停与 step 上限
+          </label>
+          <label>
+            敏感性比较口径
+            <select
+              aria-label="敏感性比较口径"
+              value={request.sensitivityMode ?? "legacy"}
+              disabled={request.sensitivity === false}
+              onChange={(e) =>
+                setRequest({
+                  ...request,
+                  sensitivityMode:
+                    e.target.value === "legacy"
+                      ? undefined
+                      : (e.target.value as AuditRequest["sensitivityMode"]),
+                })
+              }
+            >
+              {request.sensitivityMode === undefined && (
+                <option value="legacy">
+                  历史扫描：所选组合的五个静默参数点
+                </option>
+              )}
+              <option value="expert-reference">
+                专家审核：静默＋step、弹性分别比较（默认）
+              </option>
+              <option value="selected-combination">
+                所选组合：保持已选措施进行扫描
+              </option>
+            </select>
           </label>
           <label>
             物理恢复顺序

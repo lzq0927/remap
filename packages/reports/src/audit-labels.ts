@@ -23,3 +23,9 @@ export const parameterLabels: Record<string, string> = {
   computeSeconds: "检查点计算周期（秒）",
   saveSeconds: "保存阻塞（秒）",
 };
+export const sensitivityLabels: Record<string, string> = {
+  sdcCoverage: "全系统静默即时检出率",
+  sdcDelayHours: "漏检兜底发现时延（小时）",
+  elasticSyncSeconds: "弹性全局协调暂停（秒）",
+  stepSeconds: "step 回滚上限（秒）",
+};

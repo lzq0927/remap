@@ -9,6 +9,7 @@ import {
 } from "./audit-charts";
 import {
   auditVisuals,
+  auditMethodVisual,
   reportEnhancementCss,
   reportInteractionScript,
 } from "./audit-visuals";
@@ -649,7 +650,19 @@ export function report(run: Run, format = "md") {
                 s.tables
                   .map(
                     (t) =>
-                      mdTable(t) +
+                      (t.scaleRows && t.scaleRows.length > 1
+                        ? t.scaleRows
+                            .map(
+                              (s) =>
+                                "### " +
+                                num(s.cards) +
+                                " 卡 · " +
+                                (t.scaleLabel ?? "对照") +
+                                "\n\n" +
+                                mdTable({ ...t, rows: s.rows }),
+                            )
+                            .join("\n\n")
+                        : mdTable(t)) +
                       (t.eventSources
                         ? "\n\n### 数据来源与归因说明\n\n" +
                           t.eventSources
@@ -672,13 +685,9 @@ export function report(run: Run, format = "md") {
       jsonFence(provenance) +
       "\n"
     );
-  const htmlTable = (t: Table) =>
-    '<div class="table-wrap' +
-    (t.eventSources ? " event-library-table" : "") +
-    '"><table><thead><tr>' +
-    t.heads.map((h) => '<th scope="col">' + escape(h) + "</th>").join("") +
-    "</tr></thead><tbody>" +
-    t.rows
+  let renderedTables = 0;
+  const tableRows = (t: Table, rows: unknown[][]) =>
+    rows
       .map(
         (row, index) =>
           "<tr" +
@@ -706,34 +715,85 @@ export function report(run: Run, format = "md") {
             .join("") +
           "</tr>",
       )
-      .join("") +
-    "</tbody></table></div>" +
-    (t.eventSources
-      ? '<div class="event-sources"><details class="source-register"><summary>数据来源与归因说明 · ' +
-        t.eventSources.length +
-        ' 条<small>按需展开，或点击表中“查看来源”直接定位</small></summary><p class="chart-note">按事件展开阅读完整来源；证据等级表示本次输入的来源声明，不代表已验证的实测证据。</p>' +
-        t.eventSources
-          .map(
-            (e, index) =>
-              '<details class="event-source" id="event-source-' +
-              index +
-              '"><summary><strong>' +
-              escape(e.id) +
-              "</strong><span>" +
-              escape(e.description) +
-              '</span><span class="evidence-badge">' +
-              escape(e.evidence) +
-              "</span></summary><dl><dt>硬件/根因域</dt><dd>" +
-              escape(e.domain) +
-              "</dd><dt>来源</dt><dd>" +
-              escape(e.source) +
-              "</dd><dt>归因说明</dt><dd>" +
-              escape(e.note || "未补充") +
-              "</dd></dl></details>",
-          )
-          .join("") +
-        "</details></div>"
-      : "");
+      .join("");
+  const htmlTable = (t: Table) => {
+    const tableId = "report-table-" + renderedTables++;
+    return (
+      (t.scaleRows && t.scaleRows.length > 1
+        ? '<label class="scale-table-control">' +
+          escape(t.scaleLabel ?? "表格规模") +
+          '<select aria-label="' +
+          escape(t.scaleLabel ?? "表格规模") +
+          '" data-table-scale="' +
+          tableId +
+          '">' +
+          t.scaleRows
+            .map(
+              (s) =>
+                '<option value="' +
+                s.cards +
+                '" ' +
+                (s.cards === result.request.cards ? "selected" : "") +
+                ">" +
+                num(s.cards) +
+                " 卡</option>",
+            )
+            .join("") +
+          '</select></label><p class="print-only" data-table-caption="' +
+          tableId +
+          '">当前对照规模：' +
+          num(result.request.cards) +
+          " 卡</p>"
+        : "") +
+      '<div class="table-wrap' +
+      (t.eventSources ? " event-library-table" : "") +
+      '"><table' +
+      (t.scaleRows ? ' id="' + tableId + '"' : "") +
+      "><thead><tr>" +
+      t.heads.map((h) => '<th scope="col">' + escape(h) + "</th>").join("") +
+      "</tr></thead><tbody>" +
+      tableRows(t, t.rows) +
+      "</tbody></table></div>" +
+      (t.scaleRows
+        ?.map(
+          (s) =>
+            '<template id="' +
+            tableId +
+            "-" +
+            s.cards +
+            '"><table><tbody>' +
+            tableRows(t, s.rows) +
+            "</tbody></table></template>",
+        )
+        .join("") ?? "") +
+      (t.eventSources
+        ? '<div class="event-sources"><details class="source-register"><summary>数据来源与归因说明 · ' +
+          t.eventSources.length +
+          ' 条<small>按需展开，或点击表中“查看来源”直接定位</small></summary><p class="chart-note">按事件展开阅读完整来源；证据等级表示本次输入的来源声明，不代表已验证的实测证据。</p>' +
+          t.eventSources
+            .map(
+              (e, index) =>
+                '<details class="event-source" id="event-source-' +
+                index +
+                '"><summary><strong>' +
+                escape(e.id) +
+                "</strong><span>" +
+                escape(e.description) +
+                '</span><span class="evidence-badge">' +
+                escape(e.evidence) +
+                "</span></summary><dl><dt>硬件/根因域</dt><dd>" +
+                escape(e.domain) +
+                "</dd><dt>来源</dt><dd>" +
+                escape(e.source) +
+                "</dd><dt>归因说明</dt><dd>" +
+                escape(e.note || "未补充") +
+                "</dd></dl></details>",
+            )
+            .join("") +
+          "</details></div>"
+        : "")
+    );
+  };
   const sectionHtml = sections
     .map(
       (s, i) =>
@@ -748,7 +808,9 @@ export function report(run: Run, format = "md") {
           ? auditScaleCurve(result) + auditGainCharts(result)
           : s.visual === "sensitivity"
             ? auditSensitivityCurves(result)
-            : "") +
+            : s.visual === "method"
+              ? auditMethodVisual(result)
+              : "") +
         (s.tables ?? []).map(htmlTable).join("") +
         (s.collapsed ? "</details>" : "") +
         "</section>",

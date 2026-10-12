@@ -5,6 +5,12 @@ import sourceConfig from "../../../references/expert-review-2026-10-09/config.js
 import sourcePolicy from "../../../references/expert-review-2026-10-09/mechanism-policy.json";
 import sourceMechanisms from "../../../references/expert-review-2026-10-09/mechanisms.json";
 import { summarize } from "../../solvers/src/statistics";
+import {
+  auditDefaultTargets,
+  auditScalePresets,
+} from "../../contracts/src/audit-presets";
+import { auditSensitivityPlan } from "./audit-sensitivity";
+import { auditReviewChecks } from "./audit-checks";
 import { shapleyValues } from "./index";
 import {
   auditTarget,
@@ -16,7 +22,7 @@ import {
 const createEngine = createRequire(import.meta.url)(
   "../../solvers/src/vendor/review-engine.cjs",
 );
-export const AUDIT_VERSION = "review-retained-progress.v2";
+export const AUDIT_VERSION = "review-retained-progress.v3";
 export const AUDIT_METRIC = "training.retained-clean-progress";
 const commit = "683afe829313bfdcb249bc593e48df5b29813666";
 const rateBasis = "npu-equivalent-hour";
@@ -59,6 +65,7 @@ export interface AuditRequest {
   recoveryOrder?: string[];
   costs?: Record<string, number>;
   sensitivity?: boolean;
+  sensitivityMode?: "expert-reference" | "selected-combination";
 }
 const modelKeys = [
   "checkpointComputeSeconds",
@@ -100,14 +107,16 @@ export function getAuditDefaults() {
     trials: 128,
     seed: sourceConfig.seed,
     target: 0.99,
+    targets: { ...auditDefaultTargets },
     lossBudgetWeights: { ...auditBudgetDefaults },
     verifyRecommendation: true,
     verificationTrials: 64,
-    scales: [10000],
+    scales: auditScalePresets.map((p) => p.cards),
     mechanisms: ["sdcDetect", "step", "replay", "process", "elastic", "fast"],
     attribution: true,
     attributionTrials: 64,
     sensitivity: true,
+    sensitivityMode: "expert-reference" as const,
     eventOverrides: [],
     candidateFitOverrides: [],
     recoveryOrder: ["replay", "elastic", "process"],
@@ -301,6 +310,13 @@ export function resolveAudit(request: AuditRequest) {
     typeof request.sensitivity !== "boolean"
   )
     throw new Error("sensitivity must be boolean");
+  if (
+    request.sensitivityMode !== undefined &&
+    !["expert-reference", "selected-combination"].includes(
+      request.sensitivityMode,
+    )
+  )
+    throw new Error("Unknown sensitivity comparison mode");
   for (const [id, cost] of Object.entries(request.costs ?? {})) {
     if (!mechanisms.includes(id))
       throw new Error("Costs must refer to selected mechanisms");
@@ -312,19 +328,37 @@ export function resolveAudit(request: AuditRequest) {
     events.reduce((s, e) => s + e.fit, 0),
     candidateEvents.reduce((s, e) => s + e.fit, 0),
   );
+  const sensitivityPlan = auditSensitivityPlan(
+    request,
+    mechanisms,
+    model,
+    policy,
+  );
+  const sensitivityCount = sensitivityPlan.reduce(
+    (n, p) => n + p.values.length,
+    0,
+  );
   const sampleRuns =
     ((request.verifyRecommendation ?? false)
       ? 2 * (request.verificationTrials ?? 64)
       : 0) +
-    (17 + (request.candidateFitOverrides?.length ? 1 : 0)) * request.trials +
+    (11 + (request.candidateFitOverrides?.length ? 1 : 0)) * request.trials +
     ((request.attribution ?? true) && mechanisms.length
       ? 2 ** mechanisms.length * attributionTrials
       : 0);
   const expectedEvents = scales.reduce(
-    (s, n) => s + ((n * totalFit) / 1e9) * request.hours * sampleRuns,
+    (s, n) =>
+      s +
+      ((n * totalFit) / 1e9) *
+        request.hours *
+        (sampleRuns +
+          (n === request.cards ? sensitivityCount * request.trials : 0)),
     0,
   );
-  if (sampleRuns * scales.length > 131072 || expectedEvents > 30000000)
+  if (
+    sampleRuns * scales.length + sensitivityCount * request.trials > 131072 ||
+    expectedEvents > 30000000
+  )
     throw new Error(
       "Audit work budget exceeded; reduce scales, trials, mechanisms or event rates",
     );
@@ -338,6 +372,7 @@ export function resolveAudit(request: AuditRequest) {
     scales,
     attributionTrials,
     expectedEvents,
+    sensitivityPlan,
   };
 }
 export function audit(
@@ -354,6 +389,7 @@ export function audit(
       mechanisms,
       recoveryOrder,
       attributionTrials,
+      sensitivityPlan,
     } = resolved;
   const engine = createEngine(events, policy, model);
   const candidateEngine = createEngine(candidateEvents, policy, model);
@@ -362,7 +398,7 @@ export function audit(
     opts: Record<string, any>,
     trials: number,
     selectedEngine = engine,
-    ledgerEnabled = true,
+    ledgerEnabled: boolean | "totals" = true,
     seedOffset = 0,
   ) => {
     const values: number[] = [],
@@ -383,11 +419,12 @@ export function audit(
       if (ledgerEnabled) {
         for (const [k, v] of Object.entries(r.ledger))
           ledger[k] = (ledger[k] ?? 0) + (v as number) / trials;
-        for (const [id, row] of Object.entries(r.perEvent)) {
-          perEvent[id] ??= {};
-          for (const [k, v] of Object.entries(row as any))
-            perEvent[id][k] = (perEvent[id][k] ?? 0) + (v as number) / trials;
-        }
+        if (ledgerEnabled !== "totals")
+          for (const [id, row] of Object.entries(r.perEvent)) {
+            perEvent[id] ??= {};
+            for (const [k, v] of Object.entries(row as any))
+              perEvent[id][k] = (perEvent[id][k] ?? 0) + (v as number) / trials;
+          }
       }
     }
     return {
@@ -423,8 +460,6 @@ export function audit(
       name: "目标 FIT＋所选机制",
       opts: Object.fromEntries(mechanisms.map((id) => [id, true])),
     });
-  const doSensitivity =
-    (request.sensitivity ?? true) && mechanisms.includes("sdcDetect");
   const total =
     ((request.verifyRecommendation ?? false) ? 2 : 0) +
     scales.length *
@@ -432,7 +467,7 @@ export function audit(
         ((request.attribution ?? true) && mechanisms.length
           ? 2 ** mechanisms.length
           : 0)) +
-    (doSensitivity ? 5 : 0);
+    sensitivityPlan.reduce((n, p) => n + p.values.length, 0);
   for (const cards of scales) {
     const base = sample(cards, {}, request.trials);
     const samples = definitions.map((def) => {
@@ -460,34 +495,43 @@ export function audit(
       onProgress?.(++completed, total);
       return { ...def, ...sampled };
     });
-    if (cards === request.cards && doSensitivity) {
-      const combinedSamples = samples.find((s) => s.id === "combined")!;
-      for (const [parameter, value] of [
-        ["sdcCoverage", 0.95],
-        ["sdcCoverage", 0.99],
-        ["sdcCoverage", 0.999],
-        ["sdcDelayHours", 24],
-        ["sdcDelayHours", 6],
-      ] as const) {
-        const opts = {
-          ...combinedSamples.opts,
-          ...(parameter === "sdcCoverage" ? { sdcCoverage: value } : {}),
-        };
-        const selectedEngine =
-          parameter === "sdcDelayHours"
-            ? createEngine(events, policy, { ...model, sdcDelayHours: value })
-            : engine;
-        const s = sample(cards, opts, request.trials, selectedEngine, false);
-        sensitivity.push({
-          parameter,
-          value,
-          statistics: s.statistics,
-          delta: summarize(
-            s.values.map((v, i) => v - combinedSamples.values[i]),
-            0,
-          ),
-        });
-        onProgress?.(++completed, total);
+    if (cards === request.cards) {
+      for (const scan of sensitivityPlan) {
+        const reference = samples.find((s) => s.id === scan.scenarioId)!;
+        for (const value of scan.values) {
+          const parameter = scan.parameter;
+          const opts = {
+            ...reference.opts,
+            ...(parameter !== "sdcDelayHours" ? { [parameter]: value } : {}),
+          };
+          const selectedEngine =
+            parameter === "sdcDelayHours"
+              ? createEngine(events, policy, { ...model, sdcDelayHours: value })
+              : engine;
+          const s = sample(
+            cards,
+            opts,
+            request.trials,
+            selectedEngine,
+            "totals",
+          );
+          sensitivity.push({
+            parameter,
+            value,
+            cards,
+            scenarioId: reference.id,
+            scenarioName: reference.name,
+            currentValue: scan.current,
+            ledger: s.ledger,
+            availability: s.availability,
+            statistics: s.statistics,
+            delta: summarize(
+              s.values.map((v, i) => v - reference.values[i]),
+              0,
+            ),
+          });
+          onProgress?.(++completed, total);
+        }
       }
     }
     if ((request.attribution ?? true) && mechanisms.length) {
@@ -661,8 +705,10 @@ export function audit(
     rule: "优先区间下限达到目标的候选；候选成本均已提供时优先较低成本，否则按均值排序。候选仅限当前已选机制的子集，不代表全局最优；载入后需重新评估其他规模。",
   };
   const totalFit = events.reduce((s, e) => s + e.fit, 0);
+  const referenceEvents = getAuditEvents();
   const metadata = events.map((event) => ({
     ...event,
+    referenceFit: referenceEvents.find((e) => e.id === event.id)!.fit,
     share: totalFit ? event.fit / totalFit : 0,
     withinTypeShare: engine.typeTotals[event.type]
       ? event.fit / engine.typeTotals[event.type]
@@ -685,6 +731,7 @@ export function audit(
     recommendation,
     attribution,
     sensitivity,
+    reviewChecks: auditReviewChecks(request.hours, rows, attribution),
     events: metadata,
     mechanisms: sourceMechanisms.mechanisms.map((m) => ({
       ...m,

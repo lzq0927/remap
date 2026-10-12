@@ -12,6 +12,8 @@ const createEngine = createRequire(import.meta.url)(
 );
 const small = () => ({
   ...getAuditDefaults(),
+  scales: [10000],
+  targets: undefined,
   hours: 24,
   trials: 8,
   attributionTrials: 8,
