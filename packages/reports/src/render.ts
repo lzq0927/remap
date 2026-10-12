@@ -1,18 +1,19 @@
 import { runAssessmentModel } from "../../contracts/src/assessment-model";
 import type { Run } from "../../contracts/src/types";
-import { auditSections } from "./audit";
+import { auditSections, type AuditSection, type AuditTable } from "./audit";
+import {
+  auditChartCss,
+  auditGainCharts,
+  auditScaleCurve,
+  auditSensitivityCurves,
+} from "./audit-charts";
 import {
   auditVisuals,
   reportEnhancementCss,
   reportInteractionScript,
 } from "./audit-visuals";
-type Table = { heads: string[]; rows: unknown[][] };
-type Section = {
-  title: string;
-  paragraphs?: string[];
-  tables?: Table[];
-  collapsed?: boolean;
-};
+type Table = AuditTable;
+type Section = AuditSection;
 const finite = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
 const num = (v: unknown) =>
@@ -644,7 +645,22 @@ export function report(run: Run, format = "md") {
             "\n\n" +
             (s.paragraphs ?? []).map(mdCell).join("\n\n") +
             (s.tables?.length
-              ? "\n\n" + s.tables.map(mdTable).join("\n\n")
+              ? "\n\n" +
+                s.tables
+                  .map(
+                    (t) =>
+                      mdTable(t) +
+                      (t.eventSources
+                        ? "\n\n### 数据来源与归因说明\n\n" +
+                          t.eventSources
+                            .map(
+                              (e) =>
+                                `#### ${mdCell(e.id)} · ${mdCell(e.description)}\n\n证据等级：${mdCell(e.evidence)}；硬件/根因域：${mdCell(e.domain)}。\n\n来源：${mdCell(e.source)}\n\n归因说明：${mdCell(e.note || "未补充")}\n`,
+                            )
+                            .join("\n")
+                        : ""),
+                  )
+                  .join("\n\n")
               : ""),
         )
         .join("\n\n") +
@@ -657,18 +673,67 @@ export function report(run: Run, format = "md") {
       "\n"
     );
   const htmlTable = (t: Table) =>
-    '<div class="table-wrap"><table><thead><tr>' +
+    '<div class="table-wrap' +
+    (t.eventSources ? " event-library-table" : "") +
+    '"><table><thead><tr>' +
     t.heads.map((h) => '<th scope="col">' + escape(h) + "</th>").join("") +
     "</tr></thead><tbody>" +
     t.rows
       .map(
-        (row) =>
-          "<tr>" +
-          row.map((c) => "<td>" + escape(c) + "</td>").join("") +
+        (row, index) =>
+          "<tr" +
+          (t.eventSources
+            ? ' data-search="' +
+              escape(
+                t.eventSources[index].source + " " + t.eventSources[index].note,
+              ) +
+              '"'
+            : "") +
+          ">" +
+          row
+            .map(
+              (c, column) =>
+                "<td>" +
+                (t.eventSources && column === row.length - 1
+                  ? '<span class="evidence-badge">' +
+                    escape(c) +
+                    '</span><a class="source-link" href="#event-source-' +
+                    index +
+                    '">查看来源 ↗</a>'
+                  : escape(c)) +
+                "</td>",
+            )
+            .join("") +
           "</tr>",
       )
       .join("") +
-    "</tbody></table></div>";
+    "</tbody></table></div>" +
+    (t.eventSources
+      ? '<div class="event-sources"><details class="source-register"><summary>数据来源与归因说明 · ' +
+        t.eventSources.length +
+        ' 条<small>按需展开，或点击表中“查看来源”直接定位</small></summary><p class="chart-note">按事件展开阅读完整来源；证据等级表示本次输入的来源声明，不代表已验证的实测证据。</p>' +
+        t.eventSources
+          .map(
+            (e, index) =>
+              '<details class="event-source" id="event-source-' +
+              index +
+              '"><summary><strong>' +
+              escape(e.id) +
+              "</strong><span>" +
+              escape(e.description) +
+              '</span><span class="evidence-badge">' +
+              escape(e.evidence) +
+              "</span></summary><dl><dt>硬件/根因域</dt><dd>" +
+              escape(e.domain) +
+              "</dd><dt>来源</dt><dd>" +
+              escape(e.source) +
+              "</dd><dt>归因说明</dt><dd>" +
+              escape(e.note || "未补充") +
+              "</dd></dl></details>",
+          )
+          .join("") +
+        "</details></div>"
+      : "");
   const sectionHtml = sections
     .map(
       (s, i) =>
@@ -679,37 +744,22 @@ export function report(run: Run, format = "md") {
           ? "<details><summary>" + escape(s.title) + "</summary>"
           : "<h2>" + escape(s.title) + "</h2>") +
         (s.paragraphs ?? []).map((p) => "<p>" + escape(p) + "</p>").join("") +
+        (s.visual === "overview"
+          ? auditScaleCurve(result) + auditGainCharts(result)
+          : s.visual === "sensitivity"
+            ? auditSensitivityCurves(result)
+            : "") +
         (s.tables ?? []).map(htmlTable).join("") +
         (s.collapsed ? "</details>" : "") +
         "</section>",
     )
     .join("");
-  const chart = isAudit
-    ? '<section aria-label="各规模正确产出对比"><h2>规模与正确产出</h2>' +
-      result.rows
-        .filter((r: any) => ["base", "combined"].includes(r.id))
-        .map(
-          (r: any) =>
-            '<div class="chart-row"><span>' +
-            escape(r.cards) +
-            " 卡 · " +
-            escape(r.name) +
-            '</span><div class="track"><div class="bar ' +
-            (r.id === "combined" ? "combined" : "") +
-            '" style="width:' +
-            Math.max(0, Math.min(100, r.statistics.mean * 100)) +
-            '%"></div></div><strong>' +
-            pct(r.statistics.mean) +
-            "</strong></div>",
-        )
-        .join("") +
-      "<p>柱形表示当前仿真的均值，采样区间见收益表；不同模型口径不在同图混比。</p></section>"
-    : "";
   return (
     '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escape(title) +
     "</title><style>body{max-width:1320px;margin:32px auto;padding:0 24px;font:15px/1.8 system-ui,sans-serif;color:#182d35;background:#f5f6f2}header{background:#163c37;color:white;padding:36px;border-radius:16px}header p{color:#c7dbd4}h1{font-size:32px;line-height:1.4}h2{margin:0 0 20px;color:#176451}section{background:white;border:1px solid #dce3df;border-radius:12px;margin:24px 0;padding:24px;scroll-margin-top:20px}nav{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}nav a{color:#176451;padding:6px 12px;background:#e7eee8;border-radius:8px;text-decoration:none}small{color:#526b63}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}th,td{padding:10px 12px;border-bottom:1px solid #dce3df;text-align:left;vertical-align:top}th{background:#eef3ef}tr:nth-child(even){background:#fafbf8}pre{white-space:pre-wrap;word-break:break-word;background:#eef3ef;padding:20px}summary{cursor:pointer;font-weight:650;padding:12px 0}.chart-row{display:flex;gap:12px;align-items:center;margin:12px 0}.chart-row span{width:210px}.track{flex:1;background:#edf1ea;height:14px;border-radius:8px;overflow:hidden}.bar{height:100%;background:#b78756}.combined{background:#258a75}.chart-row strong{width:90px}@media(max-width:640px){body{padding:0 10px}header,section{padding:18px}.chart-row span{width:115px;font-size:12px}}@media print{body{margin:0;background:white}nav{display:none}header{background:white;color:#182d35;border-bottom:3px solid #137968}section{border:0;padding:10px 0}.table-wrap{overflow:visible}details>*{display:block!important}section,table{break-inside:auto}tr{break-inside:avoid}}" +
     reportEnhancementCss +
+    auditChartCss +
     "</style></head><body><header><p>ReMAP / RELIABILITY MODELING AND ANALYSIS PLATFORM</p><h1>" +
     escape(title) +
     "</h1><p>" +
@@ -725,7 +775,6 @@ export function report(run: Run, format = "md") {
     "</nav>" +
     '<div class="report-actions"><button id="report-print" type="button">打印 / 保存 PDF</button><button id="report-expand" type="button" aria-expanded="false">展开机制明细</button></div>' +
     (isAudit ? auditVisuals(result) : "") +
-    chart +
     sectionHtml +
     '<details class="report-evidence"><summary>输入与资产快照</summary><pre>' +
     escape(JSON.stringify(run.input, null, 2)) +

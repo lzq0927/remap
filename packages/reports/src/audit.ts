@@ -27,11 +27,25 @@ const loss = (row: any) =>
     (s, k) => s + (row?.[k] ?? 0),
     0,
   );
+export type EventSource = {
+  id: string;
+  domain: string;
+  description: string;
+  source: string;
+  evidence: string;
+  note: string;
+};
+export type AuditTable = {
+  heads: string[];
+  rows: unknown[][];
+  eventSources?: EventSource[];
+};
 export interface AuditSection {
   title: string;
   paragraphs?: string[];
-  tables?: { heads: string[]; rows: unknown[][] }[];
+  tables?: AuditTable[];
   collapsed?: boolean;
+  visual?: "overview" | "sensitivity";
 }
 export function auditSections(r: any): AuditSection[] {
   const selected = r.request.cards,
@@ -104,6 +118,7 @@ export function auditSections(r: any): AuditSection[] {
     },
     {
       title: "03 / 基线与改进收益总览",
+      visual: "overview",
       paragraphs: [
         `${r.request.trials} 条配对轨迹 / 场景；95% Student-t 均值区间仅反映抽样误差，不含参数及模型误差。运行时间变化会改变故障暴露，配对种子不意味着逐事件完全对齐。`,
       ],
@@ -161,6 +176,7 @@ export function auditSections(r: any): AuditSection[] {
       title: "04 / 独立故障事件库",
       paragraphs: [
         "事件身份与基线损失独立于机制库。总损失占比分母排除公共保存开销；静默污染归给首次污染事件，同一污染期不重复计五天。单次停机为累计停机/次数，不能解释为每次都采用该恢复时长。",
+        "表内仅显示证据等级，完整来源和归因说明在表后的同名事件明细中查看。长文本不挤入数值列；搜索仍覆盖全部来源与说明，打印保留完整明细。",
       ],
       tables: [
         {
@@ -177,8 +193,21 @@ export function auditSections(r: any): AuditSection[] {
             "窗口停机 h",
             "计算损失 h",
             "损失占比",
-            "来源 / 证据",
+            "数据证据",
           ],
+          eventSources: r.events.map((e: any) => ({
+            id: e.id,
+            domain: e.domain,
+            description: e.description,
+            source: e.source,
+            evidence:
+              {
+                "internal-measured": "内部观测",
+                "external-prior": "外网先验",
+                scenario: "方案假设",
+              }[e.evidence as string] ?? e.evidence,
+            note: e.note,
+          })),
           rows: r.events.map((e: any) => {
             const x = base.perEvent[e.id] ?? {},
               denominator = Object.values(base.perEvent).reduce(
@@ -198,15 +227,11 @@ export function auditSections(r: any): AuditSection[] {
               num(x.downtime ?? 0),
               num(loss(x) - (x.downtime ?? 0)),
               denominator ? pct(loss(x) / denominator) : "—",
-              e.source +
-                " / " +
-                ({
-                  "internal-measured": "内部观测",
-                  "external-prior": "外网先验",
-                  scenario: "方案假设",
-                }[e.evidence as string] ?? e.evidence) +
-                "；" +
-                e.note,
+              {
+                "internal-measured": "内部观测",
+                "external-prior": "外网先验",
+                scenario: "方案假设",
+              }[e.evidence as string] ?? e.evidence,
             ];
           }),
         },
@@ -349,8 +374,14 @@ export function auditSections(r: any): AuditSection[] {
     });
   sections.push({
     title: "07 / 关键参数敏感性",
+    visual: "sensitivity",
     paragraphs: [
-      "保持所选组合其他参数不变，相对当前组合进行配对比较。只在组合启用静默检测时扫描；结果不直接证明工程可实现。",
+      "保持所选组合其他参数不变，相对当前组合进行配对比较。只在组合启用静默检测时扫描；结果不直接证明工程可实现。曲线只使用本次冻结结果，专家报告中其他参数的曲线不作为本次运行数据。",
+      ...(!r.sensitivity?.length
+        ? [
+            "本次未计算敏感性。需启用静默检测和敏感性分析后重新评估，才会生成参数曲线与对照表。",
+          ]
+        : []),
     ],
     tables: [
       {

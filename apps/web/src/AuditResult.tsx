@@ -1,5 +1,11 @@
 import { useState } from "react";
 import { auditSummary } from "../../../packages/reports/src/audit-summary";
+import {
+  auditChartCss,
+  auditGainChart,
+  auditScaleCurve,
+  auditSensitivityCurves,
+} from "../../../packages/reports/src/audit-charts";
 const pct = (v: number) => (v * 100).toFixed(3) + "%";
 export default function AuditResult({
   result: r,
@@ -231,6 +237,15 @@ export default function AuditResult({
         {cards.toLocaleString()} 卡 · {r.request.hours} 小时 · 目标{" "}
         {pct(s.target)}。基线、单项与组合使用同一批种子。
       </p>
+      <details className="audit-curves" open>
+        <summary>规模趋势与机制收益图</summary>
+        <style>{auditChartCss}</style>
+        <div
+          dangerouslySetInnerHTML={{
+            __html: auditScaleCurve(r) + auditGainChart(r, cards),
+          }}
+        />
+      </details>
       <div className="table-wrap">
         <table>
           <thead>
@@ -291,6 +306,14 @@ export default function AuditResult({
             </table>
           </div>
         </>
+      )}
+      {!!r.sensitivity?.length && (
+        <details className="audit-curves" open>
+          <summary>关键参数敏感性曲线</summary>
+          <div
+            dangerouslySetInnerHTML={{ __html: auditSensitivityCurves(r) }}
+          />
+        </details>
       )}
       <p>
         完整报告含独立故障事件库、数据来源、机制前置条件、失败回退、逐事件损失变化和决策依据。采样通过不等于现场参数与工程能力已经验证。
