@@ -9,7 +9,7 @@
 | evaluate | 输入已确认 | analysis_solve,run_status,run_cancel | 分配、求解、方案比较、收益、风险、runId | 保留失败 run；重放或修正草稿 |
 | validate-deliver | 计算完成 | run_replay,report_export,feedback_record | 报告、输入摘要、版本、复现包、采纳理由 | 验证不通过回到参数/模型；不发布虚假成功 |
 
-训练调用 input 包含 cards,hours,trials,seed,target,model,config,factors。模型默认来自 model_defaults；不改动未知字段。方法工具有 allocate/rbd/fta/bdd/ctmc/compare/search/sensitivity/attribute/estimateRate。
+统一入口为“可靠性设计与评估”，新任务默认专家口径。正式调用使用 design_get.assessment 的 operation 和 input；audit 输入包含事件、机制、预算与复核设置。仅用户在高级设置中选择的历史 V4 使用 training，input 包含 cards,hours,trials,seed,target,model,config,factors。模型默认来自相应的 model_defaults.audit 或 model_defaults.training；不改动未知字段。历史运行查看/导出/重放保留原模型和指标，不改变当前设计或其确认状态。方法工具有 allocate/rbd/fta/bdd/ctmc/compare/search/sensitivity/attribute/estimateRate。
 库 payload.refs 格式为 `{id,revision,contentHash,taskId?}`；条件和来源必须核对。任务私有 validated 版本可用，公共 published 版本先复制并记录 upstream，再使用本地快照；其他资产先在草稿确认映射。
 
 每次写阶段带 executionId、expectedRevision、inputRevision。awaiting-review 为 Agent 的确认边界，confirmed 仅由工作台用户执行。工作台订阅领域 workflow events；原生聊天事件不直接修改阶段状态。取消保留产物，失败可按当前输入重试；已取消或过期执行重新启动并重新确认，不从截断的仿真中冒充续算。

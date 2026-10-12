@@ -1,3 +1,4 @@
+import { runAssessmentModel } from "../../../packages/contracts/src/assessment-model";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Download, ArrowRight } from "lucide-react";
@@ -463,7 +464,7 @@ function Comparison({
             disabled={!onApplyCandidate || !i.result?.request}
             onClick={() => onApplyCandidate?.(candidateRequest(i))}
           >
-            应用到当前设计 <ArrowRight size={13} />
+            应用到历史模型 V4 <ArrowRight size={13} />
           </button>,
         ])}
       />
@@ -548,9 +549,9 @@ function Search({
             type="button"
             disabled={!onApplyCandidate || !i.result?.request}
             onClick={() => onApplyCandidate?.(candidateRequest(i))}
-            title="将该候选的模型参数应用到当前设计，随后可重新评估"
+            title="将该候选回代历史模型 V4，重新确认后评估"
           >
-            应用到当前设计 <ArrowRight size={13} />
+            应用到历史模型 V4 <ArrowRight size={13} />
           </button>,
         ])}
       />
@@ -819,6 +820,7 @@ export default function ResultView({
   const succeeded = run.status === "succeeded",
     result = succeeded ? run.result : undefined;
   const warnings = result?.warnings ?? [];
+  const model = runAssessmentModel(run);
   return (
     <section className="paper result" aria-label="评估结果">
       <div className="section-head">
@@ -844,6 +846,14 @@ export default function ResultView({
           </button>
         )}
       </div>
+      {model && (
+        <p className="result-model" aria-label="结果口径">
+          <strong>{model.name}</strong> · {model.description}
+          <small>
+            指标 {model.metricId} · 按本次运行快照解释，与当前设计模型独立。
+          </small>
+        </p>
+      )}
       {run.error && (
         <p className="error" role="alert">
           {run.error.message} <small>（{run.error.code}）</small>

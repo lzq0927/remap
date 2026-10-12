@@ -1,3 +1,4 @@
+import { selectAssessment } from "./model-selection";
 import { test, expect } from "@playwright/test";
 
 test("homepage requires explicit task choice and task inputs and sessions remain isolated", async ({
@@ -45,7 +46,7 @@ test("homepage requires explicit task choice and task inputs and sessions remain
   await card(a.name)
     .getByRole("button", { name: "打开任务", exact: true })
     .click();
-  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await selectAssessment(page, "workflow");
   await page
     .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
@@ -61,7 +62,7 @@ test("homepage requires explicit task choice and task inputs and sessions remain
   await card(b.name)
     .getByRole("button", { name: "打开任务", exact: true })
     .click();
-  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await selectAssessment(page, "workflow");
   await page
     .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
@@ -78,7 +79,7 @@ test("homepage requires explicit task choice and task inputs and sessions remain
   await card(a.name)
     .getByRole("button", { name: "打开任务", exact: true })
     .click();
-  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await selectAssessment(page, "workflow");
   await page
     .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
@@ -137,7 +138,7 @@ test("saving budget requires manual review and stage navigation keeps input revi
     })
     .getByRole("button", { name: "打开任务", exact: true })
     .click();
-  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await selectAssessment(page, "workflow");
   await page
     .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();

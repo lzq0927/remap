@@ -64,7 +64,7 @@ test("target, budget, workflow and allocation stay consistent after refresh", as
     )
     .toBe(false);
   await page
-    .getByRole("button", { name: "可靠性设计工作台", exact: true })
+    .getByRole("button", { name: "可靠性设计与评估", exact: true })
     .click();
   await page.getByLabel("正确交付目标（0–1）").fill(".95");
   await expect(
@@ -88,9 +88,11 @@ test("published bindings can be reviewed, manual GPU FIT edits are not overwritt
   await page
     .getByLabel("我已核对资产的发生率口径、适用条件及模型字段映射")
     .check();
-  await page.getByRole("button", { name: "将已校验版本应用到训练" }).click();
   await page
-    .getByRole("button", { name: "可靠性设计工作台", exact: true })
+    .getByRole("button", { name: "将已校验版本应用到历史模型 V4" })
+    .click();
+  await page
+    .getByRole("button", { name: "可靠性设计与评估", exact: true })
     .click();
   await expect(page.getByText(/已绑定 1 个冻结资产版本/)).toBeVisible();
   await page.getByLabel("GPU FIT", { exact: true }).fill("1200");
@@ -156,17 +158,24 @@ test("locally installed OpenCode is the embedded UI with native model and API co
   );
   test.setTimeout(90000);
   await page.goto("/?view=workflow&task=" + taskId);
+  await page
+    .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
+    .click();
   await page.getByRole("button", { name: "新建关联会话" }).click();
   const frame = page.frameLocator('iframe[title="本地官方 OpenCode Web"]');
   await expect(
-    frame.getByRole("button", { name: /^(Big Pickle|GLM-5\.3(?: Highspeed)?)$/ }),
+    frame.getByRole("button", {
+      name: /^(Big Pickle|GLM-5\.3(?: Highspeed)?)$/,
+    }),
   ).toBeVisible({ timeout: 30000 });
   await page.getByRole("button", { name: "同步当前设计" }).click();
   await expect(page.getByRole("status")).toContainText("尚未调用模型");
   await expect(frame.getByText(/ReMAP 任务摘要/).first()).toBeVisible({
     timeout: 15000,
   });
-  await frame.getByRole("button", { name: /^(Big Pickle|GLM-5\.3(?: Highspeed)?)$/ }).click();
+  await frame
+    .getByRole("button", { name: /^(Big Pickle|GLM-5\.3(?: Highspeed)?)$/ })
+    .click();
   await page.screenshot({ path: "artifacts/native-opencode-models.png" });
   await expect(frame.getByText(/^(管理模型|Manage models)$/)).toBeVisible();
   await page.getByRole("button", { name: "官方设置", exact: true }).click();
@@ -227,7 +236,7 @@ test("analysis candidates without factors remain editable and cannot replace for
   await expect(page.getByRole("alert")).toContainText(
     "训练设计交付需要当前设计的训练仿真结果",
   );
-  await page.getByRole("button", { name: "应用到当前设计" }).click();
+  await page.getByRole("button", { name: "应用到历史模型 V4" }).click();
   await expect(page.getByLabel("GPU FIT", { exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("候选已回代当前设计");
   await expect(

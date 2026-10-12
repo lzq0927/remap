@@ -73,7 +73,7 @@ export default function AuditWorkbench({
       <div className="section-head">
         <div>
           <span className="eyebrow">事件 · 机制 · 决策</span>
-          <h2>故障事件与可靠性机制收益审核</h2>
+          <h2>从目标、故障证据到方案决策</h2>
         </div>
         <span className="badge">专家审核口径 · 2026-10-09</span>
       </div>
@@ -540,7 +540,7 @@ export default function AuditWorkbench({
             }
           }}
         >
-          {busy ? "正在计算…" : "运行事件与机制审核"}
+          {busy ? "正在计算…" : "运行可靠性评估"}
         </button>
       </div>
       <p className="note">

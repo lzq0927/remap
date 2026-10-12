@@ -1514,32 +1514,7 @@ select:focus-visible {
   max-width: 1440px;
   margin: 0 auto;
 }
-.assessment-modes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin: 22px 0;
-}
-.assessment-modes button {
-  display: block;
-  text-align: left;
-  padding: 18px 22px;
-  border-radius: 10px;
-}
-.assessment-modes strong,
-.assessment-modes span {
-  display: block;
-}
-.assessment-modes span {
-  color: #617670;
-  margin-top: 6px;
-  font-size: 12px;
-}
-.assessment-modes [aria-pressed="true"] {
-  border-color: #147968;
-  background: #edf7f2;
-  box-shadow: inset 4px 0 #147968;
-}
+
 .audit-workbench {
   border-radius: 12px;
   padding: 28px;
@@ -1787,12 +1762,7 @@ select:focus-visible {
   .shell.agent-hidden {
     display: block;
   }
-  .assessment-modes {
-    gap: 8px;
-  }
-  .assessment-modes button {
-    padding: 12px;
-  }
+
   .audit-workbench {
     padding: 18px;
   }
@@ -1832,18 +1802,7 @@ main > header {
   margin: 8px 0;
   gap: 10px;
 }
-.assessment-modes {
-  gap: 8px;
-  margin: 12px 0;
-}
-.assessment-modes button {
-  padding: 10px 14px;
-  border-radius: 7px;
-}
-.assessment-modes span {
-  margin-top: 3px;
-  font-size: 11px;
-}
+
 .workflow-dock {
   position: sticky;
   top: 0;
@@ -2088,5 +2047,82 @@ main > header {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+}
+
+/* A single assessment entry; compatibility models live in advanced settings. */
+.assessment-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px 16px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: #f8faf8;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
+}
+.assessment-current {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+.assessment-current span {
+  color: #60776c;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.assessment-settings > details {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.assessment-settings summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #246859;
+  padding: 3px 0;
+  white-space: nowrap;
+}
+.assessment-settings details[open] {
+  grid-column: 1 / -1;
+}
+.assessment-settings fieldset {
+  border: 1px solid #d7e2db;
+  border-radius: 6px;
+  margin: 12px 0 0;
+  padding: 14px;
+  min-width: 0;
+}
+.assessment-settings legend {
+  font-size: 13px;
+  font-weight: 600;
+}
+.assessment-settings select {
+  display: block;
+  margin-top: 8px;
+  width: 100%;
+  max-width: 460px;
+}
+.assessment-settings .note {
+  margin: 10px 0 0;
+}
+.result-model,
+.model-context-note {
+  padding: 12px 14px;
+  background: #f1f5ef;
+  border-left: 3px solid #718c69;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.result-model small {
+  display: block;
+  margin-top: 4px;
+}
+@media (max-width: 480px) {
+  .assessment-settings {
+    gap: 8px;
+    padding: 10px;
   }
 }

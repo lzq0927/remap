@@ -110,7 +110,7 @@ test("page changes start at the top, missing delivery guides back and traditiona
   ).toBeInViewport();
   await page.getByRole("button", { name: "前往计算", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "运行事件与机制审核" }),
+    page.getByRole("button", { name: "运行可靠性评估" }),
   ).toBeInViewport();
   for (const label of [
     "输入与来源",
@@ -118,7 +118,7 @@ test("page changes start at the top, missing delivery guides back and traditiona
     "方法与工具",
     "实验与报告",
     "连接与配置",
-    "可靠性设计工作台",
+    "可靠性设计与评估",
   ]) {
     await page.getByRole("button", { name: label, exact: true }).click();
     await expect(

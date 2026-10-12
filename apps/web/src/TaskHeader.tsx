@@ -18,8 +18,8 @@ export default function TaskHeader({
       <span>
         {scenario === "training"
           ? audit
-            ? "AI 训练 · 审核 · 保留干净进度"
-            : "AI 训练 · V4 · 正确交付产出率"
+            ? "AI 训练 · 专家审核口径"
+            : "AI 训练 · 历史模型 V4"
           : "传统硬件 · 结构模型 · 成功概率"}
       </span>
       <span>当前运行：{runId ? runId.slice(0, 8) : "尚未计算"}</span>

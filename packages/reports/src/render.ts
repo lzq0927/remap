@@ -1,3 +1,4 @@
+import { runAssessmentModel } from "../../contracts/src/assessment-model";
 import type { Run } from "../../contracts/src/types";
 import { auditSections } from "./audit";
 import {
@@ -76,7 +77,7 @@ const searchNames: Record<string, string> = {
 };
 const operations: Record<string, string> = {
   audit: "故障事件与机制收益审核",
-  training: "正确交付评估",
+  training: "历史模型 V4 评估",
   allocate: "目标分配",
   compare: "方案比较",
   search: "有限设计搜索",
@@ -589,7 +590,18 @@ export function report(run: Run, format = "md") {
   const result = run.status === "succeeded" ? run.result : undefined,
     sections = core(result, run);
   const isAudit = result?.kind === "expert-review-audit",
-    title = isAudit ? "故障事件与可靠性机制收益审核" : "系统可靠性评估报告";
+    model = runAssessmentModel(run),
+    title = "可靠性设计与评估报告" + (model ? " · " + model.name : "");
+  if (model)
+    sections.unshift({
+      title: "评估模型与指标口径",
+      paragraphs: [
+        model.name + "：" + model.description,
+        "指标标识：" +
+          model.metricId +
+          "。本报告依据原运行快照生成，切换当前设计不会改变历史结果。不同口径的结果不直接排名。",
+      ],
+    });
   sections.push({
     title: "设计建议与可信度限制",
     paragraphs: [
@@ -607,6 +619,8 @@ export function report(run: Run, format = "md") {
     "；时间：" +
     run.createdAt;
   const provenance = {
+    metricId: model?.metricId,
+    assessmentModel: model?.name,
     inputHash: run.inputHash,
     modelVersion: result?.modelVersion ?? result?.version ?? result?.solver,
     sourceCommit: result?.config?.sourceCommit,

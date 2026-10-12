@@ -116,3 +116,26 @@ it("escapes all dynamic HTML content including table names and full snapshots", 
   expect(html).toContain("&lt;script&gt;");
   expect(html).toContain("<td>&lt;img src=x onerror=alert(1)&gt;</td>");
 });
+
+it("labels frozen V4 reports and their derived analyses without changing JSON snapshots", () => {
+  for (const operation of [
+    "training",
+    "compare",
+    "search",
+    "sensitivity",
+    "attribute",
+  ]) {
+    const run = wrap(runTraining(base), operation);
+    const snapshot = JSON.stringify(run, null, 2);
+    for (const format of ["md", "html"]) {
+      const output = report(run, format);
+      expect(output).toContain("可靠性设计与评估报告 · 历史模型 V4");
+      expect(output).toContain("training.correct-delivery");
+      expect(output).toContain("整条任务的交付产出清零");
+    }
+    expect(report(run, "json")).toBe(snapshot);
+  }
+  expect(report(wrap({ probability: 0.99 }, "rbd"))).not.toContain(
+    "历史模型 V4",
+  );
+});

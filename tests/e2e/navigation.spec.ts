@@ -1,3 +1,4 @@
+import { selectAssessment } from "./model-selection";
 import { test, expect } from "./task-fixture";
 
 for (const viewport of [
@@ -10,7 +11,8 @@ for (const viewport of [
       taskId,
     }) => {
       await page.setViewportSize(viewport);
-      await page.goto(`/?view=${mode}&task=${taskId}`);
+      await page.goto(`/?task=${taskId}`);
+      if (mode === "workflow") await selectAssessment(page, "workflow");
       const navigation = page.getByRole("navigation", {
         name: "六阶段评估流程",
       });

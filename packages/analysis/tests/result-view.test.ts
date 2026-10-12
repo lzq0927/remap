@@ -24,7 +24,7 @@ it('search candidate callback payload uses design seed rather than independent v
   const request=candidateRequest(result.items[0]);
   expect(request.seed).toBe(base.seed);expect(request.model?.saveSeconds).toBe(0);expect(request.seed).not.toBe(result.verification!.request.seed);
   const html=renderToStaticMarkup(createElement(ResultView,{run:run(result,'search'),onApplyCandidate:()=>{}}));
-  expect(html).toContain('应用到当前设计');expect(html).toContain('独立验证');expect(html).toContain('候选');
+  expect(html).toContain('应用到历史模型 V4');expect(html).toContain('独立验证');expect(html).toContain('候选');
 });
 it('renders negative actual Shapley values as percentage-point contributions',()=>{
   const result=attribute({base,factors:['checkpoint','save']});
@@ -45,7 +45,7 @@ it('renders real allocation, comparison and sensitivity structures as readable t
   const comparison=compare({base,variants:[{id:'save',name:'加速保存',model:{saveSeconds:0}}]});
   const comparisonHtml=renderToStaticMarkup(createElement(ResultView,{run:run(comparison,'compare'),onApplyCandidate:()=>{}}));
   expect(comparisonHtml).toContain('加速保存');expect(comparisonHtml).toContain('相对基线变化');
-  expect(comparisonHtml).toContain('应用到当前设计');
+  expect(comparisonHtml).toContain('应用到历史模型 V4');
   const sweep=sensitivity({base,parameter:'saveSeconds',values:[0,60]});
   expect(renderToStaticMarkup(createElement(ResultView,{run:run(sweep,'sensitivity')}))).toContain('保存阻塞（秒）');
 });

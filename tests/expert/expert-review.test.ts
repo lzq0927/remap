@@ -235,6 +235,8 @@ it("exports complete event/mechanism tables with safe HTML and actual sensitivit
     };
   expect(r.sensitivity).toHaveLength(5);
   const html = report(run, "html");
+  expect(html).toContain("可靠性设计与评估报告 · 专家审核口径");
+  expect(html).toContain("training.retained-clean-progress");
   for (const text of [
     "独立故障事件库",
     "失败回退",

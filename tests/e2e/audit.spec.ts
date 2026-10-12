@@ -1,3 +1,4 @@
+import { selectAssessment } from "./model-selection";
 import { test, expect } from "./task-fixture";
 test("review workflow runs the chosen expert metric and downloads a complete audit", async ({
   page,
@@ -35,7 +36,7 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   await expect(
     page.getByRole("heading", { name: "计算与权衡", exact: true }),
   ).toBeVisible();
-  await panel.getByRole("button", { name: "运行事件与机制审核" }).click();
+  await panel.getByRole("button", { name: "运行可靠性评估" }).click();
   await expect(
     page.getByText("事件与机制收益审核 · 保留干净检查点", { exact: true }),
   ).toBeVisible({ timeout: 30000 });
@@ -150,9 +151,9 @@ test("audit layout is readable on mobile and metric switching preserves current 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?task=" + taskId);
   await page.getByLabel("审核卡数", { exact: true }).fill("20000");
-  await page.getByRole("button", { name: "设计确认流程" }).click();
+  await selectAssessment(page, "workflow");
   await expect(page.getByLabel("集群卡数", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "事件与机制审核" }).click();
+  await selectAssessment(page, "audit");
   await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
     "20000",
   );
@@ -169,7 +170,7 @@ test("audit layout is readable on mobile and metric switching preserves current 
   );
   await page.getByRole("button", { name: "资产库", exact: true }).click();
   await page
-    .getByRole("button", { name: "可靠性设计工作台", exact: true })
+    .getByRole("button", { name: "可靠性设计与评估", exact: true })
     .click();
   await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
     "20000",

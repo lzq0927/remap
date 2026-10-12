@@ -1,3 +1,7 @@
+import {
+  assessmentModels,
+  runAssessmentModel,
+} from "../../../packages/contracts/src/assessment-model";
 import { draftFromAuditRequest } from "../../../packages/contracts/src/audit-draft";
 import { useEffect, useState, useRef, useMemo } from "react";
 import {
@@ -66,7 +70,7 @@ const kinds = [
   ["incident", "故障事件台账"],
 ];
 const navigation = [
-  ["workbench", "可靠性设计工作台", Activity],
+  ["workbench", "可靠性设计与评估", Activity],
   ["inputs", "输入与来源", FileInput],
   ["catalogs", "资产库", Database],
   ["tools", "方法与工具", Boxes],
@@ -74,8 +78,8 @@ const navigation = [
   ["settings", "连接与配置", Settings],
 ] as const;
 const toolNames: Record<string, string> = {
-  training: "训练仿真",
-  audit: "事件与机制审核",
+  training: "历史模型 V4 评估",
+  audit: "专家口径评估",
   allocate: "指标分配",
   rbd: "可靠性框图",
   fta: "故障树",
@@ -142,7 +146,7 @@ function ModelEditor({
       <JsonEditor
         value={draft}
         onChange={setDraft}
-        label="专家 V4 参数（所有参数均进入求解器）"
+        label="历史模型 V4 参数（所有参数均进入求解器）"
       />
       <button
         onClick={() => {
@@ -247,14 +251,12 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     [chatBottom, setChatBottom] = useState(false),
     [scenario, setScenario] = useState("training");
   const [auditDraft, setAuditDraft] = useState<AuditDraft>();
-  const [designMode, setDesignMode] = useState(
-    new URLSearchParams(location.search).get("view") === "workflow"
-      ? "workflow"
-      : "audit",
-  );
-  const [agentVisible, setAgentVisible] = useState(
-    new URLSearchParams(location.search).get("view") === "workflow",
-  );
+  const [designMode, setDesignMode] = useState("audit");
+  const [agentVisible, setAgentVisible] = useState(false);
+  const [agentOpened, setAgentOpened] = useState(false);
+  useEffect(() => {
+    if (agentVisible) setAgentOpened(true);
+  }, [agentVisible]);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [page, designMode, scenario]);
@@ -433,17 +435,30 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
   }, [run?.id, run?.status]);
   useEffect(() => {
     let disposed = false;
+    // Optional connection discovery must not hold the assessment form behind Agent health checks.
+    void api("/settings")
+      .then((value) => {
+        if (!disposed) setSettings(value);
+      })
+      .catch((e) => {
+        if (!disposed) setError(e.message);
+      });
+    void api("/inputs")
+      .then((value) => {
+        if (!disposed) setInputs(value);
+      })
+      .catch((e) => {
+        if (!disposed) setError(e.message);
+      });
     void (async () => {
-      const [d, design, history, config, files] = await Promise.all([
+      const [d, design, history] = await Promise.all([
         api("/defaults"),
         api("/design"),
         api("/runs"),
-        api("/settings"),
-        api("/inputs"),
       ]);
       if (disposed) return;
       setAuditDraft(design?.auditDraft);
-      if (design && !new URLSearchParams(location.search).has("view"))
+      if (design)
         setDesignMode(
           design.activeAssessment ?? (design.auditDraft ? "audit" : "workflow"),
         );
@@ -452,8 +467,6 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       setRequest({ ...restored, factors: restored.factors ?? [] });
       setModelJson(pretty({ ...d.training.model, ...restored.model }));
       setRuns(history);
-      setSettings(config);
-      setInputs(files);
       designRevision.current = design?.revision ?? 0;
       if (design) {
         setScenario(design.scenario ?? "training");
@@ -584,7 +597,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       if (!formal)
         setNotice(
           op === "audit"
-            ? "审核输入已冻结保存。完成后可查看单项、组合收益并下载完整报告。"
+            ? "本次为专家口径试算，输入已冻结保存；正式交付需先确认前四个阶段，再计算并审核。"
             : "本次为独立评估；正式流程需先人工确认前四个阶段，再计算并审核。",
         );
       setRun(r);
@@ -630,12 +643,18 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     setModelJson(pretty(m));
   }
   function applyCandidate(value: any) {
+    if (designMode !== "workflow") {
+      setError(
+        "该候选属于历史模型 V4，不能回代专家口径。请先在高级设置 → 历史模型中选择 V4；专家方案请使用当前评估的候选决策建议。",
+      );
+      return;
+    }
     setRequest({ ...value, factors: value.factors ?? [], assetRefs: [] });
     setModelJson(pretty({ ...defaults.training.model, ...value.model }));
     setPage("workbench");
     setDesignMode("workflow");
-    setStage(4);
-    setNotice("候选已回代当前设计，尚未重新计算；请检查参数后执行评估。");
+    setStage(0);
+    setNotice("历史模型 V4 候选已回代当前设计；保留原口径，请重新确认并计算。");
   }
   const [auditEpoch, setAuditEpoch] = useState(0);
   function applyAuditCandidate(value: any) {
@@ -781,7 +800,18 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
   }
   function openAllocation() {
     setOperation("allocate");
-    setToolJson(pretty(allocationExample(request.target, request.hours)));
+    setToolJson(
+      pretty(
+        allocationExample(
+          designMode === "audit"
+            ? (auditDraft?.request.target ?? request.target)
+            : request.target,
+          designMode === "audit"
+            ? (auditDraft?.request.hours ?? request.hours)
+            : request.hours,
+        ),
+      ),
+    );
     setPage("tools");
     setNotice(
       "已同步当前目标和窗口作为子模型设计输入；训练交付到子模型目标的映射仍需确认。",
@@ -870,7 +900,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
   if (!defaults || !request)
     return (
       <div className="boot">
-        <FlaskConical /> 正在加载可靠性设计工作台…
+        <FlaskConical /> 正在加载可靠性设计与评估…
         {error && <p className="error">{error}</p>}
       </div>
     );
@@ -889,7 +919,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
             <strong title="Reliability Modeling and Analysis Platform">
               ReMAP
             </strong>
-            <span>可靠性设计工作台</span>
+            <span>可靠性设计与评估</span>
           </div>
         </div>
         <div className="sidebar-caption">WORKSPACE / 001</div>
@@ -924,7 +954,8 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
               onClick={() => {
                 setScenario(s.id);
                 setPage("workbench");
-                setDesignMode("workflow");
+                if (s.id !== scenario)
+                  setDesignMode(s.id === "training" ? "audit" : "workflow");
               }}
               className={scenario === s.id ? "selected" : ""}
             >
@@ -1006,11 +1037,8 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   attempt(async () => {
                     const associated = await api("/runs/" + agentRunId);
                     setRun(associated);
-                    setPage("workbench");
-                    setDesignMode(
-                      associated.operation === "audit" ? "audit" : "workflow",
-                    );
-                    setStage(5);
+                    setPage("runs");
+                    setRuns(await api("/runs"));
                   })
                 }
               >
@@ -1064,26 +1092,57 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         {page === "workbench" && (
           <>
             {scenario === "training" && (
-              <div
-                className="assessment-modes"
-                role="group"
-                aria-label="评估口径"
-              >
-                <button
-                  aria-pressed={designMode === "audit"}
-                  onClick={() => setDesignMode("audit")}
-                >
-                  <strong>事件与机制审核</strong>
-                  <span>保留干净进度 · 专家审核口径</span>
-                </button>
-                <button
-                  aria-pressed={designMode === "workflow"}
-                  onClick={() => setDesignMode("workflow")}
-                >
-                  <strong>设计确认流程</strong>
-                  <span>期末污染整任务清零 · V4 口径</span>
-                </button>
-              </div>
+              <section className="assessment-settings" aria-label="模型设置">
+                <div className="assessment-current">
+                  <strong>
+                    {designMode === "audit"
+                      ? "专家审核口径 · 默认"
+                      : "历史模型 V4 · 兼容复核"}
+                  </strong>
+                  <span>
+                    {
+                      assessmentModels[
+                        designMode === "audit" ? "audit" : "workflow"
+                      ].description
+                    }
+                  </span>
+                </div>
+                <details>
+                  <summary>高级设置</summary>
+                  <fieldset>
+                    <legend>历史模型</legend>
+                    <label>
+                      评估模型
+                      <select
+                        aria-label="评估模型"
+                        value={designMode}
+                        disabled={
+                          confirming ||
+                          busy ||
+                          ["running", "queued"].includes(run?.status)
+                        }
+                        onChange={(e) => {
+                          setDesignMode(e.target.value);
+                          setStage(0);
+                          setError("");
+                          setNotice(
+                            "评估模型已切换，使用同一套六阶段流程。旧结果与报告保留原口径；新计算需按当前模型重新确认。",
+                          );
+                        }}
+                      >
+                        <option value="audit">专家审核口径（默认）</option>
+                        <option value="workflow">
+                          历史模型 V4（仅用于兼容复核）
+                        </option>
+                      </select>
+                    </label>
+                    <p className="note">
+                      通常无需更改。V4
+                      用于复核已有设计；两种模型的污染处理不同，结果不能直接排名。查看或重放旧结果请进入“实验与报告”，无需切换当前设计。
+                    </p>
+                  </fieldset>
+                </details>
+              </section>
             )}
             {scenario === "training" && (
               <WorkflowTimeline
@@ -1293,7 +1352,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                       ))}
                     </div>
                     <p className="note">
-                      专家 V4 的四个 FIT 索引依次是
+                      历史模型 V4 的四个 FIT 索引依次是
                       HBM、GPU、网络、其他。存储等独立组件需要明确字段映射或扩展模型，不能通过更改标签替代建模。
                     </p>
                     {request.assetRefs?.length > 0 && (
@@ -1488,6 +1547,18 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
               </section>
             )}
             <div id="design-result">
+              {scenario === "training" &&
+                run &&
+                runAssessmentModel(run) &&
+                runAssessmentModel(run) !==
+                  assessmentModels[
+                    designMode === "audit" ? "audit" : "workflow"
+                  ] && (
+                  <p className="model-context-note" role="status">
+                    下方为{runAssessmentModel(run)!.name}
+                    的历史结果，与当前设计口径不同；查看历史不会替代本次正式评估。
+                  </p>
+                )}
               {!run && stage === 5 && scenario === "training" && (
                 <section className="paper">
                   <h2>尚无可交付的评估结果</h2>
@@ -1722,6 +1793,10 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                               disabled={!conditionAccepted}
                               onClick={() =>
                                 attempt(async () => {
+                                  if (designMode === "audit")
+                                    throw new Error(
+                                      "该资产的训练字段映射适用于历史模型 V4。请先在可靠性设计与评估 → 高级设置 → 历史模型中选择 V4 后再应用；专家口径请在故障与证据中录入同口径事件，器件 FIT 不可直接混用。",
+                                    );
                                   const p = asset.payload;
                                   if (!p.patch && !p.modelBinding)
                                     throw new Error(
@@ -1750,11 +1825,10 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                                       p.modelBinding.value ?? p.value;
                                   setModelJson(pretty(m));
                                   setPage("workbench");
-                                  setDesignMode("workflow");
                                 })
                               }
                             >
-                              将已校验版本应用到训练
+                              将已校验版本应用到历史模型 V4
                             </button>
                           )}
                           {asset.state === "published" && (
@@ -1970,6 +2044,10 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                             throw new Error(
                               "暂无可应用字段，请根据未映射原因修正输入或补充显式字段映射。",
                             );
+                          if (preview.trainingPatch && designMode === "audit")
+                            throw new Error(
+                              "此文件的训练字段映射适用于历史模型 V4，尚未改动当前专家设计。请先在高级设置 → 历史模型中选择 V4 后再应用；专家事件数据请使用故障与证据中的更新入口。",
+                            );
                           if (preview.assets.length)
                             await api("/catalogs/import", {
                               items: preview.assets,
@@ -1988,7 +2066,6 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                             });
                             setModelJson(pretty(model));
                             setPage("workbench");
-                            setDesignMode("workflow");
                             setStage(3);
                           } else {
                             setPage("catalogs");
@@ -2095,6 +2172,14 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   </button>
                 ))}
               </div>
+              {["compare", "search", "sensitivity", "attribute"].includes(
+                operation,
+              ) && (
+                <p className="model-context-note">
+                  此独立工具使用历史模型 V4
+                  的训练参数。专家口径的组合收益、敏感性和候选建议在可靠性设计与评估的“计算与权衡”阶段查看。
+                </p>
+              )}
               {methodGuidance[operation] && (
                 <p className="method-guidance">
                   {methodGuidance[operation]}{" "}
@@ -2273,6 +2358,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                     <tr>
                       <th>实验</th>
                       <th>方法</th>
+                      <th>结果口径</th>
                       <th>状态</th>
                       <th>创建时间</th>
                       <th>操作</th>
@@ -2294,6 +2380,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                           </button>
                         </td>
                         <td>{toolNames[r.operation] ?? r.operation}</td>
+                        <td>{runAssessmentModel(r)?.name ?? "独立方法指标"}</td>
                         <td>{states[r.status]}</td>
                         <td>{new Date(r.createdAt).toLocaleString()}</td>
                         <td>
@@ -2301,11 +2388,9 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                             onClick={() =>
                               attempt(async () => {
                                 setRun(await api(`/runs/${r.id}/replay`, {}));
-                                setPage("workbench");
-                                setDesignMode(
-                                  r.operation === "audit"
-                                    ? "audit"
-                                    : "workflow",
+                                setRuns(await api("/runs"));
+                                setNotice(
+                                  "已按原输入和原模型重放，当前设计模型与确认流程保持不变。",
                                 );
                               })
                             }
@@ -2412,49 +2497,51 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
           <span>目标 → 模型 → 机制 → 证据 → 决策</span>
         </footer>
       </main>
-      <OpenCodePanel
-        session={session}
-        taskName={task.name}
-        onSession={setSession}
-        context={{
-          scenario,
-          summary: {
-            target:
+      {(agentVisible || agentOpened) && (
+        <OpenCodePanel
+          session={session}
+          taskName={task.name}
+          onSession={setSession}
+          context={{
+            scenario,
+            summary: {
+              target:
+                designMode === "audit" && scenario === "training"
+                  ? auditDraft?.request.target
+                  : request.target,
+              cards:
+                designMode === "audit" && scenario === "training"
+                  ? auditDraft?.request.cards
+                  : request.cards,
+              hours:
+                designMode === "audit" && scenario === "training"
+                  ? auditDraft?.request.hours
+                  : request.hours,
+              generation: request.generation,
+              metric:
+                scenario === "training"
+                  ? designMode === "audit"
+                    ? "training.retained-clean-progress"
+                    : "correct-delivery"
+                  : "system-probability",
+              designInputPath:
+                designMode === "audit" && scenario === "training"
+                  ? "auditDraft（request + model/policy JSON + overrides/hardware JSON）"
+                  : "request",
+              inputRevision: designRevision.current,
+            },
+            step:
               designMode === "audit" && scenario === "training"
-                ? auditDraft?.request.target
-                : request.target,
-            cards:
-              designMode === "audit" && scenario === "training"
-                ? auditDraft?.request.cards
-                : request.cards,
-            hours:
-              designMode === "audit" && scenario === "training"
-                ? auditDraft?.request.hours
-                : request.hours,
-            generation: request.generation,
-            metric:
-              scenario === "training"
-                ? designMode === "audit"
-                  ? "training.retained-clean-progress"
-                  : "correct-delivery"
-                : "system-probability",
-            designInputPath:
-              designMode === "audit" && scenario === "training"
-                ? "auditDraft（request + model/policy JSON + overrides/hardware JSON）"
-                : "request",
-            inputRevision: designRevision.current,
-          },
-          step:
-            designMode === "audit" && scenario === "training"
-              ? "audit"
-              : workflowSteps[stage].id,
-          runId: run?.id,
-        }}
-        onNotice={setNotice}
-        onError={setError}
-        onExpand={() => setChatBottom(!chatBottom)}
-        beforeContext={flushDesign}
-      />
+                ? "audit"
+                : workflowSteps[stage].id,
+            runId: run?.id,
+          }}
+          onNotice={setNotice}
+          onError={setError}
+          onExpand={() => setChatBottom(!chatBottom)}
+          beforeContext={flushDesign}
+        />
+      )}
     </div>
   );
 }
