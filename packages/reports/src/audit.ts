@@ -1,5 +1,9 @@
 import { auditSummary } from "./audit-summary";
 import { parameterLabels, sensitivityLabels } from "./audit-labels";
+import {
+  auditSelectedMechanisms,
+  auditSamplingDescription,
+} from "./audit-context";
 const num = (v: any, digits = 3) =>
   typeof v === "number" && Number.isFinite(v)
     ? v.toLocaleString("zh-CN", { maximumFractionDigits: digits })
@@ -34,6 +38,10 @@ export type EventSource = {
   source: string;
   evidence: string;
   note: string;
+  referenceEvidence?: string;
+  referenceReviewNote?: string;
+  legacyEvidence?: string;
+  fitEvidence?: string;
 };
 export type AuditTable = {
   heads: string[];
@@ -135,6 +143,7 @@ export function auditSections(r: any): AuditSection[] {
     {
       title: "审核结论与行动重点",
       paragraphs: [
+        auditSamplingDescription(r),
         `${num(selected, 0)} 卡：${brief.statusLabel}。基线 ${pct(brief.base.statistics.mean)} → 组合 ${pct(brief.combined.statistics.mean)}；新增正确计算 ${num(brief.additionalHours)} 小时。`,
         brief.next,
         `最大基线损失为${brief.losses[0].name}（${num(brief.losses[0].base)} 小时）；优先核对 ${brief.drivers
@@ -142,6 +151,17 @@ export function auditSections(r: any): AuditSection[] {
           .map((d: any) => d.id)
           .join("、")} 的数据来源与机制覆盖。`,
         `${r.events.length} 条事件中 ${brief.internal} 条标记为内部观测；其余为外网先验或方案假设。`,
+        "下表是本次实际评估组合；后文推荐的是候选子集，不会自动替换本次组合。常规CKPT与人工恢复已包含在基线；硬件降FIT须单独提供目标。专家六项是对照方案，不表示每个规模的最优部署。",
+      ],
+      tables: [
+        {
+          heads: ["本次启用措施", "措施名称", "本次参数"],
+          rows: auditSelectedMechanisms(r).map((m) => [
+            m.code,
+            m.name,
+            m.parameters,
+          ]),
+        },
       ],
     },
     {
@@ -167,7 +187,7 @@ export function auditSections(r: any): AuditSection[] {
             const s = auditSummary(r, cards);
             return [
               num(cards, 0),
-              pct(s.target),
+              s.referenceOnly ? "参考点，未设需求目标" : pct(s.target),
               num(hardFit > 0 ? 1e9 / (cards * hardFit) : null),
               pct(s.base.availability),
               pct(s.combined.availability),
@@ -248,7 +268,7 @@ export function auditSections(r: any): AuditSection[] {
       title: "03 / 基线与改进收益总览",
       visual: "overview",
       paragraphs: [
-        `${r.request.trials} 条配对轨迹 / 场景；95% Student-t 均值区间仅反映抽样误差，不含参数及模型误差。运行时间变化会改变故障暴露，配对种子不意味着逐事件完全对齐。`,
+        `${r.request.trials} 条配对轨迹 / 场景；${r.rows[0].statistics.intervalMethod.includes("normal") ? "95% 正态近似（1.96）" : "95% Student-t"} 均值区间仅反映抽样误差，不含参数及模型误差。运行时间变化会改变故障暴露，配对种子不意味着逐事件完全对齐。`,
       ],
       tables: [
         {
@@ -339,6 +359,10 @@ export function auditSections(r: any): AuditSection[] {
                 scenario: "方案假设",
               }[e.evidence as string] ?? e.evidence,
             note: e.note,
+            referenceEvidence: e.referenceEvidence,
+            referenceReviewNote: e.referenceReviewNote,
+            legacyEvidence: e.legacyEvidence,
+            fitEvidence: e.fitEvidence,
           })),
           rows: eventRows(selected),
           scaleLabel: "事件库规模",
@@ -469,7 +493,9 @@ export function auditSections(r: any): AuditSection[] {
     title: "07 / 关键参数敏感性",
     visual: "sensitivity",
     paragraphs: [
-      r.request.sensitivityMode === "expert-reference"
+      ["expert-reference", "expert-reproduction"].includes(
+        r.request.sensitivityMode,
+      )
         ? "专家审核口径：静默检出率和 step 上限在“静默检测＋step”情景下扫描，弹性暂停在“DP 弹性单项”情景下扫描。每组保持其他输入不变，相对本组当前参数进行配对比较，与所选组合达标判断分别解释。"
         : "所选组合口径：保持已选措施及其他输入不变，相对当前组合进行配对比较；只有启用了对应机制才扫描相关参数。",
       "曲线只使用本次冻结结果。0% / 100% 检出率用于边界核查，不代表已实现能力；均值区间仅反映抽样误差。",
@@ -492,6 +518,7 @@ export function auditSections(r: any): AuditSection[] {
       {
         heads: [
           "参数",
+          "扫描规模 / 卡",
           "比较情景",
           "取值",
           "正确产出",
@@ -504,6 +531,7 @@ export function auditSections(r: any): AuditSection[] {
         ],
         rows: (r.sensitivity ?? []).map((s: any) => [
           sensitivityLabels[s.parameter] ?? s.parameter,
+          num(s.cards, 0),
           s.scenarioName ?? "所选机制组合",
           s.parameter === "sdcCoverage" ? pct(s.value) : num(s.value),
           pct(s.statistics.mean),
@@ -599,8 +627,8 @@ export function auditSections(r: any): AuditSection[] {
       ],
     });
   if (r.designReview)
-    sections.splice(2, 0, {
-      title: "目标预算与实际缺口",
+    sections.push({
+      title: "平台扩展 / 目标预算与实际缺口",
       paragraphs: [
         `无故障保存开销参考：基线 ${pct(r.designReview.baselineNoFault)}，所选检查点策略 ${pct(r.designReview.selectedNoFault)}；该参考不是任意机制下的可行性上界。`,
         "各规模目标由需求给定；六项损失互斥记账，预算不是故障率缩放。超预算项需结合故障证据和机制适用性落实措施，再正向复算。",
@@ -626,9 +654,10 @@ export function auditSections(r: any): AuditSection[] {
     const rec = r.recommendation,
       v = rec.verification;
     sections.push({
-      title: "候选选择与独立验证",
+      title: "平台扩展 / 候选选择与独立验证",
       paragraphs: [
         rec.rule,
+        "这里展示筛选建议；本次实际启用措施以前面的组合清单为准，建议须显式载入后重新确认和计算。",
         `筛选范围：${num(selected, 0)} 卡，${rec.candidateCount} 个候选；硬件 FIT 候选另列，不参与本次机制子集筛选。`,
         v
           ? `独立复核 ${v.trials} 条轨迹，种子索引偏移 ${v.seedOffset}；均值 ${pct(v.statistics.mean)}，95% 均值区间 ${ci(v.statistics)}，结论 ${v.status === "supported" ? "采样支持达标" : v.status === "below" ? "低于目标" : "证据不足"}。条件于输入模型，不能替代产品实测。`

@@ -1,4 +1,5 @@
 import type { AuditRequest } from "../../analysis/src/audit";
+import { auditReferenceScales, auditReferenceOnly } from "./audit-presets";
 /** Shared draft conversion: browser, API and Agent use the same saved assessment. */
 export interface AuditDraft {
   request: AuditRequest;
@@ -15,18 +16,27 @@ export function auditDraftInput(draft: AuditDraft): AuditRequest {
   if (!Array.isArray(eventOverrides) || !Array.isArray(candidateFitOverrides))
     throw new Error("事件更新必须是数组");
   const scales = allScales
-    ? [...new Set([request.cards, 10000, 100000, 200000, 500000])]
+    ? [
+        ...new Set([
+          request.cards,
+          ...(request.samplingProfile
+            ? auditReferenceScales
+            : [10000, 100000, 200000, 500000]),
+        ]),
+      ]
     : [request.cards];
   return {
     ...request,
     scales,
     targets: Object.fromEntries(
-      scales.map((n) => [
-        n,
-        n === request.cards
-          ? request.target
-          : (request.targets?.[String(n)] ?? request.target),
-      ]),
+      scales
+        .filter((n) => !auditReferenceOnly(request, n))
+        .map((n) => [
+          n,
+          n === request.cards
+            ? request.target
+            : (request.targets?.[String(n)] ?? request.target),
+        ]),
     ),
     model: JSON.parse(model),
     policy: JSON.parse(policy),

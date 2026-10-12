@@ -68,6 +68,9 @@ it("plots only frozen scale points in ascending log-axis order and does not alte
   expect(html).toContain('data-value="10000" data-mean="0.82"');
   expect(html).toContain('data-value="500000" data-mean="0.4"');
   expect(html).not.toContain('data-value="100000"');
+  expect(html).toContain("曲线数值");
+  expect(html).toContain("82%");
+  expect(html).toContain("40%");
   expect(html.indexOf('data-value="10000"')).toBeLessThan(
     html.indexOf('data-value="500000"'),
   );

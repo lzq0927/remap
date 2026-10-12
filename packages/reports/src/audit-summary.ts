@@ -1,4 +1,5 @@
 /** Presentation-only interpretation shared by the workbench and standalone report. */
+import { auditReferenceOnly } from "../../contracts/src/audit-presets";
 export const auditLossLabels: Record<string, string> = {
   downtime: "全局停机",
   save: "检查点保存",
@@ -13,8 +14,10 @@ export function auditSummary(r: any, cards = r.request.cards) {
     (x: any) => x.cards === cards && x.id === "combined",
   );
   const target = r.request.targets?.[String(cards)] ?? r.request.target;
-  const status =
-    combined.statistics.ciLow >= target
+  const referenceOnly = auditReferenceOnly(r.request, cards);
+  const status = referenceOnly
+    ? "reference"
+    : combined.statistics.ciLow >= target
       ? "supported"
       : combined.statistics.ciHigh < target
         ? "below"
@@ -23,6 +26,7 @@ export function auditSummary(r: any, cards = r.request.cards) {
     supported: "采样支持达到目标",
     below: "当前组合低于目标",
     uncertain: "目标附近，证据不足",
+    reference: "曲线参考规模 · 未设需求目标",
   }[status];
   const losses = Object.entries(auditLossLabels)
     .map(([key, name]) => ({
@@ -63,8 +67,10 @@ export function auditSummary(r: any, cards = r.request.cards) {
     internal,
     additionalHours: gain * r.request.hours,
     gap: combined.statistics.mean - target,
-    next:
-      status === "below"
+    referenceOnly,
+    next: referenceOnly
+      ? "1000卡用于复现专家规模曲线，不计入四个规模的需求达标汇总。"
+      : status === "below"
         ? "当前组合仍有产出缺口。优先检查最大损失项及覆盖条件，再比较候选措施；不能仅靠增加采样消除缺口。"
         : status === "uncertain"
           ? "先增加轨迹数并用独立种子复核，再校准关键参数；均值超过目标尚不足以确认达标。"
@@ -75,7 +81,12 @@ export function auditSummary(r: any, cards = r.request.cards) {
 export function auditScaleSummary(r: any) {
   const summaries = [
     ...new Set<number>(
-      r.rows.filter((x: any) => x.id === "combined").map((x: any) => x.cards),
+      r.rows
+        .filter(
+          (x: any) =>
+            x.id === "combined" && !auditReferenceOnly(r.request, x.cards),
+        )
+        .map((x: any) => x.cards),
     ),
   ].map((cards) => auditSummary(r, cards));
   return {

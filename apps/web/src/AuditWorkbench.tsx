@@ -5,7 +5,11 @@ import {
 import { useEffect, useState } from "react";
 import { EventEditor, NumericParameters } from "./AuditEditors";
 import type { AuditRequest } from "../../../packages/analysis/src/audit";
-import { changeAuditCards } from "../../../packages/contracts/src/audit-presets";
+import {
+  changeAuditCards,
+  auditSamplingPreset,
+  auditReferenceMechanisms,
+} from "../../../packages/contracts/src/audit-presets";
 
 import {
   auditDraftInput,
@@ -91,6 +95,39 @@ export default function AuditWorkbench({
         01 / 评估范围
       </h3>
       <div className="fields">
+        <label>
+          采样配置
+          <select
+            aria-label="采样配置"
+            value={request.samplingProfile ?? "custom"}
+            onChange={(e) => {
+              if (e.target.value === "custom")
+                setRequest({ ...request, samplingProfile: "custom" });
+              else {
+                setRequest({
+                  ...request,
+                  ...auditSamplingPreset(
+                    e.target.value as "expert-reproduction" | "quick",
+                  ),
+                });
+                setAllScales(true);
+              }
+            }}
+          >
+            <option value="expert-reproduction">
+              专家复现 · 正式审核（默认）
+            </option>
+            <option value="quick">快速试算 · 方向探索</option>
+            <option value="custom">自定义 / 历史采样</option>
+          </select>
+        </label>
+      </div>
+      <p className="note">
+        专家复现：主场景4000条、Shapley每子集2000条、敏感性每点2000条；五规模曲线、50万卡13点扫描及原始三组种子。快速试算为128
+        / 64 /
+        128条，不能作为正式达标确认。切换配置保留已编辑目标、故障证据和措施；修改方案后会在报告中列出与专家原始配置的差异。
+      </p>
+      <div className="fields">
         {[
           ["cards", "审核卡数", 1, 1000000],
           ["hours", "审核窗口（小时）", 0.01, 8760],
@@ -132,6 +169,11 @@ export default function AuditWorkbench({
           同时对比万卡、十万卡、二十万卡、五十万卡
         </label>
       </div>
+      {allScales && request.samplingProfile && (
+        <p className="note">
+          规模曲线同时加入1000卡参考点，不额外设定需求目标，也不计入四规模达标汇总。
+        </p>
+      )}
       {allScales && (
         <div className="fields" aria-label="分规模目标">
           {[...new Set([request.cards, 10000, 100000, 200000, 500000])]
@@ -300,7 +342,38 @@ export default function AuditWorkbench({
         <legend>选择组合措施</legend>
         <p className="note">
           勾选措施用于组合评估；每个单项也会独立计算，避免把单项收益直接相加。
+          默认采用专家六项对照方案；中断检测与亚健康检测增强为额外候选，常规CKPT和人工兜底已包含于基线。
         </p>
+        <button
+          type="button"
+          onClick={() => {
+            setRequest({
+              ...request,
+              mechanisms: [...auditReferenceMechanisms],
+              recoveryOrder: ["replay", "elastic", "process"],
+            });
+            const selectedCodes = mechanisms
+              .filter((m) => auditReferenceMechanisms.includes(m.id))
+              .map((m) => m.code);
+            setPolicy(
+              JSON.stringify(
+                {
+                  ...parsedPolicy,
+                  ...Object.fromEntries(
+                    selectedCodes.map((code) => [
+                      code,
+                      defaults.policy?.[code],
+                    ]),
+                  ),
+                },
+                null,
+                2,
+              ),
+            );
+          }}
+        >
+          载入专家六项及参数
+        </button>
         <div className="mechanism-grid">
           {mechanisms.map((m) => (
             <label
@@ -345,6 +418,10 @@ export default function AuditWorkbench({
             ["trials", "每场景轨迹数", 2, 8192],
             ["seed", "审核随机种子", 0, 4294967295],
             ["attributionTrials", "每组合轨迹数", 2, 2048],
+            ["sensitivityTrials", "每扫描点轨迹数", 2, 8192],
+            ["sensitivityCards", "敏感性扫描卡数", 1, 1000000],
+            ["attributionSeed", "Shapley随机种子", 0, 4294967295],
+            ["sensitivitySeed", "敏感性随机种子", 0, 4294967295],
           ].map(([key, label, min, max]) => (
             <label key={key}>
               {label}
@@ -354,15 +431,44 @@ export default function AuditWorkbench({
                 min={Number(min)}
                 max={Number(max)}
                 step="1"
-                value={(request as any)[key]}
+                value={
+                  (request as any)[key] ??
+                  (key === "sensitivityTrials"
+                    ? request.trials
+                    : key === "sensitivityCards"
+                      ? request.cards
+                      : request.seed)
+                }
                 onChange={(e) =>
-                  setRequest({ ...request, [key]: Number(e.target.value) })
+                  setRequest({
+                    ...request,
+                    samplingProfile: "custom",
+                    [key]: Number(e.target.value),
+                  })
                 }
               />
             </label>
           ))}
         </div>
         <div className="fields">
+          <label>
+            置信区间口径
+            <select
+              aria-label="置信区间口径"
+              value={request.confidenceMethod ?? "student-t"}
+              onChange={(e) =>
+                setRequest({
+                  ...request,
+                  samplingProfile: "custom",
+                  confidenceMethod: e.target
+                    .value as AuditRequest["confidenceMethod"],
+                })
+              }
+            >
+              <option value="normal-1.96">专家原报告 · 1.96正态近似</option>
+              <option value="student-t">Student-t近似</option>
+            </select>
+          </label>
           <label>
             <input
               type="checkbox"
@@ -383,6 +489,7 @@ export default function AuditWorkbench({
               min="2"
               max="2048"
               value={request.verificationTrials ?? 64}
+              aria-label="独立复核轨迹数"
               onChange={(e) =>
                 setRequest({
                   ...request,
@@ -409,7 +516,7 @@ export default function AuditWorkbench({
                 setRequest({ ...request, sensitivity: e.target.checked })
               }
             />
-            扫描静默检出率、兜底时延、弹性暂停与 step 上限
+            启用参数敏感性扫描
           </label>
           <label>
             敏感性比较口径
@@ -432,8 +539,11 @@ export default function AuditWorkbench({
                   历史扫描：所选组合的五个静默参数点
                 </option>
               )}
+              <option value="expert-reproduction">
+                专家原始13点：静默检出率、弹性暂停、step上限
+              </option>
               <option value="expert-reference">
-                专家审核：静默＋step、弹性分别比较（默认）
+                扩展16点：增加静默漏检兜底时延
               </option>
               <option value="selected-combination">
                 所选组合：保持已选措施进行扫描

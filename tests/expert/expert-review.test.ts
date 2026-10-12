@@ -16,6 +16,13 @@ const original = require("../../references/expert-review-2026-10-09/engine.cjs")
 const createEngine = require("../../packages/solvers/src/vendor/review-engine.cjs");
 const small = () => ({
   ...getAuditDefaults(),
+  samplingProfile: undefined,
+  sensitivityMode: "expert-reference" as const,
+  sensitivityTrials: 4,
+  sensitivityCards: undefined,
+  attributionSeed: undefined,
+  sensitivitySeed: undefined,
+  verificationTrials: 8,
   scales: [10000],
   targets: undefined,
   hours: 24,

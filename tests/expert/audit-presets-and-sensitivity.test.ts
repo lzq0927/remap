@@ -16,6 +16,14 @@ const original = createRequire(import.meta.url)(
 );
 const small = () => ({
   ...getAuditDefaults(),
+  samplingProfile: undefined,
+  scales: auditScalePresets.map((p) => p.cards),
+  sensitivityMode: "expert-reference" as const,
+  sensitivityTrials: 4,
+  sensitivityCards: undefined,
+  attributionSeed: undefined,
+  sensitivitySeed: undefined,
+  verificationTrials: 8,
   hours: 24,
   trials: 4,
   attribution: false,
@@ -111,6 +119,7 @@ it("preserves individually edited targets across scale changes", () => {
 it("matches the original engine for the expert's isolated coverage, elastic and step scans and conserves their time accounts", () => {
   const request = {
     ...small(),
+    sensitivityTrials: 4,
     cards: 500000,
     target: 0.8,
     scales: [500000],

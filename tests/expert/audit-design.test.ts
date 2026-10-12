@@ -12,6 +12,12 @@ const createEngine = createRequire(import.meta.url)(
 );
 const small = () => ({
   ...getAuditDefaults(),
+  samplingProfile: undefined,
+  sensitivityMode: "expert-reference" as const,
+  sensitivityTrials: 4,
+  sensitivityCards: undefined,
+  attributionSeed: undefined,
+  sensitivitySeed: undefined,
   scales: [10000],
   targets: undefined,
   hours: 24,

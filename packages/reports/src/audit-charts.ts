@@ -107,7 +107,7 @@ export function auditScaleCurve(r: any) {
     ["combined", "#16816a"],
   ];
   const count = new Set(r.rows.map((row: any) => row.cards)).size;
-  return lineChart({
+  const chart = lineChart({
     title: "规模增大后，正确产出如何变化",
     series: definitions.map(([id, color]) => ({
       name: r.rows.find((row: any) => row.id === id)?.name ?? id,
@@ -126,6 +126,23 @@ export function auditScaleCurve(r: any) {
         ? `连接本次已仿真的 ${count} 个规模，未计算的规模不补点、不外推。细竖线为 95% 均值区间，仅反映抽样误差；超出 0–100% 的区间在边界截断，完整数值见表格。各规模可有不同目标，因此不画统一目标线。`
         : "本次只计算了一个规模，仅显示实际点。启用多规模对比并重新评估后可查看趋势；95% 均值区间仅反映抽样误差，超出 0–100% 的区间在边界截断，完整数值见表格。",
   });
+  const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
+    (a, b) => a - b,
+  );
+  const values = `<div class="table-wrap curve-values"><table><thead><tr><th>曲线数值</th>${scales.map((cards) => `<th>${escape(scaleLabel(cards))}卡</th>`).join("")}</tr></thead><tbody>${definitions
+    .map(
+      ([id, color]) =>
+        `<tr style="color:${color}"><td>${escape(r.rows.find((row: any) => row.id === id)?.name ?? id)}</td>${scales
+          .map((cards) => {
+            const row = r.rows.find(
+              (row: any) => row.id === id && row.cards === cards,
+            );
+            return `<td>${row ? pct(row.statistics.mean) : "—"}</td>`;
+          })
+          .join("")}</tr>`,
+    )
+    .join("")}</tbody></table></div>`;
+  return chart.replace("<figcaption>", values + "<figcaption>");
 }
 
 export function auditSensitivityCurves(r: any) {
@@ -168,26 +185,33 @@ export function auditSensitivityCurves(r: any) {
         (row: any) => row.parameter === parameter,
       );
       if (!scanned.length) return "";
-      const reference =
-        r.rows.find(
-          (row: any) =>
-            row.cards === r.request.cards &&
-            row.id === (scanned[0].scenarioId ?? "combined"),
-        ) ?? base;
+      const scanCards = scanned[0].cards ?? r.request.cards;
+      const reference = r.rows.find(
+        (row: any) =>
+          row.cards === scanCards &&
+          row.id === (scanned[0].scenarioId ?? "combined"),
+      ) ?? {
+        ...base,
+        name: scanned[0].scenarioName ?? base.name,
+        statistics: scanned[0].referenceStatistics ?? base.statistics,
+      };
       current = scanned[0].currentValue ?? current;
       const points: Point[] = scanned
         .filter((row: any) => row.value !== current)
         .map((row: any) => ({ x: row.value, statistics: row.statistics }));
       points.push({
         x: current,
-        statistics: reference.statistics,
+        statistics:
+          scanned.find((row: any) => row.value === current)?.statistics ??
+          scanned[0].referenceStatistics ??
+          reference.statistics,
         current: true,
       });
       return lineChart({
         title,
         series: [
           {
-            name: `${num(r.request.cards)} 卡 · ${reference.name ?? "所选机制组合"}`,
+            name: `${num(scanCards)} 卡 · ${reference.name ?? "所选机制组合"}`,
             color: "#16816a",
             points,
           },
@@ -200,7 +224,7 @@ export function auditSensitivityCurves(r: any) {
             : (reference.target ??
               r.request.targets?.[String(r.request.cards)] ??
               r.request.target),
-        note: `${num(r.request.cards)} 卡，${reference.name ?? "所选机制组合"}，保持情景内其他输入不变；空心点为当前输入 ${format(current)}。纵轴局部缩放以便观察变化，细竖线为 95% 均值区间；连线只连接已计算点。参考单项情景不替代所选组合的达标判读。`,
+        note: `${num(scanCards)} 卡，${reference.name ?? "所选机制组合"}，保持情景内其他输入不变；空心点为当前输入 ${format(current)}。纵轴局部缩放以便观察变化，细竖线为 95% 均值区间；连线只连接已计算点。参考单项情景不替代所选组合的达标判读。`,
       });
     })
     .join("");

@@ -33,6 +33,15 @@ const mdCell = (v: unknown) =>
   escape(v)
     .replace(/\|/g, "\\|")
     .replace(/[\r\n]+/g, " ");
+const referenceSourceFields = (
+  e: NonNullable<AuditTable["eventSources"]>[number],
+) =>
+  [
+    ["专家事件证据", e.referenceEvidence],
+    ["专家审核备注", e.referenceReviewNote],
+    ["历史事件细分依据", e.legacyEvidence],
+    ["历史FIT依据", e.fitEvidence],
+  ].filter((entry) => entry[1]);
 const statuses: Record<string, string> = {
   queued: "等待运行",
   running: "正在计算",
@@ -668,7 +677,14 @@ export function report(run: Run, format = "md") {
                           t.eventSources
                             .map(
                               (e) =>
-                                `#### ${mdCell(e.id)} · ${mdCell(e.description)}\n\n证据等级：${mdCell(e.evidence)}；硬件/根因域：${mdCell(e.domain)}。\n\n来源：${mdCell(e.source)}\n\n归因说明：${mdCell(e.note || "未补充")}\n`,
+                                `#### ${mdCell(e.id)} · ${mdCell(e.description)}\n\n证据等级：${mdCell(e.evidence)}；硬件/根因域：${mdCell(e.domain)}。\n\n来源：${mdCell(e.source)}\n\n本次校准说明：${mdCell(e.note || "未补充")}\n\n${referenceSourceFields(
+                                  e,
+                                )
+                                  .map(
+                                    ([label, text]) =>
+                                      `${mdCell(label)}：${mdCell(text)}`,
+                                  )
+                                  .join("\n\n")}\n`,
                             )
                             .join("\n")
                         : ""),
@@ -694,8 +710,16 @@ export function report(run: Run, format = "md") {
           (t.eventSources
             ? ' data-search="' +
               escape(
-                t.eventSources[index].source + " " + t.eventSources[index].note,
+                [
+                  t.eventSources[index].source,
+                  t.eventSources[index].note,
+                  ...referenceSourceFields(t.eventSources[index]).map(
+                    (entry) => entry[1],
+                  ),
+                ].join(" "),
               ) +
+              '" data-fit="' +
+              escape(row[3]) +
               '"'
             : "") +
           ">" +
@@ -785,9 +809,20 @@ export function report(run: Run, format = "md") {
                 escape(e.domain) +
                 "</dd><dt>来源</dt><dd>" +
                 escape(e.source) +
-                "</dd><dt>归因说明</dt><dd>" +
+                "</dd><dt>本次校准说明</dt><dd>" +
                 escape(e.note || "未补充") +
-                "</dd></dl></details>",
+                "</dd>" +
+                referenceSourceFields(e)
+                  .map(
+                    ([label, text]) =>
+                      "<dt>" +
+                      escape(label) +
+                      "</dt><dd>" +
+                      escape(text) +
+                      "</dd>",
+                  )
+                  .join("") +
+                "</dl></details>",
             )
             .join("") +
           "</details></div>"

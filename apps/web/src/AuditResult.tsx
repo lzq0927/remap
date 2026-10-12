@@ -1,5 +1,9 @@
 import { useState } from "react";
 import {
+  auditSelectedMechanisms,
+  auditSamplingDescription,
+} from "../../../packages/reports/src/audit-context";
+import {
   auditSummary,
   auditScaleSummary,
 } from "../../../packages/reports/src/audit-summary";
@@ -30,6 +34,47 @@ export default function AuditResult({
   return (
     <>
       <h3>事件与机制收益审核 · 保留干净检查点</h3>
+      <p className="audit-context" role="note">
+        {auditSamplingDescription(r)}
+      </p>
+      <details className="audit-combination" open>
+        <summary>
+          本次实际启用组合 · {auditSelectedMechanisms(r).length}项
+        </summary>
+        <p className="note">
+          此处为冻结运行输入；下方推荐候选不会自动替换本次组合。常规CKPT与人工兜底已在基线中，六项对照方案不等于最优部署。
+        </p>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>措施</th>
+                <th>名称</th>
+                <th>本次参数</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auditSelectedMechanisms(r).map((m) => (
+                <tr key={m.id}>
+                  <td>{m.code}</td>
+                  <td>{m.name}</td>
+                  <td>{m.parameters}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {r.referenceComparison?.differences.length > 0 && (
+          <details>
+            <summary>与专家原始配置的差异</summary>
+            <ul>
+              {r.referenceComparison.differences.map((d: string) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </details>
       {overview.total > 1 && (
         <p className="note">
           本次核对 {overview.total} 个规模：采样支持 {overview.supported}{" "}
@@ -79,10 +124,20 @@ export default function AuditResult({
         <div>
           <span>距目标（均值 − 目标）</span>
           <strong>
-            {s.gap >= 0 ? "+" : ""}
-            {(s.gap * 100).toFixed(3)} <small>pp</small>
+            {s.referenceOnly ? (
+              "参考规模"
+            ) : (
+              <>
+                {s.gap >= 0 ? "+" : ""}
+                {(s.gap * 100).toFixed(3)} <small>pp</small>
+              </>
+            )}
           </strong>
-          <small>目标 {pct(s.target)}；pp 为百分点</small>
+          <small>
+            {s.referenceOnly
+              ? "未设置需求目标"
+              : `目标 ${pct(s.target)}；pp 为百分点`}
+          </small>
         </div>
       </div>
       {budget && (
@@ -129,6 +184,9 @@ export default function AuditResult({
       {recommendation && (
         <section aria-label="候选决策与独立复核">
           <h3>候选决策与独立复核</h3>
+          <p className="note">
+            这是平台扩展的筛选建议；本次实际组合以前面的冻结清单为准。载入建议后需重新确认并计算。
+          </p>
           <p>
             {r.request.cards.toLocaleString()} 卡 · 已比较{" "}
             {recommendation.candidateCount} 个候选。{recommendation.rule}

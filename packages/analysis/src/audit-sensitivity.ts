@@ -34,7 +34,8 @@ export function auditSensitivityPlan(
           },
         ]
       : [];
-  const expert = request.sensitivityMode === "expert-reference";
+  const reproduce = request.sensitivityMode === "expert-reproduction";
+  const expert = reproduce || request.sensitivityMode === "expert-reference";
   return [
     ...(expert || mechanisms.includes("sdcDetect")
       ? [
@@ -44,12 +45,18 @@ export function auditSensitivityPlan(
             scenarioId: expert ? ("sdcStep" as const) : ("combined" as const),
             current: policy["D-SDC"].coverage,
           },
-          {
-            parameter: "sdcDelayHours" as const,
-            values: [6, 24, 120],
-            scenarioId: expert ? ("sdcStep" as const) : ("combined" as const),
-            current: model.sdcDelayHours,
-          },
+          ...(!reproduce
+            ? [
+                {
+                  parameter: "sdcDelayHours" as const,
+                  values: [6, 24, 120],
+                  scenarioId: expert
+                    ? ("sdcStep" as const)
+                    : ("combined" as const),
+                  current: model.sdcDelayHours,
+                },
+              ]
+            : []),
         ]
       : []),
     ...(expert || mechanisms.includes("elastic")

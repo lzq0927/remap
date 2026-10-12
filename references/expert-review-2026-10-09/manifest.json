@@ -39,6 +39,10 @@
     {
       "path": "config.json",
       "sha256": "7e17f1630056467f2224044dcbcc33e22f045517ff91e16d4cebd7300497ceea"
+    },
+    {
+      "path": "analyze.cjs",
+      "sha256": "23a6e835ec6393fadedf946e780275d11940718d085da39e8fadd6be4a65fe5d"
     }
   ]
 }

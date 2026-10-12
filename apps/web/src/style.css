@@ -2126,3 +2126,40 @@ main > header {
     padding: 10px;
   }
 }
+
+@media (max-width: 640px) {
+  .audit-combination .table-wrap {
+    border: 0;
+    overflow: visible;
+  }
+  .audit-combination table,
+  .audit-combination tbody {
+    display: block;
+    width: 100%;
+  }
+  .audit-combination thead {
+    display: none;
+  }
+  .audit-combination tr {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr);
+    margin: 12px 0;
+    border: 1px solid #dce5df;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .audit-combination td {
+    display: block;
+    min-width: 0;
+    max-width: none;
+    position: static;
+    padding: 8px;
+    white-space: normal;
+  }
+  .audit-combination td:last-child {
+    grid-column: 1 / -1;
+    background: #f1f6f1;
+    border: 0;
+    overflow-wrap: normal;
+  }
+}

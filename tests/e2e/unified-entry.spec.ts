@@ -34,6 +34,7 @@ for (const viewport of [
     const navigation = page.getByRole("navigation", { name: "六阶段评估流程" });
     await expect(navigation.getByRole("button")).toHaveCount(6);
     const panel = page.getByRole("region", { name: "故障事件与机制收益审核" });
+    await panel.getByLabel("采样配置", { exact: true }).selectOption("quick");
     await panel.getByLabel("审核窗口（小时）", { exact: true }).fill("24");
     await panel.getByText("基线参数、机制目标与成本", { exact: true }).click();
     await panel.getByLabel("每场景轨迹数", { exact: true }).fill("8");

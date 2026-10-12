@@ -4,10 +4,17 @@ module.exports=function createReviewEngine(events,P,config){
 function parameters(opts={}){return {...config,...(opts.fast?{checkpointComputeSeconds:P['C-FAST'].computeSeconds,checkpointSaveSeconds:P['C-FAST'].saveSeconds}:{}),...(opts.hardDetect?{detectProbability:P['D-HARD'].coverage,detectSeconds:P['D-HARD'].detectSeconds}:{}),...(opts.slowDetect?{slowDetectProbability:P['D-SLOW'].coverage,slowDetectHours:P['D-SLOW'].detectSeconds/3600}:{})};}
 const eventGroups=Object.fromEntries(['hard','slow','sdc'].map(t=>[t,events.filter(e=>e.type===t)]));
 const typeTotals=Object.fromEntries(Object.entries(eventGroups).map(([t,es])=>[t,es.reduce((s,e)=>s+e.fit,0)]));
+const referenceRates=config.referenceRateArithmetic===true && config.referenceFitSignature===JSON.stringify(events.map(({id,fit})=>({id,fit})));
 function rng(seed){let x=seed>>>0;return()=>{x=(Math.imul(x,1664525)+1013904223)>>>0;return(x+.5)/4294967296;};}
 function simulate(cards,stage,seed,p=config,opts={}){
   const random=rng(seed),tech=rng(seed^0xa5a5bEEF),T=p.horizonHours,tau=p.checkpointComputeSeconds/3600,save=p.checkpointSaveSeconds/3600,L=tau+save;
-  const rates=[cards*typeTotals.hard/1e9,stage>=1?cards*typeTotals.slow/1e9:0,stage>=2?cards*typeTotals.sdc/1e9:0],rate=rates.reduce((a,b)=>a+b,0);
+  // Reference arithmetic differs by a few ulps and can cross a checkpoint boundary.
+  // The caller enables it only for unchanged reference FITs; updated catalogs use their actual totals.
+  const hard=cards/p.referenceCards/p.referenceMtbfHours;
+  const rates=referenceRates
+    ? [hard,stage>=1?hard*p.shares.slow/p.shares.hard:0,stage>=2?hard*p.shares.sdc/p.shares.hard:0]
+    : [cards*typeTotals.hard/1e9,stage>=1?cards*typeTotals.slow/1e9:0,stage>=2?cards*typeTotals.sdc/1e9:0];
+  const rate=rates.reduce((a,b)=>a+b,0);
   const arrival=()=>rate?-Math.log(random())/rate:Infinity;
   let remaining=arrival(),t=0,progress=0,cp=0,cleanCp=0,cpDirty=false,phase=0,dirty=null,downUntil=0;
   const slows=[],locals=[];

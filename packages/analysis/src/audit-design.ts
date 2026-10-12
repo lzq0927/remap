@@ -1,4 +1,5 @@
 import type { AuditRequest } from "./audit";
+import { auditReferenceOnly } from "../../contracts/src/audit-presets";
 export const auditLossBudgetLabels: Record<string, string> = {
   downtime: "全局停机",
   save: "检查点保存",
@@ -101,7 +102,9 @@ export function auditDesignReview(
       fast ? policy["C-FAST"].saveSeconds : model.checkpointSaveSeconds,
     ),
     scales: rows
-      .filter((r) => r.id === "combined")
+      .filter(
+        (r) => r.id === "combined" && !auditReferenceOnly(request, r.cards),
+      )
       .map((row) => {
         const target = auditTarget(request, row.cards),
           allowedHours = (1 - target) * request.hours;

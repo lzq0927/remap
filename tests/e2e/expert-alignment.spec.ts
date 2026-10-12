@@ -26,6 +26,13 @@ for (const width of [1440, 390]) {
           exact: true,
         }),
       ).toHaveValue(t);
+    await expect(panel.getByLabel("采样配置", { exact: true })).toHaveValue(
+      "expert-reproduction",
+    );
+    await expect(
+      panel.getByText("载入专家六项及参数", { exact: true }),
+    ).toBeVisible();
+    await panel.getByLabel("采样配置", { exact: true }).selectOption("quick");
     await cards.fill("500000");
     await expect(target).toHaveValue("0.8");
     await target.fill("0.82");
@@ -40,9 +47,11 @@ for (const width of [1440, 390]) {
     await panel.getByText("基线参数、机制目标与成本", { exact: true }).click();
     await expect(
       panel.getByLabel("敏感性比较口径", { exact: true }),
-    ).toHaveValue("expert-reference");
+    ).toHaveValue("expert-reproduction");
     await panel.getByLabel("每场景轨迹数", { exact: true }).fill("8");
     await panel.getByLabel("每组合轨迹数", { exact: true }).fill("4");
+    await panel.getByLabel("每扫描点轨迹数", { exact: true }).fill("4");
+    await panel.getByLabel("独立复核轨迹数", { exact: true }).fill("4");
     await panel.getByText("基线参数、机制目标与成本", { exact: true }).click();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({
@@ -84,7 +93,14 @@ for (const width of [1440, 390]) {
       200000: 0.9,
       500000: 0.8,
     });
-    expect(frozen.sensitivity).toHaveLength(16);
+    expect(frozen.sensitivity).toHaveLength(13);
+    expect(frozen.request.scales).toContain(1000);
+    expect(frozen.request.targets["1000"]).toBeUndefined();
+    expect(frozen.referenceComparison.matchesReference).toBe(false);
+    expect(frozen.sensitivity.every((s: any) => s.cards === 500000)).toBe(true);
+    await expect(
+      page.getByRole("note").filter({ hasText: /快速试算 \/ 低采样结果/ }),
+    ).toBeVisible();
     const html = await (
       await request.get(
         `/api/tasks/${taskId}/runs/${run.id}/report?format=html`,
@@ -92,31 +108,48 @@ for (const width of [1440, 390]) {
     ).text();
     const preview = await page.context().newPage();
     await preview.setContent(html);
+    if (width === 390) {
+      expect(
+        await preview
+          .locator(".actual-combination .table-wrap")
+          .evaluate((el) => el.scrollWidth <= el.clientWidth),
+      ).toBe(true);
+      await preview
+        .locator(".actual-combination")
+        .screenshot({
+          path: "artifacts/expert-alignment/combination-mobile.png",
+        });
+    }
     await expect(
       preview.getByText("机制匹配与失败回退", { exact: true }),
     ).toBeVisible();
-    const scope = preview
-      .locator("section")
-      .filter({
-        has: preview.getByRole("heading", {
-          name: "01 / 确认口径与数据证据",
-          exact: true,
-        }),
-      });
+    const scope = preview.locator("section").filter({
+      has: preview.getByRole("heading", {
+        name: "01 / 确认口径与数据证据",
+        exact: true,
+      }),
+    });
     await expect(
       scope.getByRole("row").filter({ hasText: "500,000" }),
     ).toContainText("80%");
     await expect(
       scope.getByRole("row").filter({ hasText: "500,000" }),
     ).toContainText("0.6");
-    const library = preview
-      .locator("section")
-      .filter({
-        has: preview.getByRole("heading", {
-          name: "04 / 独立故障事件库",
-          exact: true,
-        }),
-      });
+    const library = preview.locator("section").filter({
+      has: preview.getByRole("heading", {
+        name: "04 / 独立故障事件库",
+        exact: true,
+      }),
+    });
+    await library.getByLabel("隐藏零FIT事件", { exact: true }).check();
+    await expect(library.locator("tbody tr:visible")).toHaveCount(
+      frozen.events.filter((e: any) => e.fit > 0).length,
+    );
+    await library.getByLabel("隐藏零FIT事件", { exact: true }).uncheck();
+    await library
+      .getByLabel("筛选表格", { exact: true })
+      .fill("芯片内细分假设");
+    await expect(library.locator("tbody tr:visible")).not.toHaveCount(0);
     await library.getByLabel("筛选表格", { exact: true }).fill("CORE-hard");
     await library
       .getByLabel("事件库规模", { exact: true })
@@ -132,13 +165,11 @@ for (const width of [1440, 390]) {
       .getByRole("link", { name: "查看来源 ↗", exact: true })
       .click();
     await expect(library.locator(".event-source[open]")).toContainText(
-      "CORE-hard",
+      "芯片内细分假设；非白皮书器件FIT",
     );
-    const mechanism = preview
-      .locator("section>details")
-      .filter({
-        has: preview.locator("summary").filter({ hasText: /^R-ELASTIC\s*\// }),
-      });
+    const mechanism = preview.locator("section>details").filter({
+      has: preview.locator("summary").filter({ hasText: /^R-ELASTIC\s*\// }),
+    });
     await mechanism.locator("summary").click();
     await mechanism
       .getByLabel("逐事件对照规模", { exact: true })
