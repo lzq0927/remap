@@ -5,6 +5,43 @@ description: Guide reliability target allocation, architecture and failure model
 
 # 可靠性设计与评估
 
+## 先询问执行方式
+
+加载后先读取 task_current、design_get、workflow_state，再结合用户本次输入判断意图（完整自动评估、局部问题、补充数据、调整方案或继续既有流程）。已有有效执行和明确方式时接着处理，不能因为再次加载 Skill 就重复启动。没有明确方式时，必须在 Agent 对话框调用原生 `question` 工具，生成可以点击的两个选项及解释，不能仅在普通回复中列出文字菜单。OpenCode 使用如下参数：
+
+```json
+{
+  "questions": [{
+    "header": "执行方式",
+    "question": "您希望如何进行当前任务的可靠性设计与评估？",
+    "options": [
+      {"label": "全自动设计与评估", "description": "按已保存的目标、数据和分配方法依次完成建模、措施评估与报告；工作台自动跟随各步，最终由您审核。关键资料缺失时先向您澄清。"},
+      {"label": "辅助设计与评估", "description": "由您决定节奏，Agent 根据输入解释、补充资料、推荐方法或调整方案；每步展示产物并等您确认，不自动执行整条流水线。"}
+    ],
+    "multiple": false,
+    "custom": true
+  }]
+}
+```
+
+应先用一句话说明推荐方式和理由，例如设计有效且用户要完整报告时推荐全自动；参数不完整、只咨询方法或只调整一项时推荐辅助。推荐不代替用户点击选择。用户可自由输入需求，按真实意图继续澄清，不能把自由输入强行当自动授权。未回答前不启动求解，不把加载 Skill 或同步设计理解为同意自动运行。其他 Agent 没有交互问题工具时才降级为明确文字提问并等待回答。
+
+用户选择“辅助设计与评估”后，先问本次要解决的具体问题（资料导入、指标分解、措施选型、结果解释等），结合已保存输入确定下一阶段。需要修改时提出依据并通过 design_save 保存任务草稿；不要机械地让已有确认信息重新填写。用户希望切换方式时重新读取当前版本和状态，先处理已有执行的冲突，再按选择继续。
+
+用户选择自动且 scenario=training、assessment.operation=audit、assessment.valid=true 时，调用 workflow_automatic({body:{inputRevision:<design.revision>}})。其他产品或历史 V4 当前使用交互协助，先解释适用范围，不调用不支持的自动入口。服务自行保存六阶段过程资产、运行实际工具并生成报告，工作台实时展示状态。随后通过 workflow_state 查询 runId，通过 run_status 查询真实进度与结果，完成后 report_export({id:<runId>,query:{format:'html'}})，告诉用户报告位置与待审核项。不要自行重复 analysis_solve 或另起流水线。冲突、失败、取消或 stale=true 时停止推进，读取诊断并解释如何恢复；不得重试覆盖新输入。不能暗中改成快速采样，需遵循当前保存的采样设置。
+
+自动阶段 completed 表示机器完成，不是人工 confirmed；最终 validate-deliver 必须 awaiting-review，Agent 不能代用户交付确认、冻结输入或发布公共资产。自动模式采用已保存输入：缺真实资料时仍保留示例/先验标记，不能宣称架构已验证。存在无效草稿或关键缺失时先引导用户修正，再询问是否继续。
+
+用户选择交互时，使用 workflow_start({body:{inputRevision:<design.revision>,mode:'assisted'}})，逐步提问、读取文件、形成结构化草稿和阶段产物，保存 awaiting-review 后等待工作台确认。已有执行则继续当前执行；不要自动覆盖它。
+
+## 指标分配先于措施与 Shapley
+
+正确有效产出使用 lossBudgetMethod：equal 均分六项互斥损失预算；baseline-proportional 先计算本次基线、按各规模损失比例冻结预算，再计算候选措施；custom 使用 lossBudgetWeights（六项合计 1）。未指定 lossBudgetMethod 的旧任务保留手工权重语义。
+
+需要分解任务可靠度或稳态可用度时，用 submodelAllocation 明确独立目标、metricId、hours 和 items，method 为 equal/arinc/agree/availability；compareMethods 可同时比较适用方法。task-reliability 支持 Equal、ARINC、AGREE，steady-state-availability 使用 Availability。不要将 training.retained-clean-progress 的目标直接复制并冒充这些指标。AGREE 的 complexity=nᵢ、importance=Eᵢ、operatingHours=tᵢ，按 ∏Rᵢ^Eᵢ 回合成；baselineRate 单位 /h，不能混用单卡 FIT 和集群事件率。
+
+分配结果在 result.allocationPlan，预算缺口在 designReview。先确认分配依据和约束，落实降低源FIT或检测/恢复措施，再正向仿真和 Shapley。分配不得自动改写事件 FIT；子模型分配只是设计约束，不等于子模型已达标，也不直接证明训练产出达标。专家原报告的事件 FIT 分布属于先验，不是产品需求分解。
+
 ## 默认专家审核口径与历史模型
 
 新任务默认对齐 `catalogs/review-2026-10-09/故障事件与可靠性机制收益审核.html`，使用 `model_defaults.audit` 与 `operation:'audit'`。指标为 `training.retained-clean-progress`：窗口末仍污染时保留最后干净检查点。基线300秒计算/4秒保存，中断96.6%、亚健康2%、静默1.4%，万卡中断MTBF30小时；这些是专家外网场景参数，不是产品实测。下文原有 `training` 操作仍使用旧V4整任务清零，不能将两种指标结果混比。
@@ -19,7 +56,7 @@ Equal/ARINC/AGREE/Availability 从总体子模型指标向下分配设计预算�
 
 先调用 task_current、design_get、workflow_state，核对本连接绑定的 taskId、设计 revision 和当前 executionId。再通过 model_defaults、catalog_search、run_status 读取目标、模型和资产，不凭聊天重建已有事实。不得切换到另一个任务或自建全局连接。
 
-如果没有执行，调用 workflow_start({body:{inputRevision:<design.revision>,mode:'auto-to-review'}})。已有当前执行则继续它，先核对 stale=false。每次 workflow_save 必须带 executionId、expectedRevision、inputRevision、stepId、status、artifacts、notes。状态与版本以最近 workflow_state 返回值为准；409 时重新读取，不能盲目重试覆盖。
+以下逐阶段协议用于交互模式。没有执行时调用 workflow_start({body:{inputRevision:<design.revision>,mode:'assisted'}})。已有当前执行则继续它，先核对 stale=false。每次 workflow_save 必须带 executionId、expectedRevision、inputRevision、stepId、status、artifacts、notes。状态与版本以最近 workflow_state 返回值为准；409 时重新读取，不能盲目重试覆盖。
 
 Agent 将当前阶段产物保存为 awaiting-review，工作台中间会实时显示。等待用户在工作台确认后，再读取状态推进下一阶段。用户在聊天说“确认”也不能伪造服务端 confirmed 状态。前序未确认不能越级执行。输入变更后旧执行保留，需用户核对并从目标重新开始。
 

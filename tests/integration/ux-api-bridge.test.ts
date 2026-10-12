@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import Fastify from "fastify";
 import { buildApp } from "./task-fixture";
 import { OpenCodeAdapter } from "../../packages/agents/src/opencode-adapter";
+import { openCodeIntegration } from "../../apps/api/src/agent-integration";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -363,7 +364,11 @@ test("context bridge sends one noReply message without a model override or infer
       JSON.stringify(context, null, 2),
     );
     vi.stubEnv("OPENCODE_URL", url);
-    const app = await buildApp({ dataDir: ":memory:", seed: false });
+    const app = await buildApp({
+      dataDir: ":memory:",
+      seed: false,
+      agentIntegration: openCodeIntegration({ isolate: false }),
+    });
     try {
       const taskId = app.testTaskId;
       const store = app.taskServices.resolve(taskId).store;

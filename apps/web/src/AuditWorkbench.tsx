@@ -6,6 +6,11 @@ import { useEffect, useState } from "react";
 import { EventEditor, NumericParameters } from "./AuditEditors";
 import type { AuditRequest } from "../../../packages/analysis/src/audit";
 import {
+  equalLossWeights,
+  type LossBudgetMethod,
+} from "../../../packages/analysis/src/audit-allocation";
+import AuditAllocationEditor from "./AuditAllocationEditor";
+import {
   changeAuditCards,
   auditSamplingPreset,
   auditReferenceMechanisms,
@@ -277,6 +282,36 @@ export default function AuditWorkbench({
       </details>
       <section id="audit-budget" aria-label="损失预算分配">
         <h3 className="audit-step-title">03 / 预算与措施</h3>
+        <label>
+          训练损失预算分配方法
+          <select
+            aria-label="训练损失预算分配方法"
+            value={request.lossBudgetMethod ?? "custom"}
+            onChange={(e) =>
+              setRequest({
+                ...request,
+                lossBudgetMethod: e.target.value as LossBudgetMethod,
+                lossBudgetWeights:
+                  e.target.value === "baseline-proportional"
+                    ? undefined
+                    : e.target.value === "equal"
+                      ? { ...equalLossWeights }
+                      : (request.lossBudgetWeights ?? { ...equalLossWeights }),
+              })
+            }
+          >
+            <option value="equal">均分六项损失预算</option>
+            <option value="baseline-proportional">
+              按本次基线损失比例分配
+            </option>
+            <option value="custom">用户指定权重</option>
+          </select>
+        </label>
+        {request.lossBudgetMethod === "baseline-proportional" && (
+          <p className="note">
+            先计算各规模基线，再按损失比例冻结预算，随后评估措施。最终报告列出实际权重与预算。
+          </p>
+        )}
         <p>
           允许总损失 =（1 − 目标）× 窗口。六项预算用于追踪缺口，不是直接降低 FIT
           的比例；工程措施需再经正向仿真验证。
@@ -286,48 +321,59 @@ export default function AuditWorkbench({
           <strong>
             {((1 - request.target) * request.hours).toFixed(3)} 小时
           </strong>
-          ；权重合计{" "}
-          <strong>
-            {(
-              Object.values(request.lossBudgetWeights ?? {}).reduce(
-                (a, b) => a + b,
-                0,
-              ) * 100
-            ).toFixed(2)}
-            %
-          </strong>
-          （需为 100%）。
+          {request.lossBudgetMethod !== "baseline-proportional" && (
+            <>
+              ；权重合计{" "}
+              <strong>
+                {(
+                  Object.values(request.lossBudgetWeights ?? {}).reduce(
+                    (a, b) => a + b,
+                    0,
+                  ) * 100
+                ).toFixed(2)}
+                %
+              </strong>
+              （需为 100%）。
+            </>
+          )}
         </p>
-        <div className="fields">
-          {Object.entries(auditLossBudgetLabels).map(([id, name]) => (
-            <label key={id}>
-              {name}预算（%）
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                value={
-                  Math.round((request.lossBudgetWeights?.[id] ?? 0) * 10000) /
-                  100
-                }
-                onChange={(e) =>
-                  setRequest({
-                    ...request,
-                    lossBudgetWeights: {
-                      ...request.lossBudgetWeights,
-                      [id]: Number(e.target.value) / 100,
-                    },
-                  })
-                }
-              />
-            </label>
-          ))}
-        </div>
+        {request.lossBudgetMethod !== "baseline-proportional" && (
+          <div className="fields">
+            {Object.entries(auditLossBudgetLabels).map(([id, name]) => (
+              <label key={id}>
+                {name}预算（%）
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  disabled={
+                    request.lossBudgetMethod === "baseline-proportional"
+                  }
+                  value={
+                    Math.round((request.lossBudgetWeights?.[id] ?? 0) * 10000) /
+                    100
+                  }
+                  onChange={(e) =>
+                    setRequest({
+                      ...request,
+                      lossBudgetMethod: "custom",
+                      lossBudgetWeights: {
+                        ...request.lossBudgetWeights,
+                        [id]: Number(e.target.value) / 100,
+                      },
+                    })
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        )}
         <button
           onClick={() =>
             setRequest({
               ...request,
+              lossBudgetMethod: "custom",
               lossBudgetWeights: { ...auditBudgetDefaults },
             })
           }
@@ -337,6 +383,7 @@ export default function AuditWorkbench({
         <p className="note">
           参考权重为设计假设，请按产品优先级调整并在流程中确认。
         </p>
+        <AuditAllocationEditor request={request} onChange={setRequest} />
       </section>
       <fieldset className="mechanism-picker">
         <legend>选择组合措施</legend>

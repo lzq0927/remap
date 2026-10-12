@@ -34,6 +34,52 @@ export default function AuditResult({
   return (
     <>
       <h3>事件与机制收益审核 · 保留干净检查点</h3>
+      {r.allocationPlan && (
+        <details open aria-label="本次目标分配产物">
+          <summary>本次目标分配 · 冻结于措施评估前</summary>
+          <p className="note">
+            {
+              r.allocationPlan.lossBudgets.find((x: any) => x.cards === cards)
+                ?.basis
+            }
+            。损失预算与实际缺口见下表；分配不改变故障 FIT。
+          </p>
+          {r.allocationPlan.submodel && (
+            <>
+              <p>{r.allocationPlan.submodel.scope}</p>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>方法</th>
+                      <th>子系统</th>
+                      <th>子目标</th>
+                      <th>目标 FIT</th>
+                      <th>回合成</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.allocationPlan.submodel.comparisons.flatMap(
+                      (result: any) =>
+                        result.items.map((item: any) => (
+                          <tr key={result.method + item.id}>
+                            <td>{result.method}</td>
+                            <td>{item.name}</td>
+                            <td>{pct(item.target)}</td>
+                            <td>
+                              {item.targetFit?.toFixed(3) ?? "需恢复模型验证"}
+                            </td>
+                            <td>{pct(result.recomposition.achieved)}</td>
+                          </tr>
+                        )),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </details>
+      )}
       <p className="audit-context" role="note">
         {auditSamplingDescription(r)}
       </p>

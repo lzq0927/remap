@@ -143,6 +143,13 @@ export function auditSections(r: any): AuditSection[] {
     {
       title: "审核结论与行动重点",
       paragraphs: [
+        ...(r.workflowContext
+          ? [
+              r.workflowContext.reviewRequired
+                ? "自动流水线报告 · 待人工审核。自动完成不代表输入、架构或方案已由用户验证。"
+                : "自动流水线报告 · 已记录用户交付确认；模型假设和生产验证边界仍保留。",
+            ]
+          : []),
         auditSamplingDescription(r),
         `${num(selected, 0)} 卡：${brief.statusLabel}。基线 ${pct(brief.base.statistics.mean)} → 组合 ${pct(brief.combined.statistics.mean)}；新增正确计算 ${num(brief.additionalHours)} 小时。`,
         brief.next,
@@ -626,6 +633,64 @@ export function auditSections(r: any): AuditSection[] {
         },
       ],
     });
+  if (r.allocationPlan) {
+    const submodel = r.allocationPlan.submodel;
+    sections.splice(3, 0, {
+      title: "目标分配 / 先分配，再评估措施与组合贡献",
+      paragraphs: [
+        "六项训练损失预算在候选措施计算前确定；基线比例方法使用本次基线样本。分配不会自动降低事件 FIT，措施收益仍由离散事件仿真计算。",
+        ...(submodel
+          ? [
+              submodel.scope,
+              `主方法 ${submodel.selected.method}，指标 ${submodel.selected.metricId}；${submodel.selected.recomposition.formula}。当前参数和独立子模型目标见输入快照；这些预算须由相应子模型再验证。`,
+              ...submodel.selected.assumptions,
+              ...submodel.selected.warnings,
+            ]
+          : [
+              "本次未指定独立任务可靠度/稳态可用度子模型分配；仅评估训练损失预算。",
+            ]),
+      ],
+      tables: [
+        {
+          heads: ["规模", "预算方法", "依据", "总预算/h"],
+          rows: r.allocationPlan.lossBudgets.map((a: any) => [
+            num(a.cards, 0),
+            a.method,
+            a.basis,
+            num(a.allowedHours),
+          ]),
+        },
+        ...(submodel
+          ? [
+              {
+                heads: [
+                  "方法",
+                  "子系统",
+                  "当前值",
+                  "子目标",
+                  "目标 FIT",
+                  "缺口",
+                  "合成值",
+                  "合成残差",
+                ],
+                rows: submodel.comparisons.flatMap((result: any) =>
+                  result.items.map((item: any) => [
+                    result.method,
+                    item.name,
+                    item.current === null ? "未输入" : pct(item.current),
+                    pct(item.target),
+                    num(item.targetFit),
+                    item.gap === null ? "待校准" : pp(item.gap),
+                    pct(result.recomposition.achieved),
+                    num(result.recomposition.residual, 12),
+                  ]),
+                ),
+              },
+            ]
+          : []),
+      ],
+    });
+  }
   if (r.designReview)
     sections.push({
       title: "平台扩展 / 目标预算与实际缺口",

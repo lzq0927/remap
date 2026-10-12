@@ -9,6 +9,7 @@ export type WorkflowState = {
   status: string;
   stale: boolean;
   runId?: string;
+  mode?: string;
   steps: {
     id: string;
     status: string;
@@ -21,9 +22,10 @@ const labels: Record<string, string> = {
   pending: "未开始",
   "waiting-input": "待前序确认",
   ready: "可核对",
-  running: "计算中",
+  running: "执行中",
   "awaiting-review": "待人工确认",
   confirmed: "已确认",
+  completed: "自动完成 · 待总审",
   failed: "失败",
   cancelled: "已取消",
 };
@@ -35,6 +37,7 @@ const artifactNames: Record<string, string> = {
   "task-brief": "评估任务书",
   "method-plan": "方法选择依据",
   "parameter-table": "参数与证据",
+  report: "生成报告与复核记录",
 };
 function revealCurrentStep(row: HTMLDivElement | null) {
   const button = row?.querySelector<HTMLElement>('[aria-current="step"]');
@@ -70,6 +73,13 @@ export default function WorkflowTimeline({
   const current = state?.steps[stage];
   const confirmed = !state?.stale && current?.status === "confirmed";
   const complete = state?.status === "succeeded" && !state.stale;
+  const automaticRunning =
+    state?.mode === "auto-to-review" &&
+    state.status === "active" &&
+    !state.stale &&
+    state.steps.some((s) => ["completed", "running"].includes(s.status)) &&
+    state.steps[5]?.status !== "awaiting-review" &&
+    !state.steps.some((s) => s.status === "failed");
   useEffect(() => {
     const element = dock.current,
       main = element?.closest("main");
@@ -103,7 +113,8 @@ export default function WorkflowTimeline({
           <div className="workflow-steps" ref={rail}>
             {steps.map((step, i) => {
               const status = state?.steps[i]?.status ?? "pending",
-                done = status === "confirmed" && !state?.stale;
+                done =
+                  ["confirmed", "completed"].includes(status) && !state?.stale;
               const label = state?.stale
                 ? "需重新确认"
                 : (labels[status] ?? status);
@@ -144,19 +155,22 @@ export default function WorkflowTimeline({
             <h2>{steps[stage].name}</h2>
             <p
               className={
-                current?.status === "awaiting-review"
-                  ? "workflow-review-note"
+                current?.notes
+                  ? "workflow-review-note workflow-live-note"
                   : undefined
               }
-              title={
-                current?.status === "awaiting-review"
-                  ? current.notes
-                  : steps[stage].hint
-              }
+              title={current?.notes || steps[stage].hint}
             >
-              {current?.status === "awaiting-review" && current.notes
-                ? current.notes
-                : steps[stage].hint}
+              <span>{current?.notes || steps[stage].hint}</span>
+              {!!current?.artifacts.length && (
+                <small className="workflow-output-summary">
+                  过程产物：
+                  {current.artifacts
+                    .map((a) => artifactNames[a.type] ?? a.type)
+                    .join("、")}
+                  （点“步骤说明与记录”查看）
+                </small>
+              )}
             </p>
           </div>
           <div className="workflow-buttons">
@@ -177,22 +191,28 @@ export default function WorkflowTimeline({
             </button>
             <button
               className="primary"
-              disabled={pending || (complete && stage === steps.length - 1)}
+              disabled={
+                pending ||
+                automaticRunning ||
+                (complete && stage === steps.length - 1)
+              }
               onClick={
                 confirmed && stage < steps.length - 1
                   ? () => onSelect(stage + 1)
                   : onConfirm
               }
             >
-              {pending
-                ? "正在保存…"
-                : complete && stage === steps.length - 1
-                  ? "本流程已交付"
-                  : confirmed && stage < steps.length - 1
-                    ? "下一步"
-                    : stage === steps.length - 1
-                      ? "记录交付确认"
-                      : "确认并进入下一步"}
+              {automaticRunning
+                ? "流水线执行中…"
+                : pending
+                  ? "正在保存…"
+                  : complete && stage === steps.length - 1
+                    ? "本流程已交付"
+                    : confirmed && stage < steps.length - 1
+                      ? "下一步"
+                      : stage === steps.length - 1
+                        ? "记录交付确认"
+                        : "确认并进入下一步"}
               {stage < steps.length - 1 && <ChevronRight size={14} />}
             </button>
           </div>

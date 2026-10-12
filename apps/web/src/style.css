@@ -1922,6 +1922,9 @@ main > header {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.workflow-current .workflow-live-note {
+  white-space: normal;
+}
 .workflow-buttons {
   display: flex;
   flex-shrink: 0;
@@ -2162,4 +2165,10 @@ main > header {
     border: 0;
     overflow-wrap: normal;
   }
+}
+.workflow-output-summary {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted, #64748b);
+  font-size: 12px;
 }

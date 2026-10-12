@@ -17,6 +17,7 @@ type StepStatus =
   | "running"
   | "awaiting-review"
   | "confirmed"
+  | "completed"
   | "failed"
   | "cancelled";
 export interface WorkflowState {
@@ -50,6 +51,12 @@ export interface WorkflowEvent {
   type: string;
   createdAt: string;
   state: WorkflowState;
+}
+export function stageFinished(state: WorkflowState, step: { status: string }) {
+  return (
+    step.status === "confirmed" ||
+    (state.mode === "auto-to-review" && step.status === "completed")
+  );
 }
 
 /** Domain state is persisted independently of a vendor's chat/event format. */
@@ -169,21 +176,37 @@ export class WorkflowService extends EventEmitter {
     const index = steps.findIndex((id) => id === input.stepId);
     if (
       index < 0 ||
-      !["running", "awaiting-review", "confirmed", "failed"].includes(
-        input.status,
-      )
+      ![
+        "running",
+        "awaiting-review",
+        "confirmed",
+        "completed",
+        "failed",
+      ].includes(input.status)
     )
       throw new DomainError("SCHEMA_INVALID", "未知阶段或状态");
+    if (
+      input.status === "completed" &&
+      (state.mode !== "auto-to-review" || index === 5)
+    )
+      throw new DomainError(
+        "WORKFLOW_ORDER",
+        "自动完成只适用于自动模式的前五个阶段；交付需要审核",
+        409,
+      );
     if (input.status === "confirmed" && actor !== "user")
       throw new DomainError(
         "USER_CONFIRMATION_REQUIRED",
         "关键事实需要用户确认",
         403,
       );
-    if (state.steps.slice(0, index).some((step) => step.status !== "confirmed"))
+    if (state.steps.slice(0, index).some((step) => !stageFinished(state, step)))
       throw new DomainError("WORKFLOW_ORDER", "请先确认前序阶段", 409);
     const item = state.steps[index];
-    if (item.status === "confirmed")
+    if (
+      item.status === "confirmed" ||
+      (item.status === "completed" && input.status !== "confirmed")
+    )
       throw new DomainError(
         "WORKFLOW_ORDER",
         "已确认阶段不可覆盖，请开始新的执行",
@@ -204,8 +227,8 @@ export class WorkflowService extends EventEmitter {
     item.artifacts = input.artifacts ?? item.artifacts;
     item.notes = input.notes ?? item.notes;
     item.updatedAt = new Date().toISOString();
-    if (item.status === "confirmed") {
-      item.confirmedBy = actor;
+    if (stageFinished(state, item)) {
+      if (item.status === "confirmed") item.confirmedBy = actor;
       if (index + 1 < state.steps.length)
         state.steps[index + 1].status = "ready";
       else state.status = "succeeded";
@@ -220,7 +243,7 @@ export class WorkflowService extends EventEmitter {
     if (state.status !== "active") return state;
     state.status = "cancelled";
     for (const item of state.steps)
-      if (item.status !== "confirmed") item.status = "cancelled";
+      if (!stageFinished(state, item)) item.status = "cancelled";
     state.revision++;
     return this.persist(state, "workflow.cancelled", actor);
   }
@@ -234,7 +257,7 @@ export class WorkflowService extends EventEmitter {
       state.status !== "active"
     )
       throw new DomainError("INPUT_REVISION_CONFLICT", "运行对应过期流程", 409);
-    if (state.steps.slice(0, 4).some((s) => s.status !== "confirmed"))
+    if (state.steps.slice(0, 4).some((s) => !stageFinished(state, s)))
       throw new DomainError("WORKFLOW_ORDER", "请先确认参数阶段", 409);
     this.store.getRun(runId);
     state.runId = runId;

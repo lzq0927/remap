@@ -8,7 +8,7 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
     const app = await buildApp({ dataDir: ":memory:", seed: false });
     await app.listen({ host: "127.0.0.1", port: 0 });
     const directory = app.taskServices.registry.resolveRoot(app.testTaskId);
-    const agent = new OpenCodeAdapter(process.env.TEST_OPENCODE_URL, directory);
+    let agent = new OpenCodeAdapter(process.env.TEST_OPENCODE_URL, directory);
     let id: string | undefined;
     try {
       expect((await agent.health()).ready).toBe(true);
@@ -19,6 +19,10 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
       });
       expect(created.statusCode, created.body).toBe(200);
       id = created.json().sessionId;
+      const web = (
+        await app.inject(`/api/tasks/${app.testTaskId}/agent/web`)
+      ).json();
+      agent = new OpenCodeAdapter(web.url, directory);
       const metadata = await agent.metadata();
       expect(
         metadata.commands.some((c: any) => c.name === "sd-dfr-remap"),
@@ -28,7 +32,7 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
       expect(await agent.messages(id!)).toEqual([]);
     } finally {
       if (id) {
-        const url = new URL("/session/" + id, process.env.TEST_OPENCODE_URL);
+        const url = new URL("/session/" + id, agent.url);
         url.searchParams.set("directory", directory);
         await fetch(url, { method: "DELETE" });
       }

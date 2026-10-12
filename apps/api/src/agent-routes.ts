@@ -10,6 +10,10 @@ export function registerAgentRoutes(
   integration: AgentIntegration,
 ) {
   const primaryPending = new Map<string, Promise<any>>();
+  const dispatching = new Map<string, AbortController>();
+  app.addHook("onClose", async () => {
+    for (const controller of dispatching.values()) controller.abort();
+  });
   const base = "/api/tasks/:taskId/agent";
   const agent = (id: string) =>
     integration.forTask(tasks.registry.resolveRoot(id));
@@ -151,9 +155,55 @@ export function registerAgentRoutes(
     tasks.requireUser(req, req.params.taskId);
     assertSessionBound(tasks, req.params.taskId, req.params.id);
     const adapter = agent(req.params.taskId);
-    return req.body.text?.startsWith("/sd-dfr-remap")
-      ? adapter.runCommand(req.params.id, req.body.text.slice(13).trim())
-      : adapter.sendMessage(req.params.id, req.body.text);
+    const send = (signal?: AbortSignal) =>
+      req.body.text?.startsWith("/sd-dfr-remap")
+        ? adapter.runCommand(
+            req.params.id,
+            req.body.text.slice(13).trim(),
+            signal,
+          )
+        : adapter.sendMessage(req.params.id, req.body.text);
+    if (!req.body.dispatch) return send();
+    const key = req.params.taskId + "/" + req.params.id;
+    if (dispatching.has(key))
+      throw new DomainError(
+        "AGENT_BUSY",
+        "此会话已有启动请求，请在原生对话中继续或终止",
+        409,
+      );
+    const { store } = tasks.resolve(req.params.taskId);
+    const record = (status: string, error?: string) =>
+      store.putDocument(
+        "agent-dispatch",
+        {
+          sessionId: req.params.id,
+          status,
+          error,
+          updatedAt: new Date().toISOString(),
+        },
+        "dispatch." + req.params.id,
+      );
+    const controller = new AbortController();
+    dispatching.set(key, controller);
+    record("running");
+    void Promise.resolve()
+      .then(() => send(controller.signal))
+      .then(
+        () => record("finished"),
+        (error) => record("failed", (error as Error).message),
+      )
+      .finally(() => dispatching.delete(key))
+      .catch(() => {});
+    return { dispatched: true, sessionId: req.params.id };
+  });
+  app.get(base + "/:id/dispatch", async (req: any) => {
+    assertSessionBound(tasks, req.params.taskId, req.params.id);
+    return (
+      tasks
+        .resolve(req.params.taskId)
+        .store.documents("agent-dispatch")
+        .find((d) => d.sessionId === req.params.id) ?? { status: "idle" }
+    );
   });
   app.post(base + "/:id/abort", async (req: any) => {
     tasks.requireUser(req, req.params.taskId);

@@ -716,6 +716,23 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       });
     });
   }
+  const followedStep = useRef("");
+  useEffect(() => {
+    if (
+      page !== "workbench" ||
+      workflow?.mode !== "auto-to-review" ||
+      workflow.stale
+    )
+      return;
+    const index = workflow.steps.findIndex((s) =>
+      ["running", "awaiting-review", "failed"].includes(s.status),
+    );
+    if (index < 0) return;
+    const key = workflow.executionId + "/" + workflow.steps[index].id;
+    if (followedStep.current === key) return;
+    followedStep.current = key;
+    selectStep(index);
+  }, [workflow?.revision, workflow?.executionId, page, scenario, designMode]);
   async function confirmStep() {
     const auditMode = scenario === "training" && designMode === "audit";
     if (
@@ -767,7 +784,11 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       });
       setWorkflow(state);
     }
-    const first = state.steps.findIndex((s: any) => s.status !== "confirmed");
+    const first = state.steps.findIndex(
+      (s: any) =>
+        s.status !== "confirmed" &&
+        !(state.mode === "auto-to-review" && s.status === "completed"),
+    );
     if (stage !== first) {
       selectStep(first);
       throw new Error("请按顺序确认阶段；输入变更后需要从目标重新确认。");

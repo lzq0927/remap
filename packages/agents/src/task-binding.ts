@@ -31,12 +31,13 @@ export async function prepareTaskAgent(
   tasks: TaskServices,
   taskId: string,
   apiUrl: string,
+  adapter?: OpenCodeAdapter,
 ) {
   const workspace = tasks.registry.resolveRoot(taskId);
   const pending = preparations.get(workspace);
   const prepared = (pending ?? Promise.resolve())
     .catch(() => undefined)
-    .then(() => prepare(tasks, taskId, apiUrl));
+    .then(() => prepare(tasks, taskId, apiUrl, adapter));
   preparations.set(workspace, prepared);
   try {
     return await prepared;
@@ -46,7 +47,12 @@ export async function prepareTaskAgent(
   }
 }
 
-async function prepare(tasks: TaskServices, taskId: string, apiUrl: string) {
+async function prepare(
+  tasks: TaskServices,
+  taskId: string,
+  apiUrl: string,
+  adapter?: OpenCodeAdapter,
+) {
   const policy = readRuntimePolicy();
   assertEndpointAllowed(apiUrl, "api", policy);
   const { task } = tasks.resolve(taskId);
@@ -158,7 +164,7 @@ async function prepare(tasks: TaskServices, taskId: string, apiUrl: string) {
   const installedDigest = digest.update(content).digest("hex");
   const marker = join(workspace, ".opencode/rem-config-digest");
   const loadedDigest = existsSync(marker) ? await readFile(marker, "utf8") : "";
-  const agent = new OpenCodeAdapter(undefined, workspace);
+  const agent = adapter ?? new OpenCodeAdapter(undefined, workspace);
   // Native metadata probes can initialize an instance before the Skill exists.
   // Refresh only this directory after changed configuration, never on ordinary reconnects.
   if (loadedDigest !== installedDigest && (await agent.health()).ready) {

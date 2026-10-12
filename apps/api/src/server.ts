@@ -19,6 +19,7 @@ import {
   type AgentIntegration,
 } from "./agent-integration";
 import { report } from "../../../packages/reports/src/report";
+import { workflowReportRun } from "../../../packages/reports/src/workflow-context";
 import { applyBindings } from "../../../packages/domain/src/bindings";
 import type { CatalogKind } from "../../../packages/contracts/src/types";
 import { schemas } from "../../../packages/contracts/src/schemas";
@@ -51,6 +52,8 @@ export interface BuildAppOptions {
   dataDir?: string;
   seed?: boolean;
   autoStartRuns?: boolean;
+  /** Composition/test setting; cannot be changed by task or Agent requests. */
+  automaticStageDisplayMs?: number;
   registerTaskRoutes?: (
     app: FastifyInstance,
     tasks: TaskServices,
@@ -87,7 +90,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
       error: { code: error.code ?? "REQUEST_FAILED", message: error.message },
     }),
   );
-  app.addHook("onClose", async () => tasks.close());
+  app.addHook("onClose", async () => {
+    await agentIntegration.close?.();
+    await tasks.close();
+  });
   app.addHook("onRequest", async (req: any) => {
     const pathname = req.url.split("?")[0];
     if (
@@ -637,8 +643,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
       "Content-Disposition",
       `attachment; filename="reliability-${req.params.id}.${format}"`,
     );
+    const store = tasks.authorize(req, req.params.taskId).store;
     return report(
-      tasks.authorize(req, req.params.taskId).store.getRun(req.params.id),
+      workflowReportRun(store, store.getRun(req.params.id)),
       format,
     );
   });
@@ -674,7 +681,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   app.get("/api/agent/health", async () => agent.health());
   app.get("/api/agent/metadata", async () => agent.metadata());
   app.get("/api/agent/web", async () => agent.webInfo());
-  registerWorkflowRoutes(app, tasks);
+  registerWorkflowRoutes(app, tasks, options.automaticStageDisplayMs);
   registerAgentRoutes(app, tasks, agentIntegration);
   registerCatalogRoutes(app, tasks);
   registerPortableRoutes(app, tasks);

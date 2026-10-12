@@ -23,6 +23,7 @@ test("official MCP client negotiates tools, creates assets, invokes solver, canc
     await client.connect(transport);
     const list = await client.listTools();
     expect(list.tools.some((t) => t.name === "analysis_solve")).toBe(true);
+    expect(list.tools.some((t) => t.name === "workflow_automatic")).toBe(true);
     expect(new Set(list.tools.map((t) => t.name)).size).toBe(list.tools.length);
     const asset: any = await client.callTool({
       name: "catalog_create",

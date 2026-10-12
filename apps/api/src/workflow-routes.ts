@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { WorkflowService } from "../../../packages/workflow/src/service";
+import {
+  WorkflowService,
+  stageFinished,
+} from "../../../packages/workflow/src/service";
+import { registerAutomaticWorkflow } from "./automatic-workflow";
 import type {
   TaskServices,
   TaskContext,
@@ -12,6 +16,7 @@ export const currentWorkflow = (context: TaskContext) =>
 export function registerWorkflowRoutes(
   app: FastifyInstance,
   tasks: TaskServices,
+  stageDisplayMs?: number,
 ) {
   const services = new Map<string, WorkflowService>();
   const flow = (id: string) => {
@@ -30,6 +35,7 @@ export function registerWorkflowRoutes(
     services.forEach((s) => s.removeAllListeners()),
   );
   const base = "/api/tasks/:taskId";
+  registerAutomaticWorkflow(app, tasks, flow, stageDisplayMs);
   app.get(base + "/workflow", async (req: any) =>
     flow(req.params.taskId).get(),
   );
@@ -44,19 +50,22 @@ export function registerWorkflowRoutes(
     const context = tasks.authorize(req, req.params.taskId);
     const savedDesign = context.store.documents("design").at(-1);
     if (
-      req.body?.status === "confirmed" &&
+      ["confirmed", "completed"].includes(req.body?.status) &&
       savedDesign?.activeAssessment === "audit"
     ) {
       if (!savedDesign.assessment?.valid)
         throw new DomainError("INPUT_UNCONFIRMED", "请修正审核草稿后确认");
       if (
         ["select", "prepare"].includes(req.body.stepId) &&
-        !savedDesign.assessment.input.lossBudgetWeights
+        !savedDesign.assessment.input.lossBudgetWeights &&
+        !["equal", "baseline-proportional"].includes(
+          savedDesign.assessment.input.lossBudgetMethod,
+        )
       )
         throw new DomainError("INPUT_UNCONFIRMED", "请先分配六项损失预算");
     }
     if (
-      req.body?.status === "confirmed" &&
+      ["confirmed", "completed"].includes(req.body?.status) &&
       ["evaluate", "validate-deliver"].includes(req.body.stepId)
     ) {
       const artifact = req.body.artifacts?.find(
@@ -98,8 +107,9 @@ export function registerWorkflowRoutes(
     const context = tasks.authorize(req, req.params.taskId),
       service = flow(context.task.id);
     const state = service.get();
+    const cancelled = service.cancel(req.body.executionId, context.actor);
     if (state.runId) context.runs.cancel(state.runId);
-    return service.cancel(req.body.executionId, context.actor);
+    return cancelled;
   });
   app.get(base + "/workflow/events", async (req: any, reply) => {
     const service = flow(req.params.taskId);
@@ -143,7 +153,7 @@ export function registerWorkflowRoutes(
         "输入或执行已改变，请读取当前任务",
         409,
       );
-    if (state.steps.slice(0, 4).some((s) => s.status !== "confirmed"))
+    if (state.steps.slice(0, 4).some((s) => !stageFinished(state, s)))
       throw new DomainError("WORKFLOW_ORDER", "请先确认参数阶段", 409);
     const design = tasks
       .resolve(req.params.taskId)

@@ -34,13 +34,20 @@ export default function OpenCodePanel({
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
   const sessionRef = useRef(session);
+  const lastDispatchError = useRef("");
   sessionRef.current = session;
   const refreshing = useRef(false),
-    disposed = useRef(false);
+    disposed = useRef(false),
+    prepared = useRef(false);
   const refresh = async () => {
     if (refreshing.current || disposed.current) return;
     refreshing.current = true;
     try {
+      if (!prepared.current) {
+        await api("/agent/prepare", {});
+        if (disposed.current) return;
+        prepared.current = true;
+      }
       let info = await api("/agent/web");
       if (disposed.current) return;
       const selected = sessionRef.current;
@@ -52,6 +59,17 @@ export default function OpenCodePanel({
         info = await api("/agent/web");
       }
       if (disposed.current) return;
+      if (sessionRef.current) {
+        const dispatch = await api(`/agent/${sessionRef.current}/dispatch`);
+        if (disposed.current) return;
+        if (
+          dispatch.status === "failed" &&
+          dispatch.updatedAt !== lastDispatchError.current
+        ) {
+          lastDispatchError.current = dispatch.updatedAt;
+          onError("Skill 启动失败：" + dispatch.error);
+        }
+      }
       setWeb(info);
       setConnected(true);
     } catch {
@@ -89,6 +107,27 @@ export default function OpenCodePanel({
       setBusy(false);
     }
   };
+  const startSkill = async () => {
+    setBusy(true);
+    try {
+      await beforeContext();
+      await api("/agent/prepare", {});
+      if (web?.projectUrl)
+        setUrl(web.projectUrl + "/" + encodeURIComponent(session));
+      await api(`/agent/${session}/context`, context);
+      await api(`/agent/${session}/message`, {
+        text: "/sd-dfr-remap",
+        dispatch: true,
+      });
+      onNotice(
+        "Skill 已在当前关联 OpenCode 会话启动；请在原生对话中点击“全自动设计与评估”或“辅助设计与评估”。",
+      );
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <aside className="agent official-agent" aria-label="本地官方 OpenCode">
       <div className="agent-head">
@@ -117,6 +156,12 @@ export default function OpenCodePanel({
           </select>
         </label>
         <div className="actions">
+          <button
+            disabled={!session || !connected || busy}
+            onClick={() => void startSkill()}
+          >
+            加载 Skill 并选择执行方式
+          </button>
           <button disabled={busy || !connected} onClick={() => void create()}>
             <Plus size={14} />
             新建关联会话
@@ -195,7 +240,8 @@ export default function OpenCodePanel({
         </div>
         <p>
           模型选择在官方输入框旁；API Key、自定义 Base URL 与模型在官方「设置 →
-          提供商」配置。请使用上方按钮创建任务会话；此列表只显示当前任务绑定的会话。
+          提供商」配置。当前任务使用独立的本地 OpenCode
+          会话数据库；模型凭据仍由本机 OpenCode 管理。
         </p>
       </div>
       {connected && url ? (

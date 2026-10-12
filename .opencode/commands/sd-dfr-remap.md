@@ -1,5 +1,5 @@
 ---
 description: 加载统一可靠性建模、指标分解、机制权衡与验证流程
 ---
-使用 skill 工具加载 sd-dfr-remap。先调用 task_current、design_get、workflow_state 核对当前任务和版本，沿六阶段推进到用户确认点。只使用当前目录绑定的可靠性 MCP；无绑定时返回工作台创建任务主会话。中间产物通过 workflow_save 保存并在工作台显示。
+使用 skill 工具加载 sd-dfr-remap。先调用 task_current、design_get、workflow_state 核对当前任务和版本，根据本次需求解释推荐方式。首次没有明确选择时，必须调用原生 question 工具，在 Agent 对话框显示可点击的“全自动设计与评估”和“辅助设计与评估”，每项包含 Skill 中的解释，不用普通文字菜单替代。未回答前不求解。全自动按保存的完整设计执行 workflow_automatic；关键资料缺失先澄清；辅助模式根据用户输入决定下一步，逐阶段保存产物、等待工作台确认。继续既有执行时不重复询问或启动。先做目标分配，再做措施评估与 Shapley。只使用当前目录绑定的可靠性 MCP；无绑定时返回工作台创建任务主会话。不要把自动完成伪造成人工 confirmed。
 用户当前需求：$ARGUMENTS

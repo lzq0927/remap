@@ -39,6 +39,12 @@ export const registry = [
   ],
   ["workflow_state", "读取当前阶段和过程资产", "GET", "/workflow"],
   [
+    "workflow_automatic",
+    "用户选择自动执行后，按当前有效设计版本运行目标、结构、分配、参数、真实仿真和报告流水线。自动完成不表示人工确认，报告停在待审核。body.inputRevision 必填；用 workflow_state / run_status 查询进展",
+    "POST",
+    "/workflow/automatic",
+  ],
+  [
     "workflow_save",
     "保存阶段与过程资产；Agent 不能代替用户确认",
     "POST",

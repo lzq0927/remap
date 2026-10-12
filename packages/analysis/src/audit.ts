@@ -20,8 +20,14 @@ import {
   auditTarget,
   validateAuditDesign,
   auditDesignReview,
-  auditBudgetDefaults,
 } from "./audit-design";
+import {
+  auditSubmodelPlan,
+  lossAllocation,
+  equalLossWeights,
+  type AuditSubmodelAllocation,
+  type LossBudgetMethod,
+} from "./audit-allocation";
 
 const createEngine = createRequire(import.meta.url)(
   "../../solvers/src/vendor/review-engine.cjs",
@@ -63,6 +69,8 @@ export interface AuditRequest {
   target: number;
   targets?: Record<string, number>;
   lossBudgetWeights?: Record<string, number>;
+  lossBudgetMethod?: LossBudgetMethod;
+  submodelAllocation?: AuditSubmodelAllocation;
   verifyRecommendation?: boolean;
   verificationTrials?: number;
   scales?: number[];
@@ -122,7 +130,8 @@ export function getAuditDefaults() {
     seed: sourceConfig.seed,
     target: 0.99,
     targets: { ...auditDefaultTargets },
-    lossBudgetWeights: { ...auditBudgetDefaults },
+    lossBudgetWeights: { ...equalLossWeights },
+    lossBudgetMethod: "equal" as const,
     verifyRecommendation: true,
     scales: [...auditReferenceScales],
     mechanisms: [...auditReferenceMechanisms],
@@ -211,6 +220,14 @@ function applyOverrides(
   return out;
 }
 export function resolveAudit(request: AuditRequest) {
+  const submodelPlan = auditSubmodelPlan(request.submodelAllocation);
+  if (
+    request.lossBudgetMethod !== undefined &&
+    !["equal", "baseline-proportional", "custom"].includes(
+      request.lossBudgetMethod,
+    )
+  )
+    throw new Error("未知损失预算分配方法");
   if (
     request.rateArithmetic !== undefined &&
     !["expert-reference", "catalog"].includes(request.rateArithmetic)
@@ -454,6 +471,7 @@ export function resolveAudit(request: AuditRequest) {
     sensitivityTrials,
     sampleRuns,
     candidateReferenceRates: usesReferenceRates(candidateEvents),
+    submodelPlan,
   };
 }
 export function audit(
@@ -536,6 +554,7 @@ export function audit(
   const rows: any[] = [],
     attribution: any[] = [],
     sensitivity: any[] = [];
+  const lossAllocations: ReturnType<typeof lossAllocation>[] = [];
   const definitions = [
     { id: "base", name: "确认基线", opts: {} },
     ...scenarios.map(([id, name]) => ({ id, name, opts: { [id]: true } })),
@@ -562,6 +581,16 @@ export function audit(
     });
   for (const cards of scales) {
     const base = sample(cards, {}, request.trials);
+    lossAllocations.push(
+      lossAllocation(
+        request.lossBudgetMethod,
+        request.lossBudgetWeights,
+        base.ledger,
+        cards,
+        request.hours,
+        auditTarget(request, cards),
+      ),
+    );
     const samples = definitions.map((def) => {
       const sampled =
         def.id === "base"
@@ -831,11 +860,16 @@ export function audit(
     request: structuredClone(request),
     referenceComparison: auditReferenceComparison(request, resolved),
     rows,
+    allocationPlan: {
+      submodel: resolved.submodelPlan,
+      lossBudgets: lossAllocations,
+    },
     designReview: auditDesignReview(
       { ...request, mechanisms },
       rows,
       model,
       policy,
+      lossAllocations,
     ),
     recommendation,
     attribution,

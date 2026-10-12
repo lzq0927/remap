@@ -9,7 +9,11 @@ export class OpenCodeAdapter implements WorkspaceAgentPort {
   constructor(
     public url = process.env.OPENCODE_URL ?? "http://127.0.0.1:4096",
     public directory?: string,
+    private connection?: () => Promise<string>,
   ) {}
+  private async connect() {
+    if (this.connection) this.url = await this.connection();
+  }
   private endpoint() {
     const url = new URL(this.url);
     if (url.username || url.password)
@@ -24,7 +28,13 @@ export class OpenCodeAdapter implements WorkspaceAgentPort {
     base.pathname = base.pathname.replace(/\/?$/, "/");
     return new URL(path.replace(/^\/+/, ""), base);
   }
-  private async request(path: string, body?: any, method?: string) {
+  private async request(
+    path: string,
+    body?: any,
+    method?: string,
+    signal?: AbortSignal,
+  ) {
+    await this.connect();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
@@ -47,9 +57,13 @@ export class OpenCodeAdapter implements WorkspaceAgentPort {
       headers,
       body: body ? JSON.stringify(body) : undefined,
       // Project metadata may cold-start Skill/MCP; global health stays fail-fast.
-      signal: AbortSignal.timeout(
-        body ? 120000 : path.startsWith("/global/") ? 4000 : 20000,
-      ),
+      signal:
+        signal ??
+        (path.endsWith("/command")
+          ? undefined
+          : AbortSignal.timeout(
+              body ? 120000 : path.startsWith("/global/") ? 4000 : 20000,
+            )),
     });
     if (!response.ok) throw new Error("OpenCode HTTP " + response.status);
     return response.json();
@@ -88,6 +102,7 @@ export class OpenCodeAdapter implements WorkspaceAgentPort {
     return this.request("/instance/dispose", {});
   }
   async webInfo() {
+    await this.connect();
     const url = this.endpoint();
     if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname))
       throw new Error("官方界面嵌入仅支持本地 OpenCode 回环服务");
@@ -161,12 +176,17 @@ export class OpenCodeAdapter implements WorkspaceAgentPort {
       ...this.model(),
     });
   }
-  async runCommand(id: string, args = "") {
-    return this.request("/session/" + encodeURIComponent(id) + "/command", {
-      command: "sd-dfr-remap",
-      arguments: args,
-      ...(this.modelName() ? { model: this.modelName() } : {}),
-    });
+  async runCommand(id: string, args = "", signal?: AbortSignal) {
+    return this.request(
+      "/session/" + encodeURIComponent(id) + "/command",
+      {
+        command: "sd-dfr-remap",
+        arguments: args,
+        ...(this.modelName() ? { model: this.modelName() } : {}),
+      },
+      undefined,
+      signal,
+    );
   }
   private model() {
     const value = this.modelName();
@@ -232,6 +252,7 @@ export class OpenCodeAdapter implements WorkspaceAgentPort {
     sessionId: string,
     signal: AbortSignal,
   ): AsyncIterable<AgentEvent> {
+    await this.connect();
     const headers: Record<string, string> = { Accept: "text/event-stream" };
     if (process.env.OPENCODE_SERVER_PASSWORD)
       headers.Authorization =

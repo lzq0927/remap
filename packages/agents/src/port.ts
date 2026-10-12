@@ -21,7 +21,7 @@ export interface AgentPort {
   createSession(options?: { title?: string }): Promise<{ sessionId: string }>;
   messages(id: string): Promise<AgentMessage[]>;
   sendMessage(id: string, text: string): Promise<unknown>;
-  runCommand(id: string, args?: string): Promise<unknown>;
+  runCommand(id: string, args?: string, signal?: AbortSignal): Promise<unknown>;
   abort(id: string): Promise<unknown>;
   events(id: string, signal: AbortSignal): AsyncIterable<AgentEvent>;
 }
@@ -45,9 +45,7 @@ export interface WorkspaceAgentPort extends AgentPort {
   metadata(): Promise<unknown>;
   providers(): Promise<unknown>;
   addContext(id: string, context: unknown): Promise<unknown>;
-  pending(
-    id: string,
-  ): Promise<{
+  pending(id: string): Promise<{
     questions: Array<{ id: string }>;
     permissions: Array<{ id: string }>;
   }>;

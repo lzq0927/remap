@@ -5,12 +5,22 @@ import Fastify from "fastify";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildApp } from "../../apps/api/src/server";
+import { openCodeIntegration } from "../../apps/api/src/agent-integration";
+import { OpenCodeAdapter } from "../../packages/agents/src/opencode-adapter";
 
 test("native OpenCode sessions are named and scoped to task directories", async () => {
   const native = Fastify();
   const sessions: any[] = [],
     contexts: any[] = [];
   const reloads: string[] = [];
+  let completeCommand: (() => void) | undefined;
+  native.post(
+    "/session/:id/command",
+    async () =>
+      new Promise((resolve) => {
+        completeCommand = () => resolve({});
+      }),
+  );
   native.post("/instance/dispose", async (req: any) => {
     reloads.push(req.query.directory);
     return true;
@@ -50,7 +60,11 @@ test("native OpenCode sessions are named and scoped to task directories", async 
     "OPENCODE_URL",
     "http://127.0.0.1:" + (native.server.address() as any).port,
   );
-  const app = await buildApp({ dataDir: ":memory:", seed: false });
+  const app = await buildApp({
+    dataDir: ":memory:",
+    seed: false,
+    agentIntegration: openCodeIntegration({ isolate: false }),
+  });
   try {
     const a = (
       await app.inject({
@@ -164,8 +178,35 @@ test("native OpenCode sessions are named and scoped to task directories", async 
       })
     ).json();
     expect(reused.sessionId).toBe(replacement.sessionId);
+    const dispatchPath = prefix + "/agent/" + replacement.sessionId;
+    const dispatched = await app.inject({
+      method: "POST",
+      url: dispatchPath + "/message",
+      payload: { text: "/sd-dfr-remap", dispatch: true },
+    });
+    expect(dispatched.json().dispatched).toBe(true);
+    await vi.waitFor(() => expect(completeCommand).toBeDefined());
+    expect((await app.inject(dispatchPath + "/dispatch")).json().status).toBe(
+      "running",
+    );
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: dispatchPath + "/message",
+          payload: { text: "/sd-dfr-remap", dispatch: true },
+        })
+      ).statusCode,
+    ).toBe(409);
+    completeCommand!();
+    await vi.waitFor(async () =>
+      expect((await app.inject(dispatchPath + "/dispatch")).json().status).toBe(
+        "finished",
+      ),
+    );
     expect(reloads).toEqual([a.workspacePath]);
   } finally {
+    completeCommand?.();
     await app.close();
     await native.close();
     vi.unstubAllEnvs();
@@ -180,10 +221,29 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
     await app.listen({ host: "127.0.0.1", port: 0 });
     let sessionId: string | undefined;
     let directory: string | undefined;
+    let nativeUrl = process.env.TEST_OPENCODE_URL;
+    let legacy: OpenCodeAdapter | undefined;
     try {
       const task = app.taskServices.create("Native smoke · synthetic data");
       directory = task.workspacePath;
       const prefix = "/api/tasks/" + task.id;
+      // Existing task-bound transcript must survive the move out of the shared service.
+      legacy = new OpenCodeAdapter(process.env.TEST_OPENCODE_URL, directory);
+      sessionId = (
+        await legacy.createSession({ title: "Task A legacy · synthetic" })
+      ).sessionId;
+      await legacy.addContext(sessionId!, {
+        message: "synthetic preserved history",
+      });
+      app.taskServices.resolve(task.id).store.putDocument(
+        "agent-binding",
+        {
+          sessionId,
+          taskId: task.id,
+          purpose: "primary",
+        },
+        sessionId,
+      );
       // The UI probes Web metadata before it prepares the task's Agent configuration.
       expect((await app.inject(prefix + "/agent/web")).statusCode).toBe(200);
       const created = await app.inject({
@@ -192,12 +252,14 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
         payload: {},
       });
       expect(created.statusCode, created.body).toBe(200);
-      sessionId = created.json().sessionId;
+      expect(created.json().sessionId).toBe(sessionId);
       const web = (await app.inject(prefix + "/agent/web")).json();
+      nativeUrl = web.url;
+      expect(nativeUrl).not.toBe(process.env.TEST_OPENCODE_URL);
       expect(web.directory).toBe(directory);
       expect(web.sessions.find((s: any) => s.id === sessionId)).toBeDefined();
       const nativeGet = async (path: string) => {
-        const url = new URL(path, process.env.TEST_OPENCODE_URL);
+        const url = new URL(path, nativeUrl);
         url.searchParams.set("directory", directory!);
         const response = await fetch(url, {
           signal: AbortSignal.timeout(30000),
@@ -207,6 +269,29 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
       };
       const skills = await nativeGet("/skill");
       expect(skills.some((s: any) => s.name === "sd-dfr-remap")).toBe(true);
+      const messages = await nativeGet("/session/" + sessionId + "/message");
+      expect(JSON.stringify(messages)).toContain("synthetic preserved history");
+      const other = app.taskServices.create("Task B isolated · synthetic");
+      const otherPrefix = "/api/tasks/" + other.id;
+      const otherSession = (
+        await app.inject({
+          method: "POST",
+          url: otherPrefix + "/agent/session",
+          payload: {},
+        })
+      ).json();
+      const otherWeb = (await app.inject(otherPrefix + "/agent/web")).json();
+      expect(otherWeb.url).not.toBe(nativeUrl);
+      // Check the unfiltered native APIs, not just the workbench's dropdown.
+      const allA = await (await fetch(nativeUrl + "/session")).json();
+      const allB = await (await fetch(otherWeb.url + "/session")).json();
+      expect(allA.map((s: any) => s.id)).toContain(sessionId);
+      expect(allA.map((s: any) => s.id)).not.toContain(otherSession.sessionId);
+      expect(allB.map((s: any) => s.id)).toContain(otherSession.sessionId);
+      expect(allB.map((s: any) => s.id)).not.toContain(sessionId);
+      expect((await fetch(otherWeb.url + "/session/" + sessionId)).status).toBe(
+        404,
+      );
       const mcp = await nativeGet("/mcp");
       expect(mcp.reliability.status).toBe("connected");
       const providers = (await app.inject(prefix + "/agent/providers")).json();
@@ -217,18 +302,21 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
       ).toBe(true);
     } finally {
       if (sessionId) {
-        const url = new URL(
-          "/session/" + sessionId,
-          process.env.TEST_OPENCODE_URL,
-        );
+        if (legacy) {
+          const original = new URL(
+            "/session/" + sessionId,
+            process.env.TEST_OPENCODE_URL,
+          );
+          original.searchParams.set("directory", directory!);
+          await fetch(original, { method: "DELETE" });
+          await legacy.reloadProject();
+        }
+        const url = new URL("/session/" + sessionId, nativeUrl);
         if (directory) url.searchParams.set("directory", directory);
         await fetch(url, { method: "DELETE" });
       }
       if (directory) {
-        const dispose = new URL(
-          "/instance/dispose",
-          process.env.TEST_OPENCODE_URL,
-        );
+        const dispose = new URL("/instance/dispose", nativeUrl);
         dispose.searchParams.set("directory", directory);
         await fetch(dispose, { method: "POST" });
       }

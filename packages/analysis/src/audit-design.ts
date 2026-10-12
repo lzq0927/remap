@@ -87,6 +87,10 @@ export function auditDesignReview(
   rows: any[],
   model: Record<string, number>,
   policy: Record<string, any>,
+  allocations?: Array<{
+    cards: number;
+    weights: Record<string, number> | null;
+  }>,
 ) {
   const fast = request.mechanisms?.includes("fast");
   return {
@@ -107,24 +111,24 @@ export function auditDesignReview(
       )
       .map((row) => {
         const target = auditTarget(request, row.cards),
-          allowedHours = (1 - target) * request.hours;
+          allowedHours = (1 - target) * request.hours,
+          weights =
+            allocations?.find((a) => a.cards === row.cards)?.weights ??
+            request.lossBudgetWeights;
         return {
           cards: row.cards,
           target,
           allowedHours,
           actualLossHours: request.hours * (1 - row.statistics.mean),
           excessHours: request.hours * (target - row.statistics.mean),
-          allocated: !!request.lossBudgetWeights,
+          allocated: !!weights,
           items: Object.entries(auditLossBudgetLabels).map(([id, name]) => ({
             id,
             name,
             actualHours: row.ledger[id] ?? 0,
-            allowedHours: request.lossBudgetWeights
-              ? allowedHours * request.lossBudgetWeights[id]
-              : null,
-            excessHours: request.lossBudgetWeights
-              ? (row.ledger[id] ?? 0) -
-                allowedHours * request.lossBudgetWeights[id]
+            allowedHours: weights ? allowedHours * weights[id] : null,
+            excessHours: weights
+              ? (row.ledger[id] ?? 0) - allowedHours * weights[id]
               : null,
             action: actions[id],
           })),

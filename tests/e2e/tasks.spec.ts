@@ -34,6 +34,16 @@ test("homepage requires explicit task choice and task inputs and sessions remain
       },
     });
   });
+  await page.route("**/api/tasks/*/agent/prepare", (route) =>
+    route.fulfill({ json: { prepared: true } }),
+  );
+  await page.route("**/api/tasks/*/agent/session", (route) => {
+    const id = route.request().url().split("/tasks/")[1].split("/")[0];
+    return route.fulfill({ json: { sessionId: `session-${id}` } });
+  });
+  await page.route("**/api/tasks/*/agent/*/dispatch", (route) =>
+    route.fulfill({ json: { status: "idle" } }),
+  );
   await page.goto("/");
   await expect(
     page.getByRole("heading", { name: "可靠性设计任务" }),
@@ -67,7 +77,9 @@ test("homepage requires explicit task choice and task inputs and sessions remain
     .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
   await expect(page.getByLabel("集群卡数")).not.toHaveValue("12345");
-  await expect(page.getByLabel("关联 OpenCode 会话")).toHaveValue("");
+  await expect(page.getByLabel("关联 OpenCode 会话")).toHaveValue(
+    `session-${b.id}`,
+  );
   await expect(
     page
       .getByLabel("关联 OpenCode 会话")
