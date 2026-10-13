@@ -928,6 +928,7 @@ export default function ResultView({
       )}
       {result && (
         <ResultBody
+          key={run.id}
           result={result}
           onApplyCandidate={onApplyCandidate}
           onApplyAudit={onApplyAudit}

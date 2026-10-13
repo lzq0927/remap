@@ -1,6 +1,9 @@
 import { test as base, expect } from "@playwright/test";
-export const test = base.extend<{ taskId: string }>({
-  taskId: async ({ request }, use) => {
+export const test = base.extend<{ taskId: string; fullWorkspace: boolean }>({
+  // Existing domain journeys deliberately exercise the retained complete-edit views.
+  // Focused UX tests opt out and verify the new production defaults independently.
+  fullWorkspace: [true, { option: true }],
+  taskId: async ({ request, context, fullWorkspace }, use) => {
     const task = await (
       await request.post("/api/tasks", {
         data: { name: "Regression " + Date.now() },
@@ -16,6 +19,11 @@ export const test = base.extend<{ taskId: string }>({
           contentHash: asset.contentHash,
         },
       });
+    if (fullWorkspace)
+      await context.addInitScript((id) => {
+        sessionStorage.setItem(`remap.workspace.${id}`, "all");
+        sessionStorage.setItem(`remap.results.${id}`, "all");
+      }, task.id);
     await use(task.id);
   },
 });

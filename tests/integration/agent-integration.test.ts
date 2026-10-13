@@ -121,6 +121,39 @@ test("administrator can replace Agent integration while keeping task binding and
     ).toBe(403);
     expect(existsSync(join(a.workspacePath, "opencode.json"))).toBe(false);
     expect(contexts).not.toHaveBeenCalled();
+    const defaults = (await app.inject("/api/defaults")).json();
+    const saved = (
+      await app.inject({
+        method: "POST",
+        url: base + "/design",
+        payload: {
+          request: defaults.training,
+          scenario: "training",
+          activeAssessment: "workflow",
+          stage: 3,
+        },
+      })
+    ).json();
+    const context = await app.inject({
+      method: "POST",
+      url: base + "/agent/" + session.sessionId + "/context",
+      payload: {
+        step: "audit",
+        view: "catalogs",
+        summary: { inputRevision: 9999 },
+      },
+    });
+    expect(context.statusCode).toBe(200);
+    expect(contexts).toHaveBeenLastCalledWith(
+      session.sessionId,
+      expect.objectContaining({
+        step: "prepare",
+        stage: 3,
+        view: "catalogs",
+        inputRevision: saved.revision,
+        taskId: a.id,
+      }),
+    );
   } finally {
     await app.close();
   }

@@ -17,7 +17,11 @@ export default function TaskHome({ onOpen }: { onOpen: (task: Task) => void }) {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [editing, setEditing] = useState(""),
-    [rename, setRename] = useState("");
+    [rename, setRename] = useState(""),
+    [query, setQuery] = useState("");
+  const matching = tasks.filter((task) =>
+    task.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+  );
   const refresh = async () => {
     const result = await api("/tasks?includeArchived=true");
     setTasks(Array.isArray(result) ? result : (result.tasks ?? []));
@@ -106,9 +110,27 @@ export default function TaskHome({ onOpen }: { onOpen: (task: Task) => void }) {
           {error}
         </p>
       )}
+      <div className="task-search">
+        <label>
+          搜索任务
+          <input
+            aria-label="搜索任务"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="按任务名称查找"
+          />
+        </label>
+        <span>
+          {matching.length} / {tasks.length} 个任务
+        </span>
+      </div>
       <section aria-label="任务列表" className="task-list">
         {tasks.length === 0 && <p className="empty">暂无任务，请新建任务。</p>}
-        {tasks.map((task) => {
+        {tasks.length > 0 && matching.length === 0 && (
+          <p className="empty">没有匹配的任务</p>
+        )}
+        {matching.map((task) => {
           const archived = task.archived || task.status === "archived",
             prefix = "/tasks/" + encodeURIComponent(task.id);
           return (

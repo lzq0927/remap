@@ -3,7 +3,7 @@ import {
   runAssessmentModel,
 } from "../../../packages/contracts/src/assessment-model";
 import { draftFromAuditRequest } from "../../../packages/contracts/src/audit-draft";
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, Fragment } from "react";
 import {
   Activity,
   Boxes,
@@ -48,6 +48,7 @@ import AuditWorkbench, {
   auditDraftInput,
   type AuditDraft,
 } from "./AuditWorkbench";
+import WorkspaceViewTabs, { useViewPreference } from "./WorkspaceViewTabs";
 const pct = (n: number | undefined) =>
   n === undefined ? "—" : (n * 100).toFixed(3) + "%";
 const states: Record<string, string> = {
@@ -238,6 +239,10 @@ export default function App() {
   );
 }
 function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
+  const [configView, setConfigView] = useViewPreference(
+    `remap.workspace.${task.id}`,
+    "step",
+  );
   const { api, url } = useTaskApi();
   const [lastComplete, setLastComplete] = useState<any>();
   const [page, setPage] = useState("workbench"),
@@ -736,6 +741,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     const key = workflow.executionId + "/" + workflow.steps[index].id;
     if (followedStep.current === key) return;
     followedStep.current = key;
+    setConfigView("step");
     selectStep(index);
   }, [workflow?.revision, workflow?.executionId, page, scenario, designMode]);
   async function confirmStep() {
@@ -948,28 +954,39 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
             <span>可靠性设计与评估</span>
           </div>
         </div>
-        <div className="sidebar-caption">WORKSPACE / 001</div>
-        <nav>
+        <div className="sidebar-caption">任务工作区</div>
+        <nav aria-label="任务模块">
           {navigation.map(([id, label, Icon]) => (
-            <button
-              key={id}
-              className={page === id ? "active" : ""}
-              onClick={() => {
-                setPage(id);
-                if (id === "runs")
-                  attempt(async () => setRuns(await api("/runs")));
-                if (id === "settings")
-                  attempt(async () => setSettings(await api("/settings")));
-              }}
-            >
-              <Icon size={18} />
-              {label}
-              {page === id && <ChevronRight size={14} />}
-            </button>
+            <Fragment key={id}>
+              {["workbench", "catalogs", "runs"].includes(id) && (
+                <span className="workspace-nav-group">
+                  {id === "workbench"
+                    ? "设计"
+                    : id === "catalogs"
+                      ? "分析资源"
+                      : "交付与连接"}
+                </span>
+              )}
+              <button
+                className={page === id ? "active" : ""}
+                aria-current={page === id ? "page" : undefined}
+                onClick={() => {
+                  setPage(id);
+                  if (id === "runs")
+                    attempt(async () => setRuns(await api("/runs")));
+                  if (id === "settings")
+                    attempt(async () => setSettings(await api("/settings")));
+                }}
+              >
+                <Icon size={18} />
+                {label}
+                {page === id && <ChevronRight size={14} />}
+              </button>
+            </Fragment>
           ))}
         </nav>
         <div className="sidebar-section">
-          <span>PRODUCT SCENARIOS</span>
+          <span>产品场景</span>
           {defaults.scenarios.map((s: any) => (
             <button
               key={s.id}
@@ -993,7 +1010,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         </div>
         <div className="sidebar-foot">
           <span className="dot" /> 本地工作区
-          <span>Prototype 0.1 · 科学计算</span>
+          <span>输入、资产与运行独立保存</span>
         </div>
       </aside>
       <main>
@@ -1015,9 +1032,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         />
         <header>
           <div>
-            <span className="eyebrow">
-              RELIABILITY ENGINEERING / DESIGN REVIEW
-            </span>
+            <span className="eyebrow">ReMAP / 任务工作区</span>
             <h1>{navigation.find((n) => n[0] === page)?.[1]}</h1>
           </div>
           <div className="header-right">
@@ -1027,6 +1042,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
             <button
               className="icon-button"
               aria-label="显示或收起 Agent"
+              aria-expanded={agentVisible}
               onClick={() => setAgentVisible(!agentVisible)}
             >
               <PanelRightClose size={20} />
@@ -1196,33 +1212,60 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
             {scenario === "training" ? (
               <>
                 <div hidden={designMode !== "audit"}>
-                  {defaults.audit && (
-                    <AuditWorkbench
-                      key={auditEpoch}
-                      defaults={defaults.audit}
-                      draft={auditDraft}
-                      onDraftChange={setAuditDraft}
-                      events={defaults.auditEvents}
-                      mechanisms={defaults.auditMechanisms}
-                      busy={
-                        busy ||
-                        run?.status === "running" ||
-                        run?.status === "queued"
-                      }
-                      onRun={(input) =>
-                        void solve("audit", input).then(() =>
-                          requestAnimationFrame(() =>
-                            document
-                              .getElementById("design-result")
-                              ?.scrollIntoView({
-                                behavior: "smooth",
-                                block: "start",
-                              }),
-                          ),
-                        )
-                      }
+                  <div className="workspace-view-bar">
+                    <WorkspaceViewTabs
+                      name="配置视图"
+                      value={configView}
+                      onChange={setConfigView}
+                      idPrefix={`config-${task.id}`}
+                      panelId={`config-${task.id}-panel`}
+                      options={[
+                        { id: "step", label: "按步骤" },
+                        { id: "all", label: "全部配置" },
+                      ]}
                     />
-                  )}
+                    <span>
+                      {configView === "step"
+                        ? "只显示当前步骤，修改会自动保存"
+                        : "集中编辑所有配置，确认仍按步骤进行"}
+                    </span>
+                  </div>
+                  <div
+                    id={`config-${task.id}-panel`}
+                    role="tabpanel"
+                    aria-labelledby={`config-${task.id}-${configView}`}
+                    tabIndex={0}
+                  >
+                    {defaults.audit && (
+                      <AuditWorkbench
+                        key={auditEpoch}
+                        defaults={defaults.audit}
+                        draft={auditDraft}
+                        onDraftChange={setAuditDraft}
+                        events={defaults.auditEvents}
+                        mechanisms={defaults.auditMechanisms}
+                        stage={configView === "step" ? stage : undefined}
+                        busy={
+                          busy ||
+                          run?.status === "running" ||
+                          run?.status === "queued"
+                        }
+                        onRun={(input) =>
+                          void solve("audit", input).then(() => {
+                            setStage(4);
+                            requestAnimationFrame(() =>
+                              document
+                                .getElementById("design-result")
+                                ?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                }),
+                            );
+                          })
+                        }
+                      />
+                    )}
+                  </div>
                 </div>
                 <div hidden={designMode !== "workflow"}>
                   <section className="hero">
@@ -1572,7 +1615,15 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 </button>
               </section>
             )}
-            <div id="design-result">
+            <div
+              id="design-result"
+              hidden={
+                scenario === "training" &&
+                designMode === "audit" &&
+                configView === "step" &&
+                stage < 4
+              }
+            >
               {scenario === "training" &&
                 run &&
                 runAssessmentModel(run) &&
@@ -1604,16 +1655,16 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 onApplyCandidate={applyCandidate}
                 onApplyAudit={applyAuditCandidate}
               />
+              {run &&
+                ["cancelled", "failed"].includes(run.status) &&
+                lastComplete &&
+                lastComplete.id !== run.id && (
+                  <>
+                    <h3>上次完整结果</h3>
+                    <Result run={lastComplete} />
+                  </>
+                )}
             </div>
-            {run &&
-              ["cancelled", "failed"].includes(run.status) &&
-              lastComplete &&
-              lastComplete.id !== run.id && (
-                <>
-                  <h3>上次完整结果</h3>
-                  <Result run={lastComplete} />
-                </>
-              )}
           </>
         )}
         {page === "catalogs" && (
@@ -2527,9 +2578,13 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         <OpenCodePanel
           session={session}
           taskName={task.name}
+          stageName={activeSteps[stage].name}
+          moduleName={navigation.find((n) => n[0] === page)?.[1]}
+          inputRevision={designRevision.current}
           onSession={setSession}
           context={{
             scenario,
+            view: page,
             summary: {
               target:
                 designMode === "audit" && scenario === "training"
@@ -2556,10 +2611,8 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   : "request",
               inputRevision: designRevision.current,
             },
-            step:
-              designMode === "audit" && scenario === "training"
-                ? "audit"
-                : workflowSteps[stage].id,
+            step: workflowSteps[stage].id,
+            assessment: designMode,
             runId: run?.id,
           }}
           onNotice={setNotice}
