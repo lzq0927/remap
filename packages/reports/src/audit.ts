@@ -462,6 +462,61 @@ export function auditSections(r: any): AuditSection[] {
       "φᵢ = Σₛ |S|! (m−|S|−1)! / m! × [A(S∪{i})−A(S)]；Σφᵢ = A(全部启用措施)−A(空组合基线)。枚举全部子集不代表模型和参数无误差；step 单独无收益，也可能因为依赖检测而分得组合贡献。",
     ],
   });
+  if (r.rankings) {
+    const baseline = r.baseline;
+    sections.push({
+      title: "条件基线 / 剩余机制排序",
+      paragraphs: [
+        `固定部署：${baseline?.mechanisms?.join("、") || "无"}；假设已完全消除事件：${baseline?.resolvedEvents?.map((e: any) => e.id).join("、") || "无"}。${baseline?.note || ""}`,
+        "选定已消除事件仅在本次情景中FIT置零，不改写故障库；已部署机制保留实际检测覆盖、恢复效果和剩余风险。它们在所有候选、组合及独立复核中固定存在，收益与新增成本均不重复计入。",
+        "单项增量=A(B＋i)−A(B)；条件Shapley以固定基线B为前提，枚举剩余候选子集分摊A(B＋S＋i)−A(B＋S)。按收益均值排序，保留负收益；区间重叠不能证明排序具有显著性。",
+      ],
+      tables: [
+        ...(baseline?.resolvedEvents?.length
+          ? [
+              {
+                heads: ["假设已消除事件", "原始FIT（本次校准输入）", "条件FIT"],
+                rows: baseline.resolvedEvents.map((e: any) => [
+                  e.id,
+                  num(e.originalFit),
+                  "0（情景假设）",
+                ]),
+              },
+            ]
+          : []),
+        ...r.rankings.flatMap((ranking: any) =>
+          ["single", "shapley"].flatMap((mode) =>
+            ranking[mode] === null
+              ? []
+              : [
+                  {
+                    heads: [
+                      "规模",
+                      "排序依据",
+                      "排名",
+                      "剩余机制",
+                      "新增收益",
+                      "95%区间",
+                      "新增正确小时",
+                    ],
+                    rows: ranking[mode].map((row: any) => [
+                      num(ranking.cards, 0),
+                      mode === "single" ? "单项增量" : "条件Shapley",
+                      row.rank,
+                      row.name,
+                      pp(row.statistics.mean),
+                      pp(row.statistics.ciLow) +
+                        " ～ " +
+                        pp(row.statistics.ciHigh),
+                      num(row.statistics.mean * hours),
+                    ]),
+                  },
+                ],
+          ),
+        ),
+      ],
+    });
+  }
   for (const a of r.attribution)
     sections.push({
       title: `${num(a.cards, 0)} 卡 / Shapley 审核`,

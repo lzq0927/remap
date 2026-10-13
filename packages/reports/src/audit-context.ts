@@ -2,7 +2,12 @@ import { auditReferenceMechanisms } from "../../contracts/src/audit-presets";
 import { parameterLabels } from "./audit-labels";
 
 export function auditSelectedMechanisms(r: any) {
-  const ids: string[] = r.request.mechanisms ?? auditReferenceMechanisms;
+  const ids: string[] = [
+    ...new Set<string>([
+      ...(r.request.baseline?.mechanisms ?? []),
+      ...(r.request.mechanisms ?? auditReferenceMechanisms),
+    ]),
+  ];
   const codes: Record<string, string> = {
     hardDetect: "D-HARD",
     slowDetect: "D-SLOW",

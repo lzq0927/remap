@@ -26,6 +26,11 @@ export function auditReferenceComparison(
   const check = (ok: boolean, label: string) => {
     if (!ok) differences.push(label);
   };
+  check(
+    !request.baseline?.mechanisms?.length &&
+      !request.baseline?.resolvedEventIds?.length,
+    "基线包含已部署机制或已消除故障假设，属于条件评估",
+  );
   check(request.trials === preset.trials, "主场景轨迹数不是4000");
   check(
     request.attribution !== false &&

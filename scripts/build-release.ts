@@ -57,6 +57,7 @@ const include = [
   "docs/numerical-methods.md",
   "docs/2026-10-12-专家原始配置复现验收.md",
   "docs/2026-10-12-专家方法与Agent流水线使用指南.md",
+  "docs/2026-10-13-已解决条件与剩余机制排序.md",
   "docs/部署与迁移.md",
   "docs/2026-10-11-评估系统使用指南.md",
   "docs/2026-10-11-任务系统实施与验收.md",

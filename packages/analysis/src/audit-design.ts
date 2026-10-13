@@ -97,8 +97,12 @@ export function auditDesignReview(
     kind: "audit-design-review.v1",
     baselineNoFault: checkpointReference(
       request.hours,
-      model.checkpointComputeSeconds,
-      model.checkpointSaveSeconds,
+      request.baseline?.mechanisms?.includes("fast")
+        ? policy["C-FAST"].computeSeconds
+        : model.checkpointComputeSeconds,
+      request.baseline?.mechanisms?.includes("fast")
+        ? policy["C-FAST"].saveSeconds
+        : model.checkpointSaveSeconds,
     ),
     selectedNoFault: checkpointReference(
       request.hours,

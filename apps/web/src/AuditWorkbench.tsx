@@ -10,6 +10,7 @@ import {
   type LossBudgetMethod,
 } from "../../../packages/analysis/src/audit-allocation";
 import AuditAllocationEditor from "./AuditAllocationEditor";
+import AuditBaselineEditor from "./AuditBaselineEditor";
 import {
   changeAuditCards,
   auditSamplingPreset,
@@ -384,9 +385,23 @@ export default function AuditWorkbench({
           参考权重为设计假设，请按产品优先级调整并在流程中确认。
         </p>
         <AuditAllocationEditor request={request} onChange={setRequest} />
+        <AuditBaselineEditor
+          request={request}
+          onChange={setRequest}
+          events={events}
+          mechanisms={mechanisms}
+        />
       </section>
       <fieldset className="mechanism-picker">
         <legend>选择组合措施</legend>
+        <button
+          type="button"
+          onClick={() =>
+            setRequest({ ...request, mechanisms: mechanisms.map((m) => m.id) })
+          }
+        >
+          选择全部可用候选
+        </button>
         <p className="note">
           勾选措施用于组合评估；每个单项也会独立计算，避免把单项收益直接相加。
           默认采用专家六项对照方案；中断检测与亚健康检测增强为额外候选，常规CKPT和人工兜底已包含于基线。
@@ -433,7 +448,11 @@ export default function AuditWorkbench({
             >
               <input
                 type="checkbox"
-                checked={request.mechanisms?.includes(m.id) ?? false}
+                checked={
+                  (request.mechanisms?.includes(m.id) ?? false) ||
+                  !!request.baseline?.mechanisms?.includes(m.id)
+                }
+                disabled={request.baseline?.mechanisms?.includes(m.id)}
                 onChange={(e) =>
                   setRequest({
                     ...request,
@@ -446,6 +465,9 @@ export default function AuditWorkbench({
               <span>
                 <strong>{m.name}</strong>
                 <small>{descriptions[m.id]}</small>
+                {request.baseline?.mechanisms?.includes(m.id) && (
+                  <small>已部署 · 固定基线，不参与新增排序</small>
+                )}
               </span>
             </label>
           ))}
@@ -682,7 +704,11 @@ export default function AuditWorkbench({
         <h3>工程成本（可选）</h3>
         <div className="fields">
           {mechanisms
-            .filter((m) => request.mechanisms?.includes(m.id))
+            .filter(
+              (m) =>
+                request.mechanisms?.includes(m.id) &&
+                !request.baseline?.mechanisms?.includes(m.id),
+            )
             .map((m) => (
               <label key={m.id}>
                 {m.name}成本（统一单位，可留空）
@@ -711,10 +737,15 @@ export default function AuditWorkbench({
         <div>
           <strong>05 / 生成审核证据</strong>
           <p>
-            {request.mechanisms?.length ?? 0} 项组合措施 · {request.trials}{" "}
-            条轨迹 / 场景
+            {
+              (request.mechanisms ?? []).filter(
+                (id) => !request.baseline?.mechanisms?.includes(id),
+              ).length
+            }{" "}
+            项新增候选 · {request.baseline?.mechanisms?.length ?? 0}{" "}
+            项已部署基线措施 · {request.trials} 条轨迹 / 场景
             {request.attribution
-              ? ` · Shapley ${2 ** (request.mechanisms?.length ?? 0)} 个子集 × ${request.attributionTrials} 条轨迹`
+              ? ` · Shapley ${2 ** (request.mechanisms ?? []).filter((id) => !request.baseline?.mechanisms?.includes(id)).length} 个剩余候选子集 × ${request.attributionTrials} 条轨迹`
               : " · 未开启收益分摊"}
           </p>
           <small>轨迹越多，采样区间通常越稳定；它不能替代真实参数校准。</small>

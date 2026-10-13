@@ -463,7 +463,12 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
           design.activeAssessment ?? (design.auditDraft ? "audit" : "workflow"),
         );
       setDefaults(d);
-      const restored = design?.request ?? d.training;
+      // Audit designs can be saved by MCP without the separate legacy-model form.
+      // Fill presentation fields so a valid audit never crashes the workbench.
+      const restored =
+        design?.activeAssessment === "audit"
+          ? { ...d.training, ...design.request }
+          : (design?.request ?? d.training);
       setRequest({ ...restored, factors: restored.factors ?? [] });
       setModelJson(pretty({ ...d.training.model, ...restored.model }));
       setRuns(history);

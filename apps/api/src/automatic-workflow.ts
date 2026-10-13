@@ -120,6 +120,11 @@ export function registerAutomaticWorkflow(
             data: {
               events: resolved.events,
               recoveryOrder: resolved.recoveryOrder,
+              baseline: {
+                mechanisms: resolved.baseline.mechanisms,
+                resolvedEvents: resolved.baseline.resolvedEvents,
+                note: resolved.baseline.note,
+              },
             },
             note: "冻结当前事件、范围与恢复顺序；没有架构文件时使用参考场景，不能视作真实架构已校验。",
           },
@@ -132,6 +137,7 @@ export function registerAutomaticWorkflow(
               lossBudgetWeights: input.lossBudgetWeights,
               method: "discrete-event-simulation",
               attribution: input.attribution,
+              remainingMechanisms: resolved.mechanisms,
             },
             note: "先分配目标；基线比例预算在基线样本完成后、候选措施计算前冻结。Shapley 使用真实组合结果。",
           },

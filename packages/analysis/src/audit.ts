@@ -17,6 +17,11 @@ import { auditReviewChecks } from "./audit-checks";
 import { auditReferenceComparison } from "./audit-reference";
 import { shapleyValues } from "./index";
 import {
+  resolveConditionalBaseline,
+  rankMarginalGains,
+  type ConditionalBaseline,
+} from "./conditional-baseline";
+import {
   auditTarget,
   validateAuditDesign,
   auditDesignReview,
@@ -32,7 +37,7 @@ import {
 const createEngine = createRequire(import.meta.url)(
   "../../solvers/src/vendor/review-engine.cjs",
 );
-export const AUDIT_VERSION = "review-retained-progress.v3";
+export const AUDIT_VERSION = "review-retained-progress.v4";
 export const AUDIT_METRIC = "training.retained-clean-progress";
 const commit = "683afe829313bfdcb249bc593e48df5b29813666";
 const rateBasis = "npu-equivalent-hour";
@@ -75,6 +80,7 @@ export interface AuditRequest {
   verificationTrials?: number;
   scales?: number[];
   mechanisms?: string[];
+  baseline?: ConditionalBaseline;
   attribution?: boolean;
   attributionTrials?: number;
   model?: Record<string, number>;
@@ -333,13 +339,26 @@ export function resolveAudit(request: AuditRequest) {
       policy[id][key] = value;
     }
   }
-  const mechanisms = request.mechanisms ?? getAuditDefaults().mechanisms;
+  const selectedMechanisms =
+    request.mechanisms ?? getAuditDefaults().mechanisms;
   if (
-    !Array.isArray(mechanisms) ||
-    new Set(mechanisms).size !== mechanisms.length ||
-    mechanisms.some((id) => !scenarios.some((s) => s[0] === id))
+    !Array.isArray(selectedMechanisms) ||
+    new Set(selectedMechanisms).size !== selectedMechanisms.length ||
+    selectedMechanisms.some((id) => !scenarios.some((s) => s[0] === id))
   )
     throw new Error("Unknown or repeated mechanism");
+  const originalEvents = applyOverrides(
+    getAuditEvents(),
+    request.eventOverrides,
+  );
+  const baseline = resolveConditionalBaseline(
+    request.baseline,
+    scenarios.map((s) => s[0]),
+    originalEvents,
+  );
+  const mechanisms = selectedMechanisms.filter(
+    (id) => !baseline.mechanisms.includes(id),
+  );
   const recoveryOrder = request.recoveryOrder ?? [
     "replay",
     "elastic",
@@ -393,11 +412,17 @@ export function resolveAudit(request: AuditRequest) {
   )
     throw new Error("Unknown sensitivity comparison mode");
   for (const [id, cost] of Object.entries(request.costs ?? {})) {
-    if (!mechanisms.includes(id))
+    if (!selectedMechanisms.includes(id) && !baseline.mechanisms.includes(id))
       throw new Error("Costs must refer to selected mechanisms");
     numberIn(cost, 0, 1e15, "cost");
   }
-  const events = applyOverrides(getAuditEvents(), request.eventOverrides);
+  const events = baseline.events;
+  if (
+    request.candidateFitOverrides?.some((e) =>
+      baseline.resolvedEvents.some((r) => r.id === e.id),
+    )
+  )
+    throw new Error("已假设消除的故障不能同时设置候选FIT");
   const candidateEvents = applyOverrides(events, request.candidateFitOverrides);
   // Preserve the reference's arithmetic at checkpoint boundaries only while event FITs are unchanged.
   // Every calibrated catalog, and historical requests without this option, still derives rates from its actual FIT.
@@ -472,6 +497,7 @@ export function resolveAudit(request: AuditRequest) {
     sampleRuns,
     candidateReferenceRates: usesReferenceRates(candidateEvents),
     submodelPlan,
+    baseline,
   };
 }
 export function audit(
@@ -491,6 +517,7 @@ export function audit(
       sensitivityPlan,
       sensitivityCards,
       sensitivityTrials,
+      baseline,
     } = resolved;
   const engine = createEngine(events, policy, model);
   const candidateEngine = createEngine(candidateEvents, policy, {
@@ -510,6 +537,10 @@ export function audit(
     seedOffset = 0,
     seedBase = request.seed,
   ) => {
+    opts = {
+      ...Object.fromEntries(baseline.mechanisms.map((id) => [id, true])),
+      ...opts,
+    };
     const values: number[] = [],
       ledger: Record<string, number> = {},
       perEvent: Record<string, any> = {};
@@ -557,7 +588,11 @@ export function audit(
   const lossAllocations: ReturnType<typeof lossAllocation>[] = [];
   const definitions = [
     { id: "base", name: "确认基线", opts: {} },
-    ...scenarios.map(([id, name]) => ({ id, name, opts: { [id]: true } })),
+    ...scenarios.map(([id, name]) => ({
+      id,
+      name: baseline.mechanisms.includes(id) ? name + "（已在基线）" : name,
+      opts: { [id]: true },
+    })),
     {
       id: "sdcStep",
       name: "静默检测＋step 恢复",
@@ -776,7 +811,10 @@ export function audit(
       : rows
           .filter(
             (r) =>
-              r.cards === request.cards && ["base", "combined"].includes(r.id),
+              r.cards === request.cards &&
+              (mechanisms.length ? ["base", "combined"] : ["base"]).includes(
+                r.id,
+              ),
           )
           .map((r) => ({
             mechanisms: r.id === "base" ? [] : mechanisms,
@@ -842,6 +880,20 @@ export function audit(
     rule: "优先区间下限达到目标的候选；候选成本均已提供时优先较低成本，否则按均值排序。候选仅限当前已选机制的子集，不代表全局最优；载入后需重新评估其他规模。",
   };
   const totalFit = events.reduce((s, e) => s + e.fit, 0);
+  const rankings = scales.map((cards) => ({
+    cards,
+    single: rankMarginalGains(
+      mechanisms.map((id) => {
+        const row = rows.find((r) => r.cards === cards && r.id === id)!;
+        return { id, name: row.name, statistics: row.delta };
+      }),
+    ),
+    shapley: attribution.some((a) => a.cards === cards)
+      ? rankMarginalGains(
+          attribution.find((a) => a.cards === cards)!.contributions,
+        )
+      : null,
+  }));
   const referenceEvents = getAuditEvents();
   const metadata = events.map((event) => ({
     ...event,
@@ -860,12 +912,24 @@ export function audit(
     request: structuredClone(request),
     referenceComparison: auditReferenceComparison(request, resolved),
     rows,
+    baseline: {
+      active: baseline.active,
+      mechanisms: baseline.mechanisms,
+      resolvedEvents: baseline.resolvedEvents,
+      note: baseline.note,
+      interpretation:
+        "已部署机制在每个方案中固定启用；选定已消除事件的FIT仅在本次假设中置零，不改变故障库。新增成本不含基线已部署成本。",
+    },
+    rankings,
     allocationPlan: {
       submodel: resolved.submodelPlan,
       lossBudgets: lossAllocations,
     },
     designReview: auditDesignReview(
-      { ...request, mechanisms },
+      {
+        ...request,
+        mechanisms: [...new Set([...baseline.mechanisms, ...mechanisms])],
+      },
       rows,
       model,
       policy,
@@ -898,7 +962,15 @@ export function audit(
       sourceCommit: commit,
       sourcePath: "catalogs/review-2026-10-09",
       inputHash: createHash("sha256")
-        .update(JSON.stringify({ events, model, policy, recoveryOrder }))
+        .update(
+          JSON.stringify({
+            events,
+            model,
+            policy,
+            recoveryOrder,
+            ...(baseline.active ? { baseline } : {}),
+          }),
+        )
         .digest("hex"),
       classFit: engine.typeTotals,
     },

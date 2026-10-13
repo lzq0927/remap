@@ -1,4 +1,5 @@
 import { useState } from "react";
+import AuditRanking from "./AuditRanking";
 import {
   auditSelectedMechanisms,
   auditSamplingDescription,
@@ -34,6 +35,7 @@ export default function AuditResult({
   return (
     <>
       <h3>事件与机制收益审核 · 保留干净检查点</h3>
+      <AuditRanking result={r} cards={cards} />
       {r.allocationPlan && (
         <details open aria-label="本次目标分配产物">
           <summary>本次目标分配 · 冻结于措施评估前</summary>

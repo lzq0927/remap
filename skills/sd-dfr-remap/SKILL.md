@@ -34,6 +34,16 @@ description: Guide reliability target allocation, architecture and failure model
 
 用户选择交互时，使用 workflow_start({body:{inputRevision:<design.revision>,mode:'assisted'}})，逐步提问、读取文件、形成结构化草稿和阶段产物，保存 awaiting-review 后等待工作台确认。已有执行则继续当前执行；不要自动覆盖它。
 
+在调用全自动流水线前，若本次需求包含“已解决某故障/已部署措施”等新增条件，必须按下节澄清含义并保存到当前baseline；不能直接计算旧设计并声称已按新条件排序。
+
+## 已解决条件与剩余机制排序
+
+用户提出“静默故障已解决后，其余措施怎么排序”等条件分析时，先澄清“已解决”是完全消除特定故障，还是已经部署检测/恢复机制；不能把已部署检测等同于故障率为零。读取并保留当前设计，在 audit 输入的 `baseline` 保存用户自由选择的条件：`mechanisms` 为已部署机制ID数组，`resolvedEventIds` 为本次假设完全消除的事件ID数组，`note` 为依据。两类条件均支持任意多选，不只支持静默场景。部分改善使用 eventOverrides 的实际剩余FIT或机制覆盖/成功率，不冒充完全消除。
+
+`baseline.mechanisms` 在所有方案、剩余候选的每个Shapley子集和独立种子复核中固定启用，故障率仍保留；`baseline.resolvedEventIds` 只在本次条件假设里将指定事件FIT置零，不写回故障库。`mechanisms` 为待评估候选，已部署项自动从剩余排序和新增成本中排除。推荐只改变新增候选，保留baseline。改变条件后保存新设计、重新评估；不能重新排列旧贡献值替代条件求解。
+
+结果 `rankings` 按规模给出 `single`（A(B+i)−A(B)）和 `shapley`（固定B下剩余候选的组合分摊，未计算时为null），同时输出95%区间和冻结基线。基线已解决收益不再领取。解释两种排序差异，区间重叠时不宣称名次有显著性，保留负收益。其他产品适配器需按相同协议固定对应模型条件并正向求解，不能直接将训练引擎结果用于其他产品。
+
 ## 指标分配先于措施与 Shapley
 
 正确有效产出使用 lossBudgetMethod：equal 均分六项互斥损失预算；baseline-proportional 先计算本次基线、按各规模损失比例冻结预算，再计算候选措施；custom 使用 lossBudgetWeights（六项合计 1）。未指定 lossBudgetMethod 的旧任务保留手工权重语义。
