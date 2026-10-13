@@ -1,5 +1,6 @@
 import type { Issue } from "../../contracts/src/types";
 import { DomainError } from "../../contracts/src/errors";
+import { validateModel } from "../../modeling/src/validate";
 export function fitToRate(fit: number): number {
   if (!Number.isFinite(fit) || fit < 0)
     throw new DomainError("SCHEMA_INVALID", "FIT 必须是非负数");
@@ -52,6 +53,8 @@ export function validateCatalog(
   const issues: Issue[] = [];
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return [{ code: "SCHEMA_INVALID", message: "条目内容必须是对象" }];
+  if (kind === "scenario-template" && payload.engineeringModel)
+    return validateModel(payload.engineeringModel);
   const walk = (obj: any, path = "payload") => {
     if (!obj || typeof obj !== "object") return;
     for (const [key, val] of Object.entries(obj)) {

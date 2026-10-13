@@ -25,6 +25,30 @@ test("official MCP client negotiates tools, creates assets, invokes solver, canc
     expect(list.tools.some((t) => t.name === "analysis_solve")).toBe(true);
     expect(list.tools.some((t) => t.name === "workflow_automatic")).toBe(true);
     expect(new Set(list.tools.map((t) => t.name)).size).toBe(list.tools.length);
+    const engineering = (
+      await app.inject({
+        method: "POST",
+        url: `/api/tasks/${task.id}/engineering/models`,
+        payload: { template: "ai-cluster" },
+      })
+    ).json();
+    const proposal: any = await client.callTool({
+      name: "engineering_propose",
+      arguments: {
+        id: engineering.id,
+        body: {
+          expectedRevision: 1,
+          model: {
+            ...engineering.model,
+            sources: engineering.model.sources.map((s: any) => ({ id: s.id })),
+          },
+          reason: "MCP engineering source-reference conformance",
+        },
+      },
+    });
+    expect(proposal.isError).toBe(false);
+    expect(proposal.structuredContent.reviewRequired).toBe(true);
+    expect(proposal.structuredContent.candidate).toBeUndefined();
     const asset: any = await client.callTool({
       name: "catalog_create",
       arguments: {

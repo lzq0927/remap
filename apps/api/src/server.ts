@@ -47,6 +47,7 @@ import type { FastifyInstance } from "fastify";
 import { currentWorkflow, registerWorkflowRoutes } from "./workflow-routes";
 import { registerAgentRoutes } from "./agent-routes";
 import { registerCatalogRoutes } from "./catalog-routes";
+import { registerModelingRoutes } from "./modeling-routes";
 import { registerPortableRoutes } from "./portable-routes";
 
 export interface BuildAppOptions {
@@ -724,6 +725,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   registerWorkflowRoutes(app, tasks, options.automaticStageDisplayMs);
   registerAgentRoutes(app, tasks, agentIntegration);
   registerCatalogRoutes(app, tasks);
+  registerModelingRoutes(app, tasks);
   registerPortableRoutes(app, tasks);
   await options.registerTaskRoutes?.(app, tasks);
   const dist = resolve("dist/web");

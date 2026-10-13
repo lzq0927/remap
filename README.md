@@ -14,6 +14,8 @@ Reliability Modeling and Analysis Platform — 系统可靠性建模评估验证
 
 ## 安装与启动
 
+新增「系统建模」工程闭环：专家材料 → Agent 提案 → 人工审阅 → 架构/部署/行为设计 → RBD/FTA/TLC 真实分析验证 → 证据、决策与任务资产复用。详见 [工程闭环使用与内网工具适配](docs/2026-10-13-Agent工程闭环使用与适配.md) 和 [实施计划](docs/superpowers/plans/2026-10-13-agent-engineering-loop.md)。
+
 Linux 云端开发可按 [云端开发指南](docs/云端开发指南.md) 初始化依赖、浏览器与本地工具状态，并执行验收。
 
 公司内网部署与持续开发请先阅读 [内网开发指南](docs/内网开发指南.md)。通用核心版本单向导入内网，企业代码、模型配置和真实资产留在内网；实现范围和验收见 [实施计划](docs/superpowers/plans/2026-10-11-internal-development-plan.md)。
@@ -55,7 +57,7 @@ pnpm agent
 
 在工作台创建具名主会话或专题会话，列表仅显示当前任务绑定的会话。点击「同步当前设计」只写入摘要；完整设计由任务 MCP 工具读取。在官方输入框运行 `/sd-dfr-remap`。模型、API Key、自定义 Base URL 在官方设置中配置，工作台不会代替官方提供商选择。
 
-非结构化提取模型使用 `.env` 中的 `MODEL_BASE_URL`、`MODEL_API_KEY` 和 `MODEL_ID`，与原生 OpenCode 提供商分开。doctor 不发起模型请求；指定 GLM 的真实对话、流式和工具调用尚未验收。
+非结构化提取模型使用 `.env` 中的 `MODEL_BASE_URL`、`MODEL_API_KEY` 和 `MODEL_ID`，与原生 OpenCode 提供商分开。doctor 不发起模型请求。工程闭环已用原生 OpenCode + GLM-5.3 实际读取合成材料、调用 MCP 并提出模型草案；其它模型与真实企业资料需要分别验收。
 
 ## 资产与数值边界
 

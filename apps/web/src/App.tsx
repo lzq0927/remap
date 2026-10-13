@@ -3,7 +3,15 @@ import {
   runAssessmentModel,
 } from "../../../packages/contracts/src/assessment-model";
 import { draftFromAuditRequest } from "../../../packages/contracts/src/audit-draft";
-import { useEffect, useState, useRef, useMemo, Fragment } from "react";
+import {
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  Fragment,
+  lazy,
+  Suspense,
+} from "react";
 import {
   Activity,
   Boxes,
@@ -49,6 +57,9 @@ import AuditWorkbench, {
   type AuditDraft,
 } from "./AuditWorkbench";
 import WorkspaceViewTabs, { useViewPreference } from "./WorkspaceViewTabs";
+const EngineeringWorkbench = lazy(
+  () => import("./modeling/EngineeringWorkbench"),
+);
 const pct = (n: number | undefined) =>
   n === undefined ? "—" : (n * 100).toFixed(3) + "%";
 const states: Record<string, string> = {
@@ -72,6 +83,7 @@ const kinds = [
 ];
 const navigation = [
   ["workbench", "可靠性设计与评估", Activity],
+  ["engineering", "系统建模", Boxes],
   ["inputs", "输入与来源", FileInput],
   ["catalogs", "资产库", Database],
   ["tools", "方法与工具", Boxes],
@@ -245,7 +257,12 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
   );
   const { api, url } = useTaskApi();
   const [lastComplete, setLastComplete] = useState<any>();
-  const [page, setPage] = useState("workbench"),
+  const [page, setPage] = useState(() =>
+      new URLSearchParams(window.location.search).get("module") ===
+      "engineering"
+        ? "engineering"
+        : "workbench",
+    ),
     [defaults, setDefaults] = useState<any>(),
     [request, setRequest] = useState<any>(),
     [modelJson, setModelJson] = useState(""),
@@ -258,6 +275,11 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
   const [auditDraft, setAuditDraft] = useState<AuditDraft>();
   const [designMode, setDesignMode] = useState("audit");
   const [agentVisible, setAgentVisible] = useState(false);
+  const [engineeringOpened, setEngineeringOpened] = useState(false);
+  const [engineeringDirty, setEngineeringDirty] = useState(false);
+  useEffect(() => {
+    if (page === "engineering") setEngineeringOpened(true);
+  }, [page]);
   const [agentOpened, setAgentOpened] = useState(false);
   useEffect(() => {
     if (agentVisible) setAgentOpened(true);
@@ -1020,6 +1042,11 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
           audit={designMode === "audit"}
           runId={run?.id}
           onHome={() => {
+            if (
+              engineeringDirty &&
+              !window.confirm("系统模型还有未保存修改，是否离开任务？")
+            )
+              return;
             void attempt(async () => {
               try {
                 await flushDesign();
@@ -1049,7 +1076,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
             </button>
           </div>
         </header>
-        <div className="design-save-status">
+        <div className="design-save-status" hidden={page === "engineering"}>
           {scenario === "training" && designMode === "audit"
             ? savedAt
               ? `审核草稿已保存 · ${new Date(savedAt).toLocaleTimeString()}`
@@ -2568,6 +2595,19 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
               的可用模型以官方界面为准；未配置提取模型时，非结构化自动提取不可用。
             </p>
           </section>
+        )}
+        {engineeringOpened && (
+          <div hidden={page !== "engineering"}>
+            <Suspense fallback={<p>正在载入系统建模…</p>}>
+              <EngineeringWorkbench
+                onDirty={setEngineeringDirty}
+                onAgentSession={(id) => {
+                  setSession(id);
+                  setAgentVisible(true);
+                }}
+              />
+            </Suspense>
+          </div>
         )}
         <footer>
           ReMAP / 可靠性建模评估验证{" "}

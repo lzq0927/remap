@@ -115,6 +115,49 @@ export function registerAgentRoutes(
     assertSessionBound(tasks, req.params.taskId, req.params.id);
     const { task, store } = tasks.resolve(req.params.taskId),
       design = store.documents("design").at(-1);
+    if (req.body?.view === "engineering") {
+      const models = store.documents("engineering-model");
+      const selected = req.body.modelId
+        ? models.filter((m) => m.id === req.body.modelId)
+        : models;
+      if (!selected.length)
+        throw new DomainError("INPUT_UNCONFIRMED", "请先保存工程模型");
+      const summary = {
+        taskId: task.id,
+        taskName: task.name,
+        view: "engineering",
+        models: selected.map((m) => ({
+          id: m.id,
+          name: m.model.name,
+          revision: m.revision,
+          semanticHash: m.semanticHash,
+          sources: m.model.sources.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            scope: s.scope,
+          })),
+          cases: m.model.cases.map((c: any) => ({
+            id: c.id,
+            method: c.method,
+            propertyRefs: c.propertyRefs,
+          })),
+        })),
+        instruction:
+          "使用 engineering_model_get 读取完整模型、engineering_materials 读取材料；engineering_propose 提出草案，不能自行确认；保留性质和来源。只运行当前用户已保存版本。",
+      };
+      await agent(task.id).addContext(req.params.id, summary);
+      store.putDocument("agent-context", {
+        sessionId: req.params.id,
+        view: "engineering",
+        models: summary.models,
+        syncedAt: new Date().toISOString(),
+      });
+      return {
+        saved: true,
+        sessionId: req.params.id,
+        inputRevision: selected[0].revision,
+      };
+    }
     if (!design) throw new DomainError("INPUT_UNCONFIRMED", "请先保存当前设计");
     const assessment = design.assessment;
     const input =
@@ -128,6 +171,7 @@ export function registerAgentRoutes(
         : 0;
     const view = [
       "workbench",
+      "engineering",
       "inputs",
       "catalogs",
       "tools",
@@ -185,7 +229,7 @@ export function registerAgentRoutes(
             req.body.text.slice(13).trim(),
             signal,
           )
-        : adapter.sendMessage(req.params.id, req.body.text);
+        : adapter.sendMessage(req.params.id, req.body.text, signal);
     if (!req.body.dispatch) return send();
     const key = req.params.taskId + "/" + req.params.id;
     if (dispatching.has(key))
