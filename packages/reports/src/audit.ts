@@ -1,4 +1,5 @@
 import { auditSummary } from "./audit-summary";
+import { auditObjectComparison } from "./audit-object-diagram";
 import {
   auditContributionView,
   auditContributionSummary,
@@ -65,6 +66,7 @@ export interface AuditSection {
     | "overview"
     | "sensitivity"
     | "method"
+    | "objects"
     | "contribution"
     | "contribution-controls";
   contributionCards?: number;
@@ -195,11 +197,11 @@ export function auditSections(r: any): AuditSection[] {
         {
           heads: [
             "单作业规模",
-            "正确有效产出目标",
+            "可用度目标",
             "中断 MTBF / h",
             "基线运行可用度",
             "组合运行可用度",
-            "组合正确有效产出",
+            "组合可用度",
             "目标判读",
           ],
           rows: scales.map((cards) => {
@@ -221,7 +223,7 @@ export function auditSections(r: any): AuditSection[] {
             [
               "统计对象",
               `单一作业、全部卡参加，${num(hours)} 小时有限窗口`,
-              "多规模独立比较；运行可用度与正确有效产出分别报告",
+              "多规模独立比较；运行可用度与可用度分别报告",
             ],
             [
               "保存策略",
@@ -273,13 +275,13 @@ export function auditSections(r: any): AuditSection[] {
       paragraphs: [
         "先明确整体指标，再分配子模型目标，落实降 FIT 或检测/恢复等工程措施，正向计算具体场景，最后做组合收益与权衡。",
         "Availability：独立稳态串联 A=∏Aᵢ，在 −ln(A) 预算上分配。Equal：共同任务窗口下均分 −ln(R)/T 故障率预算。ARINC：按基线故障率等比缩放。",
-        "AGREE：λᵢ=nᵢ(−ln R)/(N Eᵢ tᵢ)，使 ∏Rᵢ^Eᵢ=R；属于加权任务可靠度近似，不能将其普通乘积直接当作总体目标。训练正确产出需分配互斥损失预算后正向验证，不能直接串联相乘。",
+        "AGREE：λᵢ=nᵢ(−ln R)/(N Eᵢ tᵢ)，使 ∏Rᵢ^Eᵢ=R；属于加权任务可靠度近似，不能将其普通乘积直接当作总体目标。训练可用度需分配互斥损失预算后正向验证，不能直接串联相乘。",
         "λᵢ(N)=N×FITᵢ/10⁹；机制改变事件后果，硬件改进才通过明确的新旧 FIT 改变事件发生率。",
         `物理恢复链：检测 → ${r.config.recoveryOrder.join(" → ")} → 全局 CKPT → 人工；只走启用且适用节点，失败尝试耗时累加。`,
         "离散事件仿真处理固定发现时延、周期检查点、污染合并与局部容量损失。存在先后顺序不等于 CTMC；恒定转移率、指数停留时间成立时才适用 CTMC，其他持续时间可用半马尔科夫或仿真。",
         "Shapley 对各组合的边际增益取加权平均，不分配顶层设计指标，也不改变物理恢复顺序。统计独立不自动意味着收益可加；若价值函数确实可加，直接比较单项即可。",
         "窗口小时 = 正确进度 + 全局停机 + 保存阻塞 + 降速 + 局部容量损失 + 已回滚进度 + 期末污染；重算耗时已在后续时间中体现，不重复扣账。",
-        "A运行 = 1 − 全局停机 / 窗口；A有效 = 期末保留的正确进度 / 窗口。当前目标约束 A有效。中断 MTBF = 10⁹ /（卡数 × 中断 FIT 总量），与全类型事件 MTBF 不同；MTBF 本身不能推出正确有效产出目标。",
+        "A运行 = 1 − 全局停机 / 窗口；A有效 = 期末保留的正确进度 / 窗口。当前目标约束 A有效。中断 MTBF = 10⁹ /（卡数 × 中断 FIT 总量），与全类型事件 MTBF 不同；MTBF 本身不能推出可用度目标。",
         `基线无故障保存占比约 ${pct(p.checkpointSaveSeconds / (p.checkpointComputeSeconds + p.checkpointSaveSeconds))}，普通中断回滚距离参考约 ${(p.checkpointComputeSeconds / 120).toFixed(3)} 分钟；仍须通过有限窗口仿真核算。DP 按可用域数 / ${r.config.policy["R-ELASTIC"].domains} 折算容量，依赖其余域可继续产生可保留进度，未建模梯度同步阻塞、重分片、收敛、备用容量耗尽和跨域共因。`,
       ],
     },
@@ -295,8 +297,8 @@ export function auditSections(r: any): AuditSection[] {
           heads: [
             "规模",
             "基线运行可用度",
-            "基线正确产出 / 区间",
-            "组合正确产出 / 区间",
+            "基线可用度 / 区间",
+            "组合可用度 / 区间",
             "基线停机 h",
             "保存 h",
             "降速 h",
@@ -327,7 +329,7 @@ export function auditSections(r: any): AuditSection[] {
         {
           heads: [
             "所选规模方案",
-            "正确有效产出",
+            "可用度",
             "相比基线提升",
             "提升 95% 区间",
             "新增正确计算 h",
@@ -472,7 +474,7 @@ export function auditSections(r: any): AuditSection[] {
     title: "06 / 组合贡献分摊",
     visual: "contribution-controls",
     paragraphs: [
-      "规模默认跟随本次任务。贡献采用本节Shapley样本的正确有效产出，运行可用度单独报告。",
+      "规模默认跟随本次任务。贡献采用本节Shapley样本的可用度，运行可用度单独报告。",
     ],
   });
   if (r.baseline?.active)
@@ -561,7 +563,7 @@ export function auditSections(r: any): AuditSection[] {
           "扫描规模 / 卡",
           "比较情景",
           "取值",
-          "正确产出",
+          "可用度",
           "95% 均值区间",
           "相对本组当前参数提升",
           "提升区间",
@@ -676,6 +678,9 @@ export function auditSections(r: any): AuditSection[] {
           ? [
               submodel.scope,
               `主方法 ${submodel.selected.method}，指标 ${submodel.selected.metricId}；${submodel.selected.recomposition.formula}。当前参数和独立子模型目标见输入快照；这些预算须由相应子模型再验证。`,
+              submodel.rateBasis === "npu-equivalent-hour"
+                ? `对象目标 FIT 已按 ${num(submodel.cards, 0)} 卡换算为每十亿 NPU 等效运行小时；Availability 需提供二态平均修复时间才能推导 FIT。载入硬件目标时按上限处理，不调高已满足预算的对象。`
+                : "自定义子系统目标 FIT 按十亿子系统运行小时计算，不能直接替换 NPU 等效事件。",
               ...submodel.selected.assumptions,
               ...submodel.selected.warnings,
             ]
@@ -701,7 +706,9 @@ export function auditSections(r: any): AuditSection[] {
                   "子系统",
                   "当前值",
                   "子目标",
-                  "目标 FIT",
+                  submodel.rateBasis === "npu-equivalent-hour"
+                    ? "目标 FIT / NPU 等效小时"
+                    : "目标 FIT / 子系统小时",
                   "缺口",
                   "合成值",
                   "合成残差",
@@ -712,7 +719,13 @@ export function auditSections(r: any): AuditSection[] {
                     item.name,
                     item.current === null ? "未输入" : pct(item.current),
                     pct(item.target),
-                    num(item.targetFit),
+                    num(
+                      submodel.rateBasis === "npu-equivalent-hour"
+                        ? submodel.objectFitTargets
+                            ?.find((p: any) => p.method === result.method)
+                            ?.items.find((i: any) => i.id === item.id)?.fit
+                        : item.targetFit,
+                    ),
                     item.gap === null ? "待校准" : pp(item.gap),
                     pct(result.recomposition.achieved),
                     num(result.recomposition.residual, 12),
@@ -779,5 +792,41 @@ export function auditSections(r: any): AuditSection[] {
       ],
     });
   }
+  sections.splice(2, 0, {
+    title: "可靠性框图与对象改善",
+    visual: "objects",
+    paragraphs: [
+      `${num(selected, 0)} 卡：比较确认基线与本次所选组合。对象中的中断、亚健康、静默故障率使用 NPU 等效小时单位；外网较粗的对象可通过事件数据更新校准。`,
+      "框图连线表示故障影响传递，不假设所有对象按独立串联系统相乘。检测恢复改善后果，源 FIT 仅由明确硬件目标改变；达标结论仍使用原有仿真。公共保存开销单列，未重复分配到对象。",
+    ],
+    tables: [
+      {
+        heads: [
+          "对象",
+          "中断 FIT",
+          "亚健康 FIT",
+          "静默 FIT",
+          "基线损失 h",
+          "组合损失 h",
+          "减少损失 h",
+        ],
+        rows: auditObjectComparison(r.events, brief.base, brief.combined).map(
+          (o) => [
+            o.name,
+            num(o.types.hard),
+            num(o.types.slow),
+            num(o.types.sdc),
+            num(o.leftLoss),
+            num(o.rightLoss),
+            num(
+              o.leftLoss === null || o.rightLoss === null
+                ? null
+                : o.leftLoss - o.rightLoss,
+            ),
+          ],
+        ),
+      },
+    ],
+  });
   return sections;
 }

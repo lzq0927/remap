@@ -28,11 +28,13 @@ import {
 } from "./audit-design";
 import {
   auditSubmodelPlan,
+  auditHardwareItems,
   lossAllocation,
   equalLossWeights,
   type AuditSubmodelAllocation,
   type LossBudgetMethod,
 } from "./audit-allocation";
+import { mechanismEventIds } from "../../contracts/src/audit-objects";
 
 const createEngine = createRequire(import.meta.url)(
   "../../solvers/src/vendor/review-engine.cjs",
@@ -417,6 +419,22 @@ export function resolveAudit(request: AuditRequest) {
     numberIn(cost, 0, 1e15, "cost");
   }
   const events = baseline.events;
+  if (request.submodelAllocation?.source === "event-catalog") {
+    const allocation = request.submodelAllocation;
+    const expected = auditHardwareItems(events, request.cards);
+    if (
+      allocation.cards !== request.cards ||
+      allocation.items.length !== expected.length ||
+      expected.some(
+        (item) =>
+          Math.abs(
+            (allocation.items.find((i) => i.id === item.id)?.baselineRate ??
+              -1) - item.baselineRate,
+          ) > 1e-14,
+      )
+    )
+      throw new Error("故障库或规模已改变，请在可用度分配中刷新对象并复核目标");
+  }
   if (
     request.candidateFitOverrides?.some((e) =>
       baseline.resolvedEvents.some((r) => r.id === e.id),
@@ -943,14 +961,7 @@ export function audit(
     mechanisms: sourceMechanisms.mechanisms.map((m) => ({
       ...m,
       parameters: policy[m.id] ?? null,
-      eventIds: events
-        .filter(
-          (e) =>
-            m.scope === "all" ||
-            e.type === m.scope ||
-            (e.type === "hard" && (e as any)[m.scope] === true),
-        )
-        .map((e) => e.id),
+      eventIds: mechanismEventIds(events, m.scope),
     })),
     candidateEvents: request.candidateFitOverrides?.length
       ? candidateEvents

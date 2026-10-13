@@ -33,7 +33,7 @@ for (const viewport of [
       const target = page.locator(
         mode === "audit" ? "#audit-evidence" : "#design-system",
       );
-      if (mode === "audit") await expect(target).toHaveAttribute("open", "");
+      await expect(target).toBeVisible();
       await expect
         .poll(async () => {
           const bar = await dock.boundingBox(),
@@ -71,7 +71,7 @@ for (const viewport of [
       ).toBeDisabled();
       await navigation.getByRole("button").nth(3).click();
       if (mode === "audit")
-        await expect(page.locator("#audit-parameters")).toHaveAttribute(
+        await expect(page.locator("#audit-parameters")).not.toHaveAttribute(
           "open",
           "",
         );

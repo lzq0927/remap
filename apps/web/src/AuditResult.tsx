@@ -1,13 +1,10 @@
 import { useId, useState } from "react";
 import { useTaskApi } from "./api";
 import WorkspaceViewTabs, { useViewPreference } from "./WorkspaceViewTabs";
-import AuditRanking from "./AuditRanking";
+import AuditRunContext from "./AuditRunContext";
 import AuditContribution from "./AuditContribution";
+import AuditReliabilityDiagram from "./AuditReliabilityDiagram";
 import { gainExplanation } from "../../../packages/reports/src/audit-contributions";
-import {
-  auditSelectedMechanisms,
-  auditSamplingDescription,
-} from "../../../packages/reports/src/audit-context";
 import {
   auditSummary,
   auditScaleSummary,
@@ -54,6 +51,7 @@ export default function AuditResult({
         options={[
           { id: "overview", label: "结论概览" },
           { id: "gains", label: "方案收益" },
+          { id: "diagram", label: "可靠性框图" },
           { id: "contributions", label: "贡献分摊" },
           { id: "risks", label: "风险与敏感性" },
           { id: "all", label: "全部分析" },
@@ -65,104 +63,7 @@ export default function AuditResult({
         aria-labelledby={`${viewId}-${view}`}
         tabIndex={0}
       >
-        <details className="audit-run-context" open={view === "all"}>
-          <summary>本次输入、组合与计算口径</summary>
-          {r.rankings && (
-            <details>
-              <summary>冻结条件基线与剩余机制排序</summary>
-              <AuditRanking result={r} cards={cards} />
-            </details>
-          )}
-          {r.allocationPlan && (
-            <details open={view === "all"} aria-label="本次目标分配产物">
-              <summary>本次目标分配 · 冻结于措施评估前</summary>
-              <p className="note">
-                {
-                  r.allocationPlan.lossBudgets.find(
-                    (x: any) => x.cards === cards,
-                  )?.basis
-                }
-                。损失预算与实际缺口见下表；分配不改变故障 FIT。
-              </p>
-              {r.allocationPlan.submodel && (
-                <>
-                  <p>{r.allocationPlan.submodel.scope}</p>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>方法</th>
-                          <th>子系统</th>
-                          <th>子目标</th>
-                          <th>目标 FIT</th>
-                          <th>回合成</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {r.allocationPlan.submodel.comparisons.flatMap(
-                          (result: any) =>
-                            result.items.map((item: any) => (
-                              <tr key={result.method + item.id}>
-                                <td>{result.method}</td>
-                                <td>{item.name}</td>
-                                <td>{pct(item.target)}</td>
-                                <td>
-                                  {item.targetFit?.toFixed(3) ??
-                                    "需恢复模型验证"}
-                                </td>
-                                <td>{pct(result.recomposition.achieved)}</td>
-                              </tr>
-                            )),
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </details>
-          )}
-          <p className="audit-context" role="note">
-            {auditSamplingDescription(r)}
-          </p>
-          <details className="audit-combination" open={view === "all"}>
-            <summary>
-              本次实际启用组合 · {auditSelectedMechanisms(r).length}项
-            </summary>
-            <p className="note">
-              此处为冻结运行输入；下方推荐候选不会自动替换本次组合。常规CKPT与人工兜底已在基线中，六项对照方案不等于最优部署。
-            </p>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>措施</th>
-                    <th>名称</th>
-                    <th>本次参数</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditSelectedMechanisms(r).map((m) => (
-                    <tr key={m.id}>
-                      <td>{m.code}</td>
-                      <td>{m.name}</td>
-                      <td>{m.parameters}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {r.referenceComparison?.differences.length > 0 && (
-              <details>
-                <summary>与专家原始配置的差异</summary>
-                <ul>
-                  {r.referenceComparison.differences.map((d: string) => (
-                    <li key={d}>{d}</li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </details>
-        </details>
+        <AuditRunContext result={r} cards={cards} open={view === "all"} />
         {overview.total > 1 && (
           <p className="note">
             本次核对 {overview.total} 个规模：采样支持 {overview.supported}{" "}
@@ -184,6 +85,9 @@ export default function AuditResult({
             ))}
           </select>
         </label>
+        <div className="workspace-result-panel" hidden={!visible("diagram")}>
+          <AuditReliabilityDiagram events={r.events} result={r} cards={cards} />
+        </div>
         <div className="workspace-result-panel" hidden={!visible("overview")}>
           <div className={"audit-verdict " + s.status}>
             <strong>{s.statusLabel}</strong>
@@ -191,12 +95,12 @@ export default function AuditResult({
           </div>
           <div className="audit-metrics">
             <div>
-              <span>基线正确产出</span>
+              <span>基线可用度</span>
               <strong>{pct(s.base.statistics.mean)}</strong>
               <small>当前故障与恢复假设</small>
             </div>
             <div>
-              <span>组合正确产出</span>
+              <span>组合可用度</span>
               <strong>{pct(s.combined.statistics.mean)}</strong>
               <small>
                 95% 区间 {pct(s.combined.statistics.ciLow)} ～{" "}
@@ -239,7 +143,7 @@ export default function AuditResult({
                 {Math.abs(budget.excessHours).toFixed(3)} 小时。
               </p>
               <p className="note">
-                无故障参考产出：基线 {pct(r.designReview.baselineNoFault)}
+                无故障参考可用度：基线 {pct(r.designReview.baselineNoFault)}
                 ，所选检查点策略 {pct(r.designReview.selectedNoFault)}
                 。这是保存开销参考，不是任意故障与机制下的可行性上界。
               </p>
@@ -415,7 +319,7 @@ export default function AuditResult({
               <thead>
                 <tr>
                   <th>方案</th>
-                  <th>正确产出</th>
+                  <th>可用度</th>
                   <th>均值 95% 区间</th>
                   <th>相比基线</th>
                   <th>新增正确小时</th>

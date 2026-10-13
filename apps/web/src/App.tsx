@@ -610,7 +610,19 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     setBusy(true);
     await attempt(async () => {
       const saved = await flushDesign();
-      const state = await api("/workflow");
+      let state = await api("/workflow");
+      if (
+        op === "audit" &&
+        state.executionId &&
+        (state.stale || state.status !== "active")
+      ) {
+        state = await api("/workflow/start", {
+          inputRevision: saved.revision,
+          mode: "manual",
+          resume: true,
+        });
+        setWorkflow(state);
+      }
       const ready =
         state.status === "active" &&
         !state.stale &&
@@ -694,9 +706,9 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     setAuditEpoch((n) => n + 1);
     setDesignMode("audit");
     setPage("workbench");
-    setStage(0);
+    setStage(3);
     setNotice(
-      "建议组合已载入草稿。输入版本已改变，请重新确认目标、预算、参数并评估；旧结果保留供比较。",
+      "建议组合已载入可靠性措施。未变化的前序确认可沿用，确认措施后重新计算；旧结果保留供比较。",
     );
   }
   const activeSteps =
@@ -704,26 +716,26 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       ? workflowSteps.map((step, i) => ({
           ...step,
           name: [
-            "目标与口径",
-            "故障与证据",
-            "预算与措施",
-            "参数核对",
+            "可用度目标",
+            "故障模式",
+            "可用度分配",
+            "可靠性措施",
             "计算与权衡",
             "验证与交付",
           ][i],
           hint: [
-            "明确各规模目标与正确进度指标，目标由产品需求给定。",
-            "核对事件来源、FIT 基准与机制适用范围。",
-            "确认六项互斥损失预算，选择降 FIT 与检测恢复措施。",
-            "核对恢复顺序、采样数、来源与独立复核设置。",
-            "执行正式审核，核对缺口、组合收益与候选方案。",
+            "明确各规模可用度目标与评估窗口，沿用专家计算口径。",
+            "按对象与故障类型核对 FIT、来源及影响范围。",
+            "分配硬件对象目标与损失预算，明确方法和约束。",
+            "选择硬件降 FIT、检测与恢复措施，核对能力和成本。",
+            "按需展开参数核对，运行评估并比较组合收益与达标情况。",
             "检查独立复核和待校准项，导出报告并人工确认交付。",
           ][i],
           anchor: [
             "audit-scope",
             "audit-evidence",
             "audit-budget",
-            "audit-parameters",
+            "audit-mechanisms",
             "audit-run",
             "design-result",
           ][i],
@@ -814,6 +826,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       state = await api("/workflow/start", {
         inputRevision: saved.revision,
         mode: "manual",
+        resume: true,
       });
       setWorkflow(state);
     }
@@ -824,7 +837,9 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     );
     if (stage !== first) {
       selectStep(first);
-      throw new Error("请按顺序确认阶段；输入变更后需要从目标重新确认。");
+      throw new Error(
+        `请先复核“${activeSteps[first].name}”；未受影响的前序确认已保留。`,
+      );
     }
     if (stage >= 4 && state.runId !== run?.id) {
       throw new Error("请在当前流程确认前四个阶段后重新执行正式评估。");
@@ -1899,7 +1914,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                                 attempt(async () => {
                                   if (designMode === "audit")
                                     throw new Error(
-                                      "该资产的训练字段映射适用于历史模型 V4。请先在可靠性设计与评估 → 高级设置 → 历史模型中选择 V4 后再应用；专家口径请在故障与证据中录入同口径事件，器件 FIT 不可直接混用。",
+                                      "该资产的训练字段映射适用于历史模型 V4。请先在可靠性设计与评估 → 高级设置 → 历史模型中选择 V4 后再应用；专家口径请在故障模式中录入同口径事件，器件 FIT 不可直接混用。",
                                     );
                                   const p = asset.payload;
                                   if (!p.patch && !p.modelBinding)
@@ -2150,7 +2165,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                             );
                           if (preview.trainingPatch && designMode === "audit")
                             throw new Error(
-                              "此文件的训练字段映射适用于历史模型 V4，尚未改动当前专家设计。请先在高级设置 → 历史模型中选择 V4 后再应用；专家事件数据请使用故障与证据中的更新入口。",
+                              "此文件的训练字段映射适用于历史模型 V4，尚未改动当前专家设计。请先在高级设置 → 历史模型中选择 V4 后再应用；专家事件数据请使用故障模式中的更新入口。",
                             );
                           if (preview.assets.length)
                             await api("/catalogs/import", {

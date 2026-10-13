@@ -268,7 +268,7 @@ it("exports complete event/mechanism tables with safe HTML and actual sensitivit
   expect(html).toContain('class="event-source" id="event-source-0"');
   expect(html).toContain("<dt>来源</dt><dd>&lt;img");
   expect(html).toContain('class="source-link"');
-  expect(html).toContain('aria-label="静默检出率对正确产出的影响"');
+  expect(html).toContain('aria-label="静默检出率对可用度的影响"');
   const markdown = report(run, "md");
   expect(markdown).toContain("### 数据来源与归因说明");
   expect(markdown).toContain("来源：&lt;img");

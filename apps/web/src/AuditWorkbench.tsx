@@ -11,6 +11,9 @@ import {
 } from "../../../packages/analysis/src/audit-allocation";
 import AuditAllocationEditor from "./AuditAllocationEditor";
 import AuditBaselineEditor from "./AuditBaselineEditor";
+import AuditEventCatalog from "./AuditEventCatalog";
+import AuditReliabilityDiagram from "./AuditReliabilityDiagram";
+import { auditDraftEvents } from "../../../packages/contracts/src/audit-objects";
 import {
   changeAuditCards,
   auditSamplingPreset,
@@ -51,6 +54,7 @@ export default function AuditWorkbench({
   const [overrides, setOverrides] = useState(draft?.overrides ?? "[]"),
     [hardware, setHardware] = useState(draft?.hardware ?? "[]");
   const [error, setError] = useState("");
+  const [editingEvent, setEditingEvent] = useState<string>();
   const [model, setModel] = useState(
     draft?.model ?? JSON.stringify(defaults.model, null, 2),
   );
@@ -70,6 +74,22 @@ export default function AuditWorkbench({
     parsedPolicy = JSON.parse(policy);
   } catch {
     /* keep advanced JSON editable */
+  }
+  let currentEvents = events;
+  try {
+    currentEvents = auditDraftEvents(
+      events,
+      overrides,
+      request.baseline?.resolvedEventIds,
+    );
+  } catch {
+    /* Preserve the invalid JSON for correction. */
+  }
+  let targetEvents = currentEvents;
+  try {
+    targetEvents = auditDraftEvents(currentEvents, hardware);
+  } catch {
+    /* Targets remain editable. */
   }
   const descriptions: Record<string, string> = {
     hardDetect: "更早发现中断，减少检测等待。",
@@ -106,7 +126,7 @@ export default function AuditWorkbench({
       {stage !== undefined && (
         <p className="workspace-context">
           当前设计 · {request.cards.toLocaleString()} 卡 · {request.hours} 小时
-          · 正确有效产出目标 {(request.target * 100).toFixed(2)}%
+          · 可用度目标 {(request.target * 100).toFixed(2)}%
         </p>
       )}
       <div className="audit-stage" hidden={stage !== undefined && stage !== 0}>
@@ -134,7 +154,7 @@ export default function AuditWorkbench({
               }}
             >
               <option value="expert-reproduction">
-                专家复现 · 正式审核（默认）
+                专家复现 · 正式评估（默认）
               </option>
               <option value="quick">快速试算 · 方向探索</option>
               <option value="custom">自定义 / 历史采样</option>
@@ -151,9 +171,9 @@ export default function AuditWorkbench({
         </details>
         <div className="fields">
           {[
-            ["cards", "审核卡数", 1, 1000000],
-            ["hours", "审核窗口（小时）", 0.01, 8760],
-            ["target", "审核产出目标（0–1）", 0, 1],
+            ["cards", "评估卡数", 1, 1000000],
+            ["hours", "评估窗口（小时）", 0.01, 8760],
+            ["target", "可用度目标（0–1）", 0, 1],
           ].map(([key, label, min, max]) => (
             <label key={key}>
               {label}
@@ -178,7 +198,7 @@ export default function AuditWorkbench({
         <details className="audit-help" open={stage === undefined}>
           <summary>规模目标与 MTBF 口径说明</summary>
           <p className="note">
-            默认正确有效产出目标：万卡 99%、十万卡 95%、二十万卡 90%、五十万卡
+            默认可用度目标：万卡 99%、十万卡 95%、二十万卡 90%、五十万卡
             80%；分别对应专家参考中断 MTBF 约 30、3、1.5、0.6
             小时。目标由需求给定，MTBF
             来自中断事件率；内网更新事件率后重新计算，二者不互相推导。
@@ -225,42 +245,49 @@ export default function AuditWorkbench({
                 </label>
               ))}
             <p className="note">
-              可分别编辑各规模目标；切换审核卡数保留已编辑目标。其他自定义规模默认沿用当前目标。
+              可分别编辑各规模目标；切换评估卡数保留已编辑目标。其他自定义规模默认沿用当前目标。
             </p>
           </div>
         )}
       </div>
       <div className="audit-stage" hidden={stage !== undefined && stage !== 1}>
-        <h3 className="audit-step-title">02 / 故障与证据</h3>
-        <details id="audit-evidence" open={stage === 1 ? true : undefined}>
-          <summary>内网中断数据替换与硬件降 FIT</summary>
+        <h3 className="audit-step-title" id="audit-evidence">
+          02 / 故障模式
+        </h3>
+        <AuditEventCatalog
+          events={currentEvents}
+          onEdit={(id) => {
+            setEditingEvent(id);
+            const panel = document.getElementById(
+              "audit-event-update",
+            ) as HTMLDetailsElement;
+            if (panel) {
+              panel.open = true;
+              panel.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          }}
+        />
+        <details id="audit-event-update">
+          <summary>更新故障证据与基线 FIT</summary>
           <p>
             只替换明确提供的事件。中断总量或 CORE-hard
             等细分比例变化时，静默和亚健康保留各自外网先验，不随旧比例缩放。零观测不能直接推断零
             FIT。
           </p>
-          <p>
-            每项填写 id、fit、source、evidence（internal-measured /
-            external-prior /
-            scenario）、rateBasis（npu-equivalent-hour）。这要求已换算为 NPU
-            等效运行小时；器件物理 FIT
-            不可直接混用。内网真实数据只在公司内部部署中录入。
+          <p className="note">
+            选择故障模式，填写已换算为 NPU 等效运行小时的 FIT
+            和证据来源。器件物理 FIT 需要先换算；后续可逐项替换为内网数据。
           </p>
           <EventEditor
             title="基线事件更新"
-            events={events}
+            events={currentEvents}
+            selectedId={editingEvent}
             value={overrides}
             onChange={setOverrides}
           />
 
-          <EventEditor
-            title="硬件改进目标"
-            events={events}
-            value={hardware}
-            onChange={setHardware}
-          />
           <details>
-            <summary>批量 JSON 更新与参考事件库</summary>
+            <summary>高级：批量更新 JSON</summary>
             <label>
               基线事件更新 JSON
               <textarea
@@ -270,43 +297,19 @@ export default function AuditWorkbench({
                 onChange={(e) => setOverrides(e.target.value)}
               />
             </label>
-            <label>
-              硬件改进目标 JSON
-              <textarea
-                aria-label="硬件目标更新"
-                className="json"
-                value={hardware}
-                onChange={(e) => setHardware(e.target.value)}
-              />
-            </label>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>事件</th>
-                    <th>领域</th>
-                    <th>参考 FIT</th>
-                    <th>证据</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((e) => (
-                    <tr key={e.id}>
-                      <td>{e.id}</td>
-                      <td>{e.domain}</td>
-                      <td>{e.fit.toFixed(3)}</td>
-                      <td>{e.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </details>
         </details>
       </div>
       <div className="audit-stage" hidden={stage !== undefined && stage !== 2}>
         <section id="audit-budget" aria-label="损失预算分配">
-          <h3 className="audit-step-title">03 / 预算与措施</h3>
+          <h3 className="audit-step-title">03 / 可用度分配</h3>
+          <AuditAllocationEditor
+            request={request}
+            events={currentEvents}
+            onChange={setRequest}
+            onApplyHardware={setHardware}
+          />
+          <h4>检测恢复与运行损失预算</h4>
           <label>
             训练损失预算分配方法
             <select
@@ -411,14 +414,43 @@ export default function AuditWorkbench({
           <p className="note">
             参考权重为设计假设，请按产品优先级调整并在流程中确认。
           </p>
-          <AuditAllocationEditor request={request} onChange={setRequest} />
-          <AuditBaselineEditor
-            request={request}
-            onChange={setRequest}
-            events={events}
-            mechanisms={mechanisms}
-          />
         </section>
+      </div>
+      <div className="audit-stage" hidden={stage !== undefined && stage !== 3}>
+        <h3 className="audit-step-title" id="audit-mechanisms">
+          04 / 可靠性措施
+        </h3>
+        <p className="note">
+          按第三步的目标选择措施。硬件改进改变事件
+          FIT；检测、恢复、隔离和检查点策略改变故障后果。第五步统一计算是否达到可用度要求。
+        </p>
+        <details className="hardware-target-editor">
+          <summary>硬件降 FIT · 设计目标与来源</summary>
+          <EventEditor
+            title="硬件改进目标"
+            events={currentEvents}
+            value={hardware}
+            onChange={setHardware}
+          />
+          <details>
+            <summary>高级：硬件目标 JSON</summary>
+            <label>
+              硬件改进目标 JSON
+              <textarea
+                aria-label="硬件目标更新"
+                className="json"
+                value={hardware}
+                onChange={(e) => setHardware(e.target.value)}
+              />
+            </label>
+          </details>
+        </details>
+        <AuditBaselineEditor
+          request={request}
+          onChange={setRequest}
+          events={events}
+          mechanisms={mechanisms}
+        />
         <fieldset className="mechanism-picker">
           <legend>选择组合措施</legend>
           <button
@@ -507,19 +539,89 @@ export default function AuditWorkbench({
         </fieldset>
         <p className="note">
           Shapley
-          的加入顺序用于分摊收益，物理恢复顺序由“参数核对”中的恢复链决定。无检测时
+          的加入顺序用于分摊收益，物理恢复顺序在第五步“参数核对”中设置。无检测时
           step 不能自行发现静默错误；机制改变后果，不自动降低源 FIT。
         </p>
+        <details className="diagram-preview">
+          <summary>预览可靠性框图与措施覆盖</summary>
+          <AuditReliabilityDiagram
+            events={currentEvents}
+            candidateEvents={targetEvents}
+            mechanisms={mechanisms}
+            selectedMechanisms={[
+              ...(request.mechanisms ?? []),
+              ...(request.baseline?.mechanisms ?? []),
+            ]}
+          />
+        </details>
       </div>
-      <div className="audit-stage" hidden={stage !== undefined && stage !== 3}>
-        <h3 className="audit-step-title">04 / 参数核对</h3>
-        <details id="audit-parameters" open={stage === 3 ? true : undefined}>
-          <summary>基线参数、机制目标与成本</summary>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="audit-stage" hidden={stage !== undefined && stage !== 4}>
+        <div className="audit-run-summary" id="audit-run">
+          <div>
+            <strong>05 / 计算与权衡</strong>
+            <p>
+              {
+                (request.mechanisms ?? []).filter(
+                  (id) => !request.baseline?.mechanisms?.includes(id),
+                ).length
+              }{" "}
+              项新增候选 · {request.baseline?.mechanisms?.length ?? 0}{" "}
+              项已部署基线措施 · {request.trials} 条轨迹 / 场景
+              {request.attribution
+                ? ` · Shapley ${2 ** (request.mechanisms ?? []).filter((id) => !request.baseline?.mechanisms?.includes(id)).length} 个剩余候选子集 × ${request.attributionTrials} 条轨迹`
+                : " · 未开启收益分摊"}
+            </p>
+            <small>
+              轨迹越多，采样区间通常越稳定；它不能替代真实参数校准。
+            </small>
+          </div>
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => {
+              try {
+                const input = auditDraftInput({
+                  request,
+                  overrides,
+                  hardware,
+                  model,
+                  policy,
+                  allScales,
+                });
+                setError("");
+                onRun(input);
+              } catch (e) {
+                setError((e as Error).message);
+              }
+            }}
+          >
+            {busy ? "正在计算…" : "运行可靠性评估"}
+          </button>
+        </div>
+        <p className="note">
+          前四步确认后，运行将关联正式流程；也可先独立试算。结果保留输入快照，
+          在“实验与报告”下载完整 HTML。正式交付仍需人工确认。
+        </p>
+      </div>
+      <div
+        className="audit-stage audit-parameter-stage"
+        hidden={stage !== undefined && stage !== 4}
+      >
+        <details id="audit-parameters" className="parameter-review">
+          <summary>
+            <span>参数核对</span>
+            <small>采样与复核、基线参数、机制能力及成本 · 按需展开</small>
+          </summary>
           <h3>采样与复核</h3>
           <div className="fields">
             {[
               ["trials", "每场景轨迹数", 2, 8192],
-              ["seed", "审核随机种子", 0, 4294967295],
+              ["seed", "评估随机种子", 0, 4294967295],
               ["attributionTrials", "每组合轨迹数", 2, 2048],
               ["sensitivityTrials", "每扫描点轨迹数", 2, 8192],
               ["sensitivityCards", "敏感性扫描卡数", 1, 1000000],
@@ -573,19 +675,6 @@ export default function AuditWorkbench({
               </select>
             </label>
             <label>
-              <input
-                type="checkbox"
-                checked={request.verifyRecommendation ?? false}
-                onChange={(e) =>
-                  setRequest({
-                    ...request,
-                    verifyRecommendation: e.target.checked,
-                  })
-                }
-              />
-              独立种子复核建议组合
-            </label>
-            <label>
               独立复核轨迹数
               <input
                 type="number"
@@ -600,26 +689,6 @@ export default function AuditWorkbench({
                   })
                 }
               />
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={request.attribution ?? true}
-                onChange={(e) =>
-                  setRequest({ ...request, attribution: e.target.checked })
-                }
-              />
-              计算组合 Shapley 与交互
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={request.sensitivity ?? true}
-                onChange={(e) =>
-                  setRequest({ ...request, sensitivity: e.target.checked })
-                }
-              />
-              启用参数敏感性扫描
             </label>
             <label>
               敏感性比较口径
@@ -686,6 +755,43 @@ export default function AuditWorkbench({
               </select>
             </label>
           </div>
+          <fieldset className="analysis-options">
+            <legend>可选分析与复核</legend>
+            {[
+              [
+                "attribution",
+                "计算组合 Shapley 与交互",
+                "比较措施组合并解释收益分摊；计算量随候选数量增加。",
+                true,
+              ],
+              [
+                "sensitivity",
+                "启用参数敏感性扫描",
+                "扫描关键参数，识别哪些假设最影响可用度。",
+                true,
+              ],
+              [
+                "verifyRecommendation",
+                "独立种子复核建议组合",
+                "用未参与筛选的样本复核候选，减少偶然达标的影响。",
+                false,
+              ],
+            ].map(([key, title, description, fallback]) => (
+              <label className="analysis-option" key={String(key)}>
+                <input
+                  type="checkbox"
+                  checked={(request as any)[String(key)] ?? fallback}
+                  onChange={(e) =>
+                    setRequest({ ...request, [String(key)]: e.target.checked })
+                  }
+                />
+                <span>
+                  <strong>{String(title)}</strong>
+                  <small>{String(description)}</small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
           <h3>当前基线</h3>
           {parsedModel && (
             <NumericParameters
@@ -766,59 +872,6 @@ export default function AuditWorkbench({
               ))}
           </div>
         </details>
-      </div>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="audit-stage" hidden={stage !== undefined && stage !== 4}>
-        <div className="audit-run-summary" id="audit-run">
-          <div>
-            <strong>05 / 生成审核证据</strong>
-            <p>
-              {
-                (request.mechanisms ?? []).filter(
-                  (id) => !request.baseline?.mechanisms?.includes(id),
-                ).length
-              }{" "}
-              项新增候选 · {request.baseline?.mechanisms?.length ?? 0}{" "}
-              项已部署基线措施 · {request.trials} 条轨迹 / 场景
-              {request.attribution
-                ? ` · Shapley ${2 ** (request.mechanisms ?? []).filter((id) => !request.baseline?.mechanisms?.includes(id)).length} 个剩余候选子集 × ${request.attributionTrials} 条轨迹`
-                : " · 未开启收益分摊"}
-            </p>
-            <small>
-              轨迹越多，采样区间通常越稳定；它不能替代真实参数校准。
-            </small>
-          </div>
-          <button
-            className="primary"
-            disabled={busy}
-            onClick={() => {
-              try {
-                const input = auditDraftInput({
-                  request,
-                  overrides,
-                  hardware,
-                  model,
-                  policy,
-                  allScales,
-                });
-                setError("");
-                onRun(input);
-              } catch (e) {
-                setError((e as Error).message);
-              }
-            }}
-          >
-            {busy ? "正在计算…" : "运行可靠性评估"}
-          </button>
-        </div>
-        <p className="note">
-          前四步确认后，运行将关联正式流程；也可先独立试算。结果保留输入快照，
-          在“实验与报告”下载完整 HTML。正式交付仍需人工确认。
-        </p>
       </div>
     </section>
   );

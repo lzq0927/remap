@@ -40,7 +40,7 @@ export function validateAuditDesign(request: AuditRequest, scales: number[]) {
       request.targets[String(request.cards)] !== undefined &&
       request.targets[String(request.cards)] !== request.target
     )
-      throw new Error("所选规模目标必须与审核产出目标一致");
+      throw new Error("所选规模目标必须与可用度目标一致");
   }
   if (request.lossBudgetWeights !== undefined) {
     const w = request.lossBudgetWeights;

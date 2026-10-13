@@ -2008,6 +2008,7 @@ main > header {
 #audit-scope,
 #audit-budget,
 #audit-evidence,
+#audit-mechanisms,
 #audit-parameters,
 #audit-run {
   scroll-margin-top: var(--workflow-navigation-height, 140px);

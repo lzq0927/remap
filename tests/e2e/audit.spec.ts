@@ -10,13 +10,11 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   const panel = page.getByRole("region", { name: "故障事件与机制收益审核" });
   await expect(panel).toBeVisible();
   await panel.getByLabel("采样配置", { exact: true }).selectOption("quick");
-  await panel.getByLabel("审核窗口（小时）", { exact: true }).fill("24");
-  await panel.getByText("基线参数、机制目标与成本", { exact: true }).click();
+  await panel.getByLabel("评估窗口（小时）", { exact: true }).fill("24");
+  await panel.getByText("参数核对", { exact: true }).click();
   await panel.getByLabel("每场景轨迹数", { exact: true }).fill("8");
   await panel.getByLabel("每组合轨迹数", { exact: true }).fill("8");
-  await panel
-    .getByText("内网中断数据替换与硬件降 FIT", { exact: true })
-    .click();
+  await panel.getByText("更新故障证据与基线 FIT", { exact: true }).click();
   await panel
     .getByLabel("基线事件更新事件", { exact: true })
     .selectOption("CORE-hard");
@@ -108,7 +106,7 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
       { exact: true },
     ),
   ).toHaveCount(0);
-  await panel.getByLabel("审核产出目标（0–1）", { exact: true }).fill("0.98");
+  await panel.getByLabel("可用度目标（0–1）", { exact: true }).fill("0.98");
   await expect(
     page.getByText(
       "审核输入已改变；下方结果与下载报告保留上次运行快照，请重新运行后比较。",
@@ -151,11 +149,11 @@ test("audit layout is readable on mobile and metric switching preserves current 
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?task=" + taskId);
-  await page.getByLabel("审核卡数", { exact: true }).fill("20000");
+  await page.getByLabel("评估卡数", { exact: true }).fill("20000");
   await selectAssessment(page, "workflow");
   await expect(page.getByLabel("集群卡数", { exact: true })).toBeVisible();
   await selectAssessment(page, "audit");
-  await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("评估卡数", { exact: true })).toHaveValue(
     "20000",
   );
   await expect
@@ -166,14 +164,14 @@ test("audit layout is readable on mobile and metric switching preserves current 
     )
     .toBe(20000);
   await page.reload();
-  await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("评估卡数", { exact: true })).toHaveValue(
     "20000",
   );
   await page.getByRole("button", { name: "资产库", exact: true }).click();
   await page
     .getByRole("button", { name: "可靠性设计与评估", exact: true })
     .click();
-  await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("评估卡数", { exact: true })).toHaveValue(
     "20000",
   );
   expect(

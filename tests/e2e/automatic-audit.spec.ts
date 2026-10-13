@@ -12,12 +12,7 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
   await panel
     .getByLabel("训练损失预算分配方法", { exact: true })
     .selectOption("baseline-proportional");
-  await panel
-    .getByText("子模型目标分配 · Equal / ARINC / AGREE / Availability", {
-      exact: true,
-    })
-    .click();
-  await panel.getByLabel("启用独立子模型分配", { exact: true }).check();
+  await panel.getByLabel("启用对象目标分配", { exact: true }).check();
   await panel
     .getByLabel("子模型分配方法", { exact: true })
     .selectOption("agree");
@@ -32,7 +27,9 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
   ).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(
-    panel.getByText("AGREE · 加权任务可靠度", { exact: true }),
+    panel
+      .getByRole("table", { name: "分配方法对比" })
+      .getByText("AGREE · 复杂度与重要度加权", { exact: true }),
   ).toBeAttached();
   await panel.getByLabel("子模型目标", { exact: true }).fill("97");
   await expect
@@ -71,13 +68,13 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
     "audit-scope",
     "audit-evidence",
     "audit-budget",
-    "audit-parameters",
+    "audit-mechanisms",
   ].entries()) {
     const current = page
       .getByRole("navigation", { name: "六阶段评估流程" })
       .locator('[aria-current="step"]');
     await expect(current).toContainText(
-      ["目标与口径", "故障与证据", "预算与措施", "参数核对"][index],
+      ["可用度目标", "故障模式", "可用度分配", "可靠性措施"][index],
     );
     await expect(page.locator(".workflow-current")).toContainText("过程产物：");
     await expect
@@ -87,12 +84,20 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
           const dock = document
             .querySelector(".workflow-dock")!
             .getBoundingClientRect();
-          return (
-            rect.top >= dock.bottom - 2 && rect.top < window.innerHeight - 40
-          );
+          return rect.top >= dock.bottom - 2 &&
+            rect.top < window.innerHeight - 40
+            ? "visible"
+            : {
+                anchor: element.id,
+                top: rect.top,
+                dockBottom: dock.bottom,
+                height: rect.height,
+                current: document.querySelector('[aria-current="step"]')
+                  ?.textContent,
+              };
         }),
       )
-      .toBe(true);
+      .toBe("visible");
   }
   await expect(
     page.getByRole("heading", {
@@ -107,7 +112,7 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
     page.getByText("自动完成 · 待总审", { exact: true }),
   ).toHaveCount(5);
   await expect(
-    page.getByText("本次目标分配 · 冻结于措施评估前", { exact: true }),
+    page.getByLabel("本次目标分配产物", { exact: true }),
   ).toBeVisible();
   const url = await page
     .getByRole("link", { name: "下载报告", exact: true })

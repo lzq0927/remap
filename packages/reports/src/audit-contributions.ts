@@ -2,7 +2,7 @@ import { auditReferenceMechanisms } from "../../contracts/src/audit-presets";
 const finite = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
 export const gainExplanation =
-  "每行是完整方案相对当前基线的正确有效产出增量；单项与组合收益不能相加。方案收益为负，表示相对基线新增开销超过改善。";
+  "每行是完整方案相对当前基线的可用度增量；单项与组合收益不能相加。方案收益为负，表示相对基线新增开销超过改善。";
 export const contributionExplanation =
   "Shapley为负，表示在剩余候选的各种组合中平均边际贡献为负。区间跨零时，当前采样不能明确判断改善或下降。排名按均值排列，不能仅凭名次宣称显著优劣。";
 export const interactionExplanation =
@@ -131,7 +131,7 @@ export function auditContributionSummary(
 ) {
   const pct = (n: number | null) =>
     n === null ? "历史未记录" : (n * 100).toFixed(3) + "%";
-  return `本节基线产出 ${pct(v.baselineMean)}；本节组合产出 ${pct(v.combinedMean)}；总提升 ${v.gain === null ? "未记录" : (v.gain * 100).toFixed(3) + " pp"}。参与机制 ${v.rows.length}项；子集 ${v.subsetCount ?? "未记录"}个；每子集 ${v.trials ?? "未记录"}条轨迹；${v.windowLabel}。指标为正确有效产出。`;
+  return `本节基线可用度 ${pct(v.baselineMean)}；本节组合可用度 ${pct(v.combinedMean)}；总提升 ${v.gain === null ? "未记录" : (v.gain * 100).toFixed(3) + " pp"}。参与机制 ${v.rows.length}项；子集 ${v.subsetCount ?? "未记录"}个；每子集 ${v.trials ?? "未记录"}条轨迹；${v.windowLabel}。指标为可用度。`;
 }
 export function auditContributionEvidence(r: any, cards: number) {
   const v = auditContributionView(r, cards);

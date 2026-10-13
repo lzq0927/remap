@@ -119,14 +119,12 @@ export function registerAutomaticWorkflow(
             type: "architecture",
             data: {
               events: resolved.events,
-              recoveryOrder: resolved.recoveryOrder,
               baseline: {
-                mechanisms: resolved.baseline.mechanisms,
                 resolvedEvents: resolved.baseline.resolvedEvents,
                 note: resolved.baseline.note,
               },
             },
-            note: "冻结当前事件、范围与恢复顺序；没有架构文件时使用参考场景，不能视作真实架构已校验。",
+            note: "冻结当前故障对象、类型、FIT 与来源；没有架构文件时使用参考场景，不能视作真实架构已校验。",
           },
           {
             id: "select",
@@ -135,17 +133,22 @@ export function registerAutomaticWorkflow(
               submodel: resolved.submodelPlan,
               lossBudgetMethod: input.lossBudgetMethod ?? "custom",
               lossBudgetWeights: input.lossBudgetWeights,
-              method: "discrete-event-simulation",
-              attribution: input.attribution,
-              remainingMechanisms: resolved.mechanisms,
             },
             note: "先分配目标；基线比例预算在基线样本完成后、候选措施计算前冻结。Shapley 使用真实组合结果。",
           },
           {
             id: "prepare",
-            type: "parameter-table",
-            data: input,
-            note: "冻结本次参数与来源；采样数量及种子使用当前设计，不暗中降低精度。",
+            type: "mechanism-plan",
+            data: {
+              mechanisms: resolved.mechanisms,
+              deployedMechanisms: resolved.baseline.mechanisms,
+              candidateFitOverrides: input.candidateFitOverrides,
+              recoveryOrder: resolved.recoveryOrder,
+              model: input.model,
+              policy: input.policy,
+              costs: input.costs,
+            },
+            note: "冻结硬件目标、已部署与新增措施、机制参数及物理恢复顺序；源 FIT 与故障后果分开计算。",
           },
         ];
         for (const stage of stages) {
@@ -200,6 +203,7 @@ export function registerAutomaticWorkflow(
           "evaluate",
           "completed",
           [
+            { type: "parameter-table", data: input },
             {
               type: "evaluation",
               runId: run.id,

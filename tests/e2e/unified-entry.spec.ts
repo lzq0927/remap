@@ -35,11 +35,11 @@ for (const viewport of [
     await expect(navigation.getByRole("button")).toHaveCount(6);
     const panel = page.getByRole("region", { name: "故障事件与机制收益审核" });
     await panel.getByLabel("采样配置", { exact: true }).selectOption("quick");
-    await panel.getByLabel("审核窗口（小时）", { exact: true }).fill("24");
-    await panel.getByText("基线参数、机制目标与成本", { exact: true }).click();
+    await panel.getByLabel("评估窗口（小时）", { exact: true }).fill("24");
+    await panel.getByText("参数核对", { exact: true }).click();
     await panel.getByLabel("每场景轨迹数", { exact: true }).fill("8");
     await panel.getByLabel("每组合轨迹数", { exact: true }).fill("8");
-    await panel.getByText("基线参数、机制目标与成本", { exact: true }).click();
+    await panel.getByText("参数核对", { exact: true }).click();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({
       path: `artifacts/unified-entry/overview-${viewport.width}.png`,
@@ -190,7 +190,7 @@ for (const viewport of [
     });
     await selectAssessment(page, "audit");
     await expect(
-      panel.getByLabel("审核窗口（小时）", { exact: true }),
+      panel.getByLabel("评估窗口（小时）", { exact: true }),
     ).toHaveValue("24");
     expect(
       (
@@ -262,7 +262,7 @@ test("legacy input mapping cannot silently replace the default expert design", a
   taskId,
 }) => {
   await page.goto(`/?task=${taskId}`);
-  await page.getByLabel("审核卡数", { exact: true }).fill("24680");
+  await page.getByLabel("评估卡数", { exact: true }).fill("24680");
   await page.getByRole("button", { name: "输入与来源", exact: true }).click();
   await page.locator("input[type=file]").setInputFiles({
     name: "legacy-training.json",
@@ -282,7 +282,7 @@ test("legacy input mapping cannot silently replace the default expert design", a
   await page
     .getByRole("button", { name: "可靠性设计与评估", exact: true })
     .click();
-  await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("评估卡数", { exact: true })).toHaveValue(
     "24680",
   );
   await expect
@@ -322,8 +322,8 @@ test("expert assessment loads while optional connection discovery is still pendi
         exact: true,
       }),
     ).toBeVisible();
-    await page.getByLabel("审核卡数", { exact: true }).fill("20000");
-    await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+    await page.getByLabel("评估卡数", { exact: true }).fill("20000");
+    await expect(page.getByLabel("评估卡数", { exact: true })).toHaveValue(
       "20000",
     );
     expect(agentRequests).toBe(0);

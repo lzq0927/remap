@@ -49,7 +49,7 @@ export function auditReviewChecks(
       detail: `公共保存独立计账；最大绝对残差 ${eventResidual.toExponential(3)} 小时`,
     },
     {
-      name: "正确有效产出位于 0–1",
+      name: "可用度位于 0–1",
       status: rows.every(
         (r) => r.statistics.mean >= 0 && r.statistics.mean <= 1,
       )

@@ -140,7 +140,7 @@ for (const width of [1440, 390])
     for (const cards of [10000, 500000]) {
       await panel.getByLabel("贡献分摊规模").selectOption(String(cards));
       const expected = auditContributionView(run.result, cards);
-      await expect(panel.getByText(/本节基线产出/)).toContainText(
+      await expect(panel.getByText(/本节基线可用度/)).toContainText(
         (expected.baselineMean! * 100).toFixed(3) + "%",
       );
       const ids = await panel

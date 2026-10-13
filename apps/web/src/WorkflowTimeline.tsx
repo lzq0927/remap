@@ -8,6 +8,8 @@ export type WorkflowState = {
   inputRevision: number;
   status: string;
   stale: boolean;
+  changedFrom?: number;
+  resumedFrom?: { confirmedSteps: number };
   runId?: string;
   mode?: string;
   steps: {
@@ -35,7 +37,8 @@ const artifactNames: Record<string, string> = {
   brief: "目标说明",
   architecture: "系统结构",
   "task-brief": "评估任务书",
-  "method-plan": "方法选择依据",
+  "method-plan": "目标分配依据",
+  "mechanism-plan": "可靠性措施方案",
   "parameter-table": "参数与证据",
   report: "生成报告与复核记录",
 };
@@ -71,7 +74,9 @@ export default function WorkflowTimeline({
     dialog = useRef<HTMLDialogElement>(null);
   const [showDetails, setShowDetails] = useState(false);
   const current = state?.steps[stage];
-  const confirmed = !state?.stale && current?.status === "confirmed";
+  const needsReview = (index: number) =>
+    !!state?.stale && index >= (state.changedFrom ?? 0);
+  const confirmed = !needsReview(stage) && current?.status === "confirmed";
   const complete = state?.status === "succeeded" && !state.stale;
   const automaticRunning =
     state?.mode === "auto-to-review" &&
@@ -114,8 +119,9 @@ export default function WorkflowTimeline({
             {steps.map((step, i) => {
               const status = state?.steps[i]?.status ?? "pending",
                 done =
-                  ["confirmed", "completed"].includes(status) && !state?.stale;
-              const label = state?.stale
+                  ["confirmed", "completed"].includes(status) &&
+                  !needsReview(i);
+              const label = needsReview(i)
                 ? "需重新确认"
                 : (labels[status] ?? status);
               return (
@@ -218,6 +224,12 @@ export default function WorkflowTimeline({
           </div>
         </section>
         {error && <p className="workflow-inline-error">{error}</p>}
+        {state?.stale && (
+          <p className="workflow-change-note" role="status">
+            输入已更新：从“{steps[state.changedFrom ?? 0].name}
+            ”复核并重新计算；前序未变更内容可沿用确认。
+          </p>
+        )}
       </div>
       <dialog
         className="workflow-dialog"
@@ -240,7 +252,7 @@ export default function WorkflowTimeline({
         </div>
         <p>{steps[stage].hint}</p>
         <p className="note">
-          点击步骤可浏览内容；浏览或返回已确认步骤不会重复签认。修改输入后需从目标重新确认。
+          点击步骤可浏览内容；浏览或返回已确认步骤不会重复签认。修改输入后只复核受影响阶段及其后续结果；目标或规模改变时才从第一步复核。
         </p>
         {state?.executionId ? (
           <div className="workflow-status">

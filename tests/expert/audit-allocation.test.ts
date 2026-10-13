@@ -1,6 +1,13 @@
 import { expect, it } from "vitest";
-import { audit, getAuditDefaults } from "../../packages/analysis/src/audit";
-import { auditSubmodelPlan } from "../../packages/analysis/src/audit-allocation";
+import {
+  audit,
+  getAuditDefaults,
+  getAuditEvents,
+} from "../../packages/analysis/src/audit";
+import {
+  auditSubmodelPlan,
+  auditHardwareItems,
+} from "../../packages/analysis/src/audit-allocation";
 import { auditSections } from "../../packages/reports/src/audit";
 
 const input = () => ({
@@ -13,6 +20,29 @@ const input = () => ({
   sensitivity: false,
   mechanisms: ["sdcDetect", "step"],
   verifyRecommendation: false,
+});
+it("reports object FIT in NPU-equivalent hours instead of silently using fleet hours", () => {
+  const result = audit({
+    ...input(),
+    submodelAllocation: {
+      method: "arinc",
+      metricId: "task-reliability",
+      source: "event-catalog",
+      cards: 10000,
+      target: 0.99,
+      hours: 24,
+      items: auditHardwareItems(getAuditEvents(), 10000),
+    },
+  });
+  const table = auditSections(result).find((s) =>
+    s.title.startsWith("目标分配"),
+  )!.tables![1];
+  expect(table.heads[4]).toBe("目标 FIT / NPU 等效小时");
+  const fleetFits = result.allocationPlan.submodel!.selected.items;
+  table.rows.forEach((row, index) => {
+    const displayed = Number(String(row[4]).replaceAll(",", ""));
+    expect(displayed).toBeCloseTo(fleetFits[index].targetFit! / 10000, 3);
+  });
 });
 it("freezes loss budgets from baseline before measures and preserves the exact forward results", () => {
   const equal = audit(input()),

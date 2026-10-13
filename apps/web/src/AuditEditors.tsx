@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { parameterLabels } from "../../../packages/reports/src/audit-labels";
 export function NumericParameters({
   value,
@@ -34,13 +34,18 @@ export function EventEditor({
   value,
   onChange,
   title,
+  selectedId,
 }: {
   events: any[];
   value: string;
   onChange: (s: string) => void;
   title: string;
+  selectedId?: string;
 }) {
   const [id, setId] = useState(events[0]?.id ?? "");
+  useEffect(() => {
+    if (selectedId) setId(selectedId);
+  }, [selectedId]);
   const [fit, setFit] = useState("");
   const [source, setSource] = useState("");
   const [evidence, setEvidence] = useState("scenario");

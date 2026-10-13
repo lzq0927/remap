@@ -10,8 +10,8 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
     await page.goto(`/?task=${taskId}`);
     const panel = page.getByRole("region", { name: "故障事件与机制收益审核" });
-    const target = panel.getByLabel("审核产出目标（0–1）", { exact: true });
-    const cards = panel.getByLabel("审核卡数", { exact: true });
+    const target = panel.getByLabel("可用度目标（0–1）", { exact: true });
+    const cards = panel.getByLabel("评估卡数", { exact: true });
     await expect(target).toHaveValue("0.99");
     await expect(
       panel.getByLabel("同时对比万卡、十万卡、二十万卡、五十万卡"),
@@ -43,8 +43,8 @@ for (const width of [1440, 390]) {
     await panel
       .getByLabel("500,000 卡目标（0–1）", { exact: true })
       .fill("0.8");
-    await panel.getByLabel("审核窗口（小时）", { exact: true }).fill("24");
-    await panel.getByText("基线参数、机制目标与成本", { exact: true }).click();
+    await panel.getByLabel("评估窗口（小时）", { exact: true }).fill("24");
+    await panel.getByText("参数核对", { exact: true }).click();
     await expect(
       panel.getByLabel("敏感性比较口径", { exact: true }),
     ).toHaveValue("expert-reproduction");
@@ -52,7 +52,7 @@ for (const width of [1440, 390]) {
     await panel.getByLabel("每组合轨迹数", { exact: true }).fill("4");
     await panel.getByLabel("每扫描点轨迹数", { exact: true }).fill("4");
     await panel.getByLabel("独立复核轨迹数", { exact: true }).fill("4");
-    await panel.getByText("基线参数、机制目标与成本", { exact: true }).click();
+    await panel.getByText("参数核对", { exact: true }).click();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({
       path: `artifacts/expert-alignment/default-targets-${width}.png`,
@@ -68,8 +68,8 @@ for (const width of [1440, 390]) {
       page.getByRole("link", { name: "下载报告", exact: true }),
     ).toBeVisible({ timeout: 30000 });
     for (const name of [
-      "弹性全局协调暂停对正确产出的影响",
-      "step 回滚上限对正确产出的影响",
+      "弹性全局协调暂停对可用度的影响",
+      "step 回滚上限对可用度的影响",
     ])
       await expect(page.getByRole("img", { name, exact: true })).toBeVisible();
     await page
@@ -98,6 +98,11 @@ for (const width of [1440, 390]) {
     expect(frozen.request.targets["1000"]).toBeUndefined();
     expect(frozen.referenceComparison.matchesReference).toBe(false);
     expect(frozen.sensitivity.every((s: any) => s.cards === 500000)).toBe(true);
+    await page.getByLabel("结果规模", { exact: true }).selectOption("1000");
+    await expect(
+      page.locator(".workspace-result-panel .reliability-block-view"),
+    ).toContainText("本规模仅为参考点，不判定达标");
+    await page.getByLabel("结果规模", { exact: true }).selectOption("10000");
     await expect(
       page.getByRole("note").filter({ hasText: /快速试算 \/ 低采样结果/ }),
     ).toBeVisible();
@@ -114,11 +119,9 @@ for (const width of [1440, 390]) {
           .locator(".actual-combination .table-wrap")
           .evaluate((el) => el.scrollWidth <= el.clientWidth),
       ).toBe(true);
-      await preview
-        .locator(".actual-combination")
-        .screenshot({
-          path: "artifacts/expert-alignment/combination-mobile.png",
-        });
+      await preview.locator(".actual-combination").screenshot({
+        path: "artifacts/expert-alignment/combination-mobile.png",
+      });
     }
     await expect(
       preview.getByText("机制匹配与失败回退", { exact: true }),
@@ -188,8 +191,8 @@ for (const width of [1440, 390]) {
       "公共保存开销",
     );
     for (const [name, file] of [
-      ["弹性全局协调暂停对正确产出的影响", "elastic"],
-      ["step 回滚上限对正确产出的影响", "step"],
+      ["弹性全局协调暂停对可用度的影响", "elastic"],
+      ["step 回滚上限对可用度的影响", "step"],
     ])
       await preview
         .getByRole("img", { name, exact: true })

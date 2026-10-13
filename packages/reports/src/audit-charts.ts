@@ -100,7 +100,7 @@ function lineChart({
           .join("")}`,
     )
     .join("");
-  return `<figure class="reliability-chart"><h3>${escape(title)}</h3>${legend(series)}<div class="reliability-plot" tabindex="0" aria-label="${escape(title)}图表，可横向滚动"><svg viewBox="0 0 960 390" role="img" aria-label="${escape(title)}"><title>${escape(title)}</title><desc>${escape(note)}</desc><text x="78" y="26" class="axis-label">正确有效产出率</text>${grid}${targetLine}${curves}${xs.map((x) => `<text x="${coordinate(X(x))}" y="334" text-anchor="middle">${escape(formatX(x))}</text>`).join("")}<text x="494" y="374" text-anchor="middle" class="axis-label">${escape(xLabel)}</text></svg></div><figcaption>${escape(note)}</figcaption></figure>`;
+  return `<figure class="reliability-chart"><h3>${escape(title)}</h3>${legend(series)}<div class="reliability-plot" tabindex="0" aria-label="${escape(title)}图表，可横向滚动"><svg viewBox="0 0 960 390" role="img" aria-label="${escape(title)}"><title>${escape(title)}</title><desc>${escape(note)}</desc><text x="78" y="26" class="axis-label">可用度</text>${grid}${targetLine}${curves}${xs.map((x) => `<text x="${coordinate(X(x))}" y="334" text-anchor="middle">${escape(formatX(x))}</text>`).join("")}<text x="494" y="374" text-anchor="middle" class="axis-label">${escape(xLabel)}</text></svg></div><figcaption>${escape(note)}</figcaption></figure>`;
 }
 
 export function auditScaleCurve(r: any) {
@@ -112,7 +112,7 @@ export function auditScaleCurve(r: any) {
   ];
   const count = new Set(r.rows.map((row: any) => row.cards)).size;
   const chart = lineChart({
-    title: "规模增大后，正确产出如何变化",
+    title: "规模增大后，可用度如何变化",
     series: definitions.map(([id, color]) => ({
       name: r.rows.find((row: any) => row.id === id)?.name ?? id,
       color,
@@ -157,28 +157,28 @@ export function auditSensitivityCurves(r: any) {
   return [
     {
       parameter: "sdcCoverage",
-      title: "静默检出率对正确产出的影响",
+      title: "静默检出率对可用度的影响",
       current: r.config.policy["D-SDC"]?.coverage ?? 0.95,
       label: "全系统静默即时检出率",
       format: pct,
     },
     {
       parameter: "sdcDelayHours",
-      title: "漏检发现时延对正确产出的影响",
+      title: "漏检发现时延对可用度的影响",
       current: r.config.model.sdcDelayHours,
       label: "漏检兜底发现时延 · 小时",
       format: (v: number) => num(v) + " h",
     },
     {
       parameter: "elasticSyncSeconds",
-      title: "弹性全局协调暂停对正确产出的影响",
+      title: "弹性全局协调暂停对可用度的影响",
       current: r.config.policy["R-ELASTIC"]?.syncSeconds ?? 1,
       label: "全局协调暂停 · 秒",
       format: (v: number) => num(v) + " s",
     },
     {
       parameter: "stepSeconds",
-      title: "step 回滚上限对正确产出的影响",
+      title: "step 回滚上限对可用度的影响",
       current: r.config.policy["R-SDC"]?.stepSeconds ?? 1,
       label: "step 回滚上限 · 秒",
       format: (v: number) => num(v) + " s",
@@ -288,7 +288,7 @@ export function auditContributionChart(r: any, cards = r.request.cards) {
     215 + ((n - low + padding) / (high - low + 2 * padding)) * 485;
   const zero = X(0),
     height = 68 + rows.length * 42;
-  return `<figure class="reliability-chart contribution-chart"><div class="reliability-plot" tabindex="0" aria-label="贡献分摊图，可横向滚动"><svg viewBox="0 0 800 ${height}" role="img" aria-label="组合贡献分摊图"><title>${escape(v.title)}</title><desc>同一批Shapley样本的正确有效产出贡献；负贡献向零线左侧延伸，横向线为95%区间。</desc><line x1="${zero}" y1="12" x2="${zero}" y2="${height - 32}" class="chart-zero"/>${rows
+  return `<figure class="reliability-chart contribution-chart"><div class="reliability-plot" tabindex="0" aria-label="贡献分摊图，可横向滚动"><svg viewBox="0 0 800 ${height}" role="img" aria-label="组合贡献分摊图"><title>${escape(v.title)}</title><desc>同一批Shapley样本的可用度贡献；负贡献向零线左侧延伸，横向线为95%区间。</desc><line x1="${zero}" y1="12" x2="${zero}" y2="${height - 32}" class="chart-zero"/>${rows
     .map((row: any, i: number) => {
       const s = row.statistics,
         y = 28 + i * 42,

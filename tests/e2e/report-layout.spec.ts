@@ -59,12 +59,12 @@ for (const width of [1440, 390]) {
     await page.setContent(await response.text());
     await expect(
       page.getByRole("img", {
-        name: "规模增大后，正确产出如何变化",
+        name: "规模增大后，可用度如何变化",
         exact: true,
       }),
     ).toBeVisible();
     const curve = page.getByRole("img", {
-      name: "规模增大后，正确产出如何变化",
+      name: "规模增大后，可用度如何变化",
       exact: true,
     });
     await expect(curve.locator('g[data-value="500000"]')).toHaveCount(4);
@@ -121,7 +121,7 @@ for (const width of [1440, 390]) {
     });
 
     const sensitivity = page.getByRole("img", {
-      name: "静默检出率对正确产出的影响",
+      name: "静默检出率对可用度的影响",
       exact: true,
     });
     await expect(sensitivity).toBeVisible();
@@ -175,13 +175,13 @@ for (const width of [1440, 390]) {
       .click();
     await expect(
       page.getByRole("img", {
-        name: "规模增大后，正确产出如何变化",
+        name: "规模增大后，可用度如何变化",
         exact: true,
       }),
     ).toBeVisible();
     await expect(
       page.getByRole("img", {
-        name: "静默检出率对正确产出的影响",
+        name: "静默检出率对可用度的影响",
         exact: true,
       }),
     ).toBeVisible();

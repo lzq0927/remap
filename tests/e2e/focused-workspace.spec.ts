@@ -14,18 +14,23 @@ for (const width of [1440, 390])
     await expect(
       views.getByRole("tab", { name: "按步骤", exact: true }),
     ).toHaveAttribute("aria-selected", "true");
-    await page.getByLabel("审核卡数", { exact: true }).fill("12000");
+    await page.getByLabel("评估卡数", { exact: true }).fill("12000");
     const steps = page.getByRole("navigation", {
       name: "六阶段评估流程",
       exact: true,
     });
-    await steps.getByRole("button").nth(3).click();
-    await expect(page.getByLabel("审核卡数", { exact: true })).toBeHidden();
+    await steps.getByRole("button").nth(4).click();
+    await expect(page.locator("#audit-parameters")).not.toHaveAttribute(
+      "open",
+      "",
+    );
+    await page.getByText("参数核对", { exact: true }).click();
+    await expect(page.getByLabel("评估卡数", { exact: true })).toBeHidden();
     await expect(
       page.getByLabel("每场景轨迹数", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "03 / 预算与措施", exact: true }),
+      page.getByRole("heading", { name: "03 / 可用度分配", exact: true }),
     ).toBeHidden();
     await expect
       .poll(
@@ -38,7 +43,7 @@ for (const width of [1440, 390])
       await (await request.get(`/api/tasks/${taskId}/design`)).json()
     ).revision;
     await views.getByRole("tab", { name: "全部配置", exact: true }).click();
-    await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+    await expect(page.getByLabel("评估卡数", { exact: true })).toHaveValue(
       "12000",
     );
     await views.getByRole("tab", { name: "按步骤", exact: true }).click();
@@ -50,7 +55,7 @@ for (const width of [1440, 390])
       )
       .toBe(before);
     await steps.getByRole("button").nth(0).click();
-    await expect(page.getByLabel("审核卡数", { exact: true })).toHaveValue(
+    await expect(page.getByLabel("评估卡数", { exact: true })).toHaveValue(
       "12000",
     );
     await expect(page.getByLabel("每场景轨迹数", { exact: true })).toBeHidden();
@@ -151,6 +156,12 @@ test("result views keep frozen numbers and scale while showing the requested ana
     .getByRole("tab", { name: "贡献分摊", exact: true })
     .press("ArrowLeft");
   await expect(
+    views.getByRole("tab", { name: "可靠性框图", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await views
+    .getByRole("tab", { name: "可靠性框图", exact: true })
+    .press("ArrowLeft");
+  await expect(
     views.getByRole("tab", { name: "方案收益", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await expect(page.getByLabel("结果规模", { exact: true })).toHaveValue(
@@ -240,7 +251,7 @@ test("native Agent panel has the actual task step and keeps secondary management
   });
   await expect(
     panel.getByLabel("Agent 当前上下文", { exact: true }),
-  ).toContainText("参数核对");
+  ).toContainText("可靠性措施");
   await expect(panel.locator(".agent-management")).not.toHaveAttribute(
     "open",
     "",
@@ -372,7 +383,7 @@ for (const status of ["cancelled", "failed"])
     await expect(
       page.getByRole("heading", { name: "上次完整结果", exact: true }),
     ).toBeHidden();
-    await expect(page.getByLabel("审核卡数", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("评估卡数", { exact: true })).toBeVisible();
     expect(
       await (await request.get(`/api/tasks/${taskId}/runs/${run.id}`)).json(),
     ).toEqual(run);

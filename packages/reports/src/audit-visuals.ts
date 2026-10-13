@@ -42,8 +42,8 @@ export function auditVisuals(r: any) {
           )
         : 1;
       return `<div data-summary-scale="${cards}" ${cards !== r.request.cards ? "hidden" : ""}><div class="verdict ${s.status}"><strong>${esc(s.statusLabel)}</strong><p>${esc(s.next)}</p></div><div class="metric-cards">
-      <div><span>基线正确产出</span><b>${pct(s.base.statistics.mean)}</b><small>当前故障与恢复假设</small></div>
-      <div><span>组合正确产出</span><b>${pct(s.combined.statistics.mean)}</b><small>95% 区间 ${pct(s.combined.statistics.ciLow)} ～ ${pct(s.combined.statistics.ciHigh)}</small></div>
+      <div><span>基线可用度</span><b>${pct(s.base.statistics.mean)}</b><small>当前故障与恢复假设</small></div>
+      <div><span>组合可用度</span><b>${pct(s.combined.statistics.mean)}</b><small>95% 区间 ${pct(s.combined.statistics.ciLow)} ～ ${pct(s.combined.statistics.ciHigh)}</small></div>
       <div><span>新增正确计算</span><b>${number(s.additionalHours)} <em>小时</em></b><small>提升 ${number(s.gain * 100)} 个百分点 · 单窗口</small></div>
       <div><span>距目标（均值 − 目标）</span><b>${s.referenceOnly ? "参考规模" : `${s.gap >= 0 ? "+" : ""}${number(s.gap * 100)} <em>pp</em>`}</b><small>${s.referenceOnly ? "未设置需求目标" : `目标 ${pct(s.target)}；pp 为百分点`}</small></div></div>
       <div class="brief-grid"><div><h3>产出损失去了哪里</h3><p class="chart-note">橙色：基线 · 绿色：组合 · 单窗口等效计算小时</p>${s.losses.map((l) => `<div class="loss-row"><span>${esc(l.name)}</span><div>${(["base", "combined"] as const).map((k) => `<div class="bar-pair"><div class="track"><div class="bar ${k}" style="width:${(Math.max(0, l[k]) / max) * 100}%"></div></div><small>${number(l[k])} h</small></div>`).join("")}</div></div>`).join("")}</div>
@@ -81,7 +81,7 @@ export const reportInteractionScript = `<script>
  document.addEventListener('click',e=>{const link=e.target.closest?.('.source-link');if(link)revealSource(link.getAttribute('href').slice(1));});
  const openSource=()=>{const id=location.hash.slice(1);if(id.startsWith('event-source-'))revealSource(id);};openSource();window.addEventListener('hashchange',openSource);
  document.querySelectorAll('section .table-wrap').forEach(wrap=>{
- const table=wrap.querySelector('table'),getRows=()=>Array.from(table.tBodies[0]?.rows||[]);if(getRows().length<10)return;
+ const table=wrap.querySelector('table');if(!table)return;const getRows=()=>Array.from(table.tBodies[0]?.rows||[]);if(getRows().length<10)return;
  const tools=document.createElement('div');tools.className='table-tools';
  const input=document.createElement('input');input.type='search';input.placeholder='搜索事件、机制或来源';input.setAttribute('aria-label','筛选表格');
  const count=document.createElement('span');count.className='table-count';count.setAttribute('role','status');

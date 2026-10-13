@@ -1,4 +1,5 @@
 import { runAssessmentModel } from "../../contracts/src/assessment-model";
+import { auditObjectDiagram } from "./audit-object-diagram";
 import type { Run } from "../../contracts/src/types";
 import {
   validationSummary,
@@ -892,17 +893,30 @@ export function report(run: Run, format = "md", options: ReportOptions = {}) {
           ? "<details><summary>" + escape(s.title) + "</summary>"
           : "<h2>" + escape(s.title) + "</h2>") +
         (s.paragraphs ?? []).map((p) => "<p>" + escape(p) + "</p>").join("") +
-        (s.visual === "overview"
-          ? auditScaleCurve(result) + auditGainCharts(result)
-          : s.visual === "sensitivity"
-            ? auditSensitivityCurves(result)
-            : s.visual === "method"
-              ? auditMethodVisual(result)
-              : s.visual === "contribution"
-                ? auditContributionChart(result, s.contributionCards)
-                : s.visual === "contribution-controls"
-                  ? auditContributionScaleControl(result)
-                  : "") +
+        (s.visual === "objects"
+          ? '<div class="table-wrap" tabindex="0" aria-label="可靠性框图，可横向滚动"><div style="min-width:780px">' +
+            auditObjectDiagram(
+              result.events,
+              result.rows.find(
+                (r: any) => r.cards === result.request.cards && r.id === "base",
+              ),
+              result.rows.find(
+                (r: any) =>
+                  r.cards === result.request.cards && r.id === "combined",
+              ),
+            ) +
+            "</div></div>"
+          : s.visual === "overview"
+            ? auditScaleCurve(result) + auditGainCharts(result)
+            : s.visual === "sensitivity"
+              ? auditSensitivityCurves(result)
+              : s.visual === "method"
+                ? auditMethodVisual(result)
+                : s.visual === "contribution"
+                  ? auditContributionChart(result, s.contributionCards)
+                  : s.visual === "contribution-controls"
+                    ? auditContributionScaleControl(result)
+                    : "") +
         (s.tables ?? []).map(htmlTable).join("") +
         (s.collapsed ? "</details>" : "") +
         "</section>",

@@ -100,7 +100,7 @@ export default function AuditRanking({
         </table>
       </div>
       {!rows.length && (
-        <p>没有剩余候选机制；可在预算与措施中增加候选后重新评估。</p>
+        <p>没有剩余候选机制；可在可靠性措施中增加候选后重新评估。</p>
       )}
     </section>
   );

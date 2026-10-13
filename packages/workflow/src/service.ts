@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 import { Store } from "../../assets/src/store";
 import { DomainError } from "../../contracts/src/errors";
+import { changedAuditStage } from "./design-changes";
 
 export const steps = [
   "clarify",
@@ -29,6 +30,12 @@ export interface WorkflowState {
   mode: string;
   status: "idle" | "active" | "succeeded" | "cancelled";
   stale?: boolean;
+  changedFrom?: number;
+  resumedFrom?: {
+    executionId: string;
+    inputRevision: number;
+    confirmedSteps: number;
+  };
   steps: {
     id: string;
     status: StepStatus;
@@ -92,7 +99,19 @@ export class WorkflowService extends EventEmitter {
         notes: "",
       })),
     };
-    return { ...state, stale: state.inputRevision !== this.inputRevision() };
+    const stale = state.inputRevision !== this.inputRevision();
+    return {
+      ...state,
+      stale,
+      changedFrom: stale ? this.changedFrom(state) : undefined,
+    };
+  }
+  private changedFrom(state: WorkflowState) {
+    const designs = this.store.documents("design");
+    return changedAuditStage(
+      designs.find((d) => d.revision === state.inputRevision),
+      designs.at(-1),
+    );
   }
   events(after = 0): WorkflowEvent[] {
     if (!Number.isSafeInteger(after) || after < 0)
@@ -102,7 +121,10 @@ export class WorkflowService extends EventEmitter {
       .filter((e) => e.sequence > after)
       .sort((a, b) => a.sequence - b.sequence);
   }
-  start(input: { inputRevision: number; mode?: string }, actor = "user") {
+  start(
+    input: { inputRevision: number; mode?: string; resume?: boolean },
+    actor = "user",
+  ) {
     if (input.inputRevision !== this.inputRevision())
       throw new DomainError(
         "INPUT_REVISION_CONFLICT",
@@ -113,6 +135,16 @@ export class WorkflowService extends EventEmitter {
     if (!["manual", "assisted", "auto-to-review"].includes(mode))
       throw new DomainError("SCHEMA_INVALID", "未知执行模式");
     const previous = this.get();
+    let retained = 0;
+    if (input.resume && actor === "user" && mode === "manual") {
+      const changed = this.changedFrom(previous);
+      while (
+        retained < Math.min(changed, 4) &&
+        previous.steps[retained]?.status === "confirmed" &&
+        previous.steps[retained]?.confirmedBy === "user"
+      )
+        retained++;
+    }
     const state: WorkflowState = {
       taskId: this.taskId,
       workflowId: this.taskId,
@@ -121,12 +153,23 @@ export class WorkflowService extends EventEmitter {
       inputRevision: input.inputRevision,
       mode,
       status: "active",
-      steps: steps.map((id, index) => ({
-        id,
-        status: index === 0 ? "ready" : "waiting-input",
-        artifacts: [],
-        notes: "",
-      })),
+      resumedFrom: retained
+        ? {
+            executionId: previous.executionId,
+            inputRevision: previous.inputRevision,
+            confirmedSteps: retained,
+          }
+        : undefined,
+      steps: steps.map((id, index) =>
+        index < retained
+          ? structuredClone(previous.steps[index])
+          : {
+              id,
+              status: index === retained ? "ready" : "waiting-input",
+              artifacts: [],
+              notes: "",
+            },
+      ),
     };
     return this.persist(state, "workflow.started", actor);
   }
@@ -170,7 +213,7 @@ export class WorkflowService extends EventEmitter {
     if (input.inputRevision !== state.inputRevision || state.stale)
       throw new DomainError(
         "INPUT_REVISION_CONFLICT",
-        "设计已改变，保留旧执行，请核对后重新开始",
+        "设计已改变，请继续当前版本并复核受影响的阶段",
         409,
       );
     const index = steps.findIndex((id) => id === input.stepId);
