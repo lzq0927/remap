@@ -2,6 +2,10 @@ import { describe, it, expect } from "vitest";
 import { buildApp } from "../../apps/api/src/server";
 import { clusterModel } from "../../packages/modeling/src/sample";
 import { hash } from "../../packages/assets/src/hash";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { tlcRuntime } from "../../packages/modeling/src/tlc";
 
 describe("task engineering loop", () => {
   it("versions models, reviews agent proposals, preserves evidence and roundtrips bundles", async () => {
@@ -415,52 +419,76 @@ describe("task engineering loop", () => {
       await app.close();
     }
   });
-  it("cancels a running unbounded formal model without recording a successful verdict", async () => {
-    const app = await buildApp({ dataDir: ":memory:", seed: false });
-    try {
-      const task = app.taskServices.create("cancel"),
-        base = `/api/tasks/${task.id}/engineering`,
-        model = clusterModel();
-      model.cases[2].files = [
-        {
-          name: "Counter.tla",
-          content:
-            "---- MODULE Counter ----\nEXTENDS Naturals\nVARIABLE x\nInit == x = 0\nNext == x' = x + 1\nSafe == x >= 0\n====",
-        },
-        {
-          name: "Counter.cfg",
-          content: "INIT Init\nNEXT Next\nINVARIANT Safe",
-        },
-      ];
-      const saved = (
-        await app.inject({
-          method: "POST",
-          url: base + "/models",
-          payload: { model },
-        })
-      ).json();
-      const run = (
-        await app.inject({
-          method: "POST",
-          url: base + "/models/" + saved.id + "/runs",
-          payload: { expectedRevision: 1, caseId: "unfenced-tlc" },
-        })
-      ).json();
-      await expect
-        .poll(() => app.taskServices.resolve(task.id).runs.get(run.id).status)
-        .toBe("running");
-      await new Promise((r) => setTimeout(r, 1000));
-      const cancelled = (
-        await app.inject({
-          method: "POST",
-          url: `/api/tasks/${task.id}/runs/${run.id}/cancel`,
-          payload: {},
-        })
-      ).json();
-      expect(cancelled.status).toBe("cancelled");
-      expect(cancelled.result).toBeUndefined();
-    } finally {
-      await app.close();
-    }
-  });
+  it.skipIf(!tlcRuntime().available)(
+    "cancels an unbounded model and removes its Java state files",
+    async () => {
+      const before = new Set(readdirSync(tmpdir()));
+      const app = await buildApp({ dataDir: ":memory:", seed: false });
+      try {
+        const task = app.taskServices.create("cancel"),
+          base = `/api/tasks/${task.id}/engineering`,
+          model = clusterModel();
+        model.cases[2].files = [
+          {
+            name: "Counter.tla",
+            content:
+              "---- MODULE Counter ----\nEXTENDS Naturals\nVARIABLE x\nInit == x = 0\nNext == x' = x + 1\nSafe == x >= 0\n====",
+          },
+          {
+            name: "Counter.cfg",
+            content: "INIT Init\nNEXT Next\nINVARIANT Safe",
+          },
+        ];
+        const saved = (
+          await app.inject({
+            method: "POST",
+            url: base + "/models",
+            payload: { model },
+          })
+        ).json();
+        const run = (
+          await app.inject({
+            method: "POST",
+            url: base + "/models/" + saved.id + "/runs",
+            payload: { expectedRevision: 1, caseId: "unfenced-tlc" },
+          })
+        ).json();
+        await expect
+          .poll(() => app.taskServices.resolve(task.id).runs.get(run.id).status)
+          .toBe("running");
+        let directory: string | undefined;
+        // Wait for the actual TLC child, not merely the queued worker's status.
+        await expect
+          .poll(
+            () => {
+              directory = readdirSync(tmpdir()).find(
+                (name) =>
+                  !before.has(name) &&
+                  name.startsWith("remap-tlc-") &&
+                  existsSync(join(tmpdir(), name, "states")),
+              );
+              return !!directory;
+            },
+            { timeout: 10000 },
+          )
+          .toBe(true);
+        const cancelled = (
+          await app.inject({
+            method: "POST",
+            url: `/api/tasks/${task.id}/runs/${run.id}/cancel`,
+            payload: {},
+          })
+        ).json();
+        expect(cancelled.status).toBe("cancelled");
+        expect(cancelled.result).toBeUndefined();
+        await expect
+          .poll(() => existsSync(join(tmpdir(), directory!)), {
+            timeout: 10000,
+          })
+          .toBe(false);
+      } finally {
+        await app.close();
+      }
+    },
+  );
 });

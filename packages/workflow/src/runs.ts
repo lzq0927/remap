@@ -172,6 +172,7 @@ export class RunService extends EventEmitter {
           execArgv: ["--import", "tsx"],
           stdio: ["ignore", "ignore", "pipe", "ipc"],
           env: process.env,
+          detached: process.platform !== "win32",
         },
       );
       this.children.set(run.id, child);
@@ -220,6 +221,12 @@ export class RunService extends EventEmitter {
         { windowsHide: true, stdio: "ignore" },
       );
       killer.on("error", () => child.kill());
-    } else child.kill();
+    } else if (child.pid && child.exitCode === null) {
+      try {
+        process.kill(-child.pid, "SIGTERM");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") child.kill();
+      }
+    }
   }
 }

@@ -106,6 +106,15 @@ export async function runTlc(input: ToolInput): Promise<ToolResult> {
         child.kill();
       };
       const timer = setTimeout(stop, Math.min(60000, input.timeoutMs));
+      // Let the Java close event settle the promise and remove state files on cancellation.
+      // The run scheduler terminates the complete POSIX process group.
+      process.once("SIGTERM", stop);
+      process.once("SIGINT", stop);
+      const cleanup = () => {
+        clearTimeout(timer);
+        process.off("SIGTERM", stop);
+        process.off("SIGINT", stop);
+      };
       const append = (b: Buffer) => {
         output += b.toString();
         if (Buffer.byteLength(output) > 2_000_000) stop();
@@ -113,11 +122,11 @@ export async function runTlc(input: ToolInput): Promise<ToolResult> {
       child.stdout.on("data", append);
       child.stderr.on("data", append);
       child.on("error", (e) => {
-        clearTimeout(timer);
+        cleanup();
         reject(e);
       });
       child.on("close", (code) => {
-        clearTimeout(timer);
+        cleanup();
         done({ output: output.slice(0, 2_000_000), code, limited });
       });
     });
