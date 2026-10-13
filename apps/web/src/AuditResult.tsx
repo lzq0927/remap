@@ -1,5 +1,7 @@
 import { useState } from "react";
 import AuditRanking from "./AuditRanking";
+import AuditContribution from "./AuditContribution";
+import { gainExplanation } from "../../../packages/reports/src/audit-contributions";
 import {
   auditSelectedMechanisms,
   auditSamplingDescription,
@@ -31,11 +33,15 @@ export default function AuditResult({
   const selected = r.rows.filter((row: any) => row.cards === cards);
   const budget = r.designReview?.scales.find((x: any) => x.cards === cards);
   const recommendation = r.recommendation;
-  const a = r.attribution.find((row: any) => row.cards === cards);
   return (
     <>
       <h3>事件与机制收益审核 · 保留干净检查点</h3>
-      <AuditRanking result={r} cards={cards} />
+      {r.rankings && (
+        <details>
+          <summary>冻结条件基线与剩余机制排序</summary>
+          <AuditRanking result={r} cards={cards} />
+        </details>
+      )}
       {r.allocationPlan && (
         <details open aria-label="本次目标分配产物">
           <summary>本次目标分配 · 冻结于措施评估前</summary>
@@ -349,7 +355,8 @@ export default function AuditResult({
           按基线损失排序，排除公共保存开销；排序用于定位问题，不代表实施收益排名。
         </p>
       </details>
-      <h3>单项与组合对照</h3>
+      <h3>单项与组合方案收益对照</h3>
+      <p>{gainExplanation}</p>
       <p>
         {cards.toLocaleString()} 卡 · {r.request.hours} 小时 · 目标{" "}
         {pct(s.target)}。基线、单项与组合使用同一批种子。
@@ -389,41 +396,7 @@ export default function AuditResult({
           </tbody>
         </table>
       </div>
-      {a && (
-        <>
-          <h3>组合贡献</h3>
-          <p>
-            每个子集 {a.trials} 条轨迹，本批次组合提升{" "}
-            {(a.gain * 100).toFixed(3)} pp；主评估使用 {r.request.trials}{" "}
-            条轨迹，采样差异会使总提升不同。 组合与单项之和的差值{" "}
-            {(a.nonAdditivity * 100).toFixed(3)} pp。Shapley
-            是收益分摊，恢复链为 {r.config.recoveryOrder.join(" → ")}。
-          </p>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>机制</th>
-                  <th>Shapley 贡献</th>
-                  <th>95% 区间</th>
-                </tr>
-              </thead>
-              <tbody>
-                {a.contributions.map((c: any) => (
-                  <tr key={c.id}>
-                    <td>{c.name}</td>
-                    <td>{(100 * c.statistics.mean).toFixed(3)} pp</td>
-                    <td>
-                      {(100 * c.statistics.ciLow).toFixed(3)} ～{" "}
-                      {(100 * c.statistics.ciHigh).toFixed(3)} pp
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+      <AuditContribution result={r} cards={cards} onScale={setScale} />
       {!!r.sensitivity?.length && (
         <details className="audit-curves" open>
           <summary>关键参数敏感性曲线</summary>

@@ -68,6 +68,22 @@ test("official MCP client negotiates tools, creates assets, invokes solver, canc
       await new Promise((r) => setTimeout(r, 30));
     }
     expect(run.result.probability).toBeCloseTo(0.72);
+    const exported: any = await client.callTool({
+      name: "report_export",
+      arguments: {
+        id: queued.runId,
+        query: { format: "html", includeTechnical: "true" },
+      },
+    });
+    expect(exported.isError).toBe(false);
+    const descriptor = JSON.parse(exported.content[0].text);
+    expect(descriptor.offlinePackage.href).toBe(
+      `http://127.0.0.1:${address.port}/api/tasks/${task.id}/runs/${queued.runId}/report?format=zip`,
+    );
+    expect(descriptor.attachment.filename).toContain(".results.json");
+    expect(exported.content[0].text).not.toContain(
+      app.taskServices.getAgentCredential(task.id),
+    );
   } finally {
     await client.close();
     await app.close();

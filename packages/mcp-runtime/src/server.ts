@@ -86,7 +86,12 @@ export const registry = [
   ["run_status", "查询实验状态、结果、参数快照和诊断", "GET", "/runs/:id"],
   ["run_cancel", "取消指定实验，保留已有记录", "POST", "/runs/:id/cancel"],
   ["run_replay", "使用固化输入与种子重放实验", "POST", "/runs/:id/replay"],
-  ["report_export", "获取报告（md/html/json）", "GET", "/runs/:id/report"],
+  [
+    "report_export",
+    "获取简洁报告（md/html）、完整 JSON 附件。format=manifest/zip 或 includeTechnical=true 返回包含离线 ZIP 下载地址的描述，不向对话塞入二进制附件",
+    "GET",
+    "/runs/:id/report",
+  ],
   ["feedback_record", "记录用户采纳情况和理由", "POST", "/feedback"],
   [
     "workflow_cancel",
@@ -135,7 +140,16 @@ export function createMcpServer(
               path = path.replace(":" + p, encodeURIComponent(String(args[p])));
             }
           }
-          const q = new URLSearchParams(args.query).toString();
+          const query = { ...args.query };
+          if (
+            name === "report_export" &&
+            (query.format === "zip" ||
+              ["true", "1"].includes(query.includeTechnical))
+          ) {
+            query.format = "manifest";
+            delete query.includeTechnical;
+          }
+          const q = new URLSearchParams(query).toString();
           const policy = readRuntimePolicy();
           const requestUrl = assertEndpointAllowed(
             baseUrl.replace(/\/$/, "") +
@@ -180,6 +194,14 @@ export function createMcpServer(
               artifactRefs: [],
               warnings: [],
             };
+          if (name === "report_export" && response.ok && value.offlinePackage) {
+            for (const file of [
+              ...value.reports,
+              value.attachment,
+              value.offlinePackage,
+            ])
+              file.href = new URL(file.href, requestUrl).href;
+          }
           return {
             content: [{ type: "text" as const, text: JSON.stringify(value) }],
             structuredContent:

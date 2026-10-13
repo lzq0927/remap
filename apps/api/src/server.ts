@@ -19,6 +19,8 @@ import {
   type AgentIntegration,
 } from "./agent-integration";
 import { report } from "../../../packages/reports/src/report";
+import { reportPackage } from "../../../packages/reports/src/report-package";
+import { reportAttachment } from "../../../packages/reports/src/validation-summary";
 import { workflowReportRun } from "../../../packages/reports/src/workflow-context";
 import { applyBindings } from "../../../packages/domain/src/bindings";
 import type { CatalogKind } from "../../../packages/contracts/src/types";
@@ -628,9 +630,48 @@ export async function buildApp(options: BuildAppOptions = {}) {
     });
   });
   app.get("/api/tasks/:taskId/runs/:id/report", async (req: any, reply) => {
-    const format = ["md", "html", "json"].includes(req.query.format)
+    const store = tasks.authorize(req, req.params.taskId).store;
+    const run = workflowReportRun(store, store.getRun(req.params.id));
+    const attachment = reportAttachment(run);
+    const path = `/api/tasks/${encodeURIComponent(req.params.taskId)}/runs/${encodeURIComponent(run.id)}/report`;
+    const format = ["md", "html", "json", "zip", "manifest"].includes(
+      req.query.format,
+    )
       ? req.query.format
       : "md";
+    if (format === "manifest")
+      return {
+        runId: run.id,
+        status: run.status,
+        inputHash: run.inputHash,
+        reports: ["html", "md"].map((format) => ({
+          format,
+          filename: `${attachment.stem}.${format}`,
+          href: `${path}?format=${format}`,
+        })),
+        attachment: {
+          filename: attachment.filename,
+          href: `${path}?format=json`,
+        },
+        offlinePackage: {
+          filename: `${attachment.stem}.zip`,
+          href: `${path}?format=zip`,
+          description:
+            "HTML、Markdown、完整 JSON 及 SHA-256 清单；解压后离线附件可访问",
+        },
+      };
+    if (
+      format === "zip" ||
+      (format !== "json" && ["true", "1"].includes(req.query.includeTechnical))
+    ) {
+      const bundle = reportPackage(run, { taskId: req.params.taskId });
+      reply.header("Content-Type", "application/zip");
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="${bundle.filename}"`,
+      );
+      return reply.send(bundle.buffer);
+    }
     reply.header(
       "Content-Type",
       format === "html"
@@ -641,13 +682,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
     );
     reply.header(
       "Content-Disposition",
-      `attachment; filename="reliability-${req.params.id}.${format}"`,
+      `attachment; filename="${format === "json" ? attachment.filename : `${attachment.stem}.${format}`}"`,
     );
-    const store = tasks.authorize(req, req.params.taskId).store;
-    return report(
-      workflowReportRun(store, store.getRun(req.params.id)),
-      format,
-    );
+    return report(run, format, {
+      taskId: req.params.taskId,
+      onlineAttachmentHref: `${req.protocol}://${req.headers.host}${path}?format=json`,
+    });
   });
   app.get("/api/tasks/:taskId/feedback", async (req: any) =>
     tasks.authorize(req, req.params.taskId).store.documents("feedback"),

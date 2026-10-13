@@ -2172,3 +2172,51 @@ main > header {
   color: var(--muted, #64748b);
   font-size: 12px;
 }
+.report-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 580px;
+  min-width: 0;
+}
+.report-export label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.report-export .technical-export input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+.report-export small {
+  display: block;
+  flex-basis: 100%;
+  color: #526b63;
+  overflow-wrap: anywhere;
+}
+.report-export .button {
+  white-space: normal;
+}
+.validation-summary p,
+.validation-summary td {
+  overflow-wrap: anywhere;
+}
+.failure-diagnostics {
+  border-left: 3px solid #b84c40;
+  padding-left: 16px;
+}
+@media (max-width: 640px) {
+  .report-export {
+    max-width: 100%;
+    width: 100%;
+  }
+  .report-export .button {
+    flex: 1 1 auto;
+  }
+  .validation-summary .table-wrap {
+    max-width: 100%;
+  }
+}

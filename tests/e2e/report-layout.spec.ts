@@ -78,7 +78,7 @@ for (const width of [1440, 390]) {
         .getAttribute("data-mean"),
     ).toBe(String(frozenBase.statistics.mean));
     await page
-      .getByLabel("收益排名规模", { exact: true })
+      .getByLabel("方案收益对照规模", { exact: true })
       .selectOption("500000");
     await expect(page.locator('[data-gain-scale="500000"]')).toBeVisible();
     await expect(page.locator('[data-gain-scale="10000"]')).toBeHidden();
@@ -188,7 +188,7 @@ for (const width of [1440, 390]) {
     await page.getByLabel("结果规模", { exact: true }).selectOption("500000");
     await expect(
       page.getByRole("heading", {
-        name: "500,000 卡 · 单项与组合收益排名",
+        name: "500,000 卡 · 单项与组合方案收益对照",
         exact: true,
       }),
     ).toBeVisible();

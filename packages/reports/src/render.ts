@@ -1,9 +1,16 @@
 import { runAssessmentModel } from "../../contracts/src/assessment-model";
 import type { Run } from "../../contracts/src/types";
+import {
+  validationSummary,
+  reportAttachment,
+  diagnosticText,
+} from "./validation-summary";
 import { auditSections, type AuditSection, type AuditTable } from "./audit";
 import {
   auditChartCss,
   auditGainCharts,
+  auditContributionChart,
+  auditContributionScaleControl,
   auditScaleCurve,
   auditSensitivityCurves,
 } from "./audit-charts";
@@ -264,7 +271,9 @@ function core(r: any, run: Run): Section[] {
         paragraphs: [
           (statuses[run.status] ?? run.status) +
             "：" +
-            (run.error?.message ?? "暂无成功计算结果"),
+            (run.error
+              ? diagnosticText(run.error.message)
+              : "暂无成功计算结果"),
         ],
       },
     ];
@@ -588,15 +597,14 @@ function mdTable(t: Table) {
     ...t.rows.map((row) => "| " + row.map(mdCell).join(" | ") + " |"),
   ].join("\n");
 }
-function jsonFence(v: unknown) {
-  const json = JSON.stringify(v ?? null, null, 2),
-    mark = String.fromCharCode(96),
-    runs = json.match(new RegExp(mark + "+", "g")) ?? [],
-    longest = runs.reduce((max, s) => Math.max(max, s.length), 0),
-    fence = mark.repeat(Math.max(3, longest + 1));
-  return fence + "json\n" + json + "\n" + fence;
+export interface ReportOptions {
+  taskId?: string;
+  /** Relative sibling JSON in offline files; task-scoped endpoint in the workspace. */
+  attachmentHref?: string;
+  onlineAttachmentHref?: string;
+  offlinePackage?: boolean;
 }
-export function report(run: Run, format = "md") {
+export function report(run: Run, format = "md", options: ReportOptions = {}) {
   if (format === "json") return JSON.stringify(run, null, 2);
   const result = run.status === "succeeded" ? run.result : undefined,
     sections = core(result, run);
@@ -613,13 +621,14 @@ export function report(run: Run, format = "md") {
           "。本报告依据原运行快照生成，切换当前设计不会改变历史结果。不同口径的结果不直接排名。",
       ],
     });
-  sections.push({
-    title: "设计建议与可信度限制",
-    paragraphs: [
-      "优先分析实际损失，再通过方案比较、敏感性和组合贡献验证候选。未经比较，不指定所谓最优方案。",
-      "参数、传播与机制成功率需产品实测校准。示例回归不能证明产品预测准确度；抽样区间不能覆盖参数与模型误差。",
-    ],
-  });
+  if (result)
+    sections.push({
+      title: "设计建议与可信度限制",
+      paragraphs: [
+        "优先分析实际损失，再通过方案比较、敏感性和组合贡献验证候选。未经比较，不指定所谓最优方案。",
+        "参数、传播与机制成功率需产品实测校准。示例回归不能证明产品预测准确度；抽样区间不能覆盖参数与模型误差。",
+      ],
+    });
   const metadata =
     "运行：" +
     run.id +
@@ -629,17 +638,48 @@ export function report(run: Run, format = "md") {
     (operations[run.operation] ?? run.operation) +
     "；时间：" +
     run.createdAt;
-  const provenance = {
-    metricId: model?.metricId,
-    assessmentModel: model?.name,
-    inputHash: run.inputHash,
-    modelVersion: result?.modelVersion ?? result?.version ?? result?.solver,
-    sourceCommit: result?.config?.sourceCommit,
-    config: result?.config,
-    assumptions: result?.assumptions ?? result?.details?.assumptions,
-    warnings: result?.warnings,
-    events: run.events,
-  };
+  const summary = validationSummary(run, options.taskId),
+    attachment = reportAttachment(run);
+  // Restrict custom links to HTTP(S), task paths or a safe sibling filename.
+  const proposedHref = options.attachmentHref ?? attachment.filename;
+  const href =
+    /^(?:https?:\/\/[^\s<>"']+|\/api\/[^\s<>"']+|[a-zA-Z0-9._-]+\.json)$/.test(
+      proposedHref,
+    )
+      ? proposedHref
+      : attachment.filename;
+  const onlineHref =
+    options.onlineAttachmentHref &&
+    /^https?:\/\/[^\s<>"']+$/.test(options.onlineAttachmentHref)
+      ? options.onlineAttachmentHref
+      : undefined;
+  const attachmentNote = options.offlinePackage
+    ? "完整技术附件已随离线报告包保存。请先解压，保持报告与 JSON 同目录；无需平台服务或网络。"
+    : "正文不包含完整技术附件。离线阅读请下载包含完整技术附件的 ZIP 包并解压，或将独立 JSON 保存到正文同目录。";
+  sections.push({
+    title: "验证与诊断摘要",
+    paragraphs: [
+      summary.note,
+      ...summary.trace,
+      ...(summary.omittedAnomalies
+        ? [`另有 ${summary.omittedAnomalies} 条异常/提醒，见 JSON 附件。`]
+        : []),
+    ],
+    tables: [
+      { heads: ["摘要项", "内容"], rows: summary.rows },
+      ...(summary.anomalies.length
+        ? [
+            {
+              heads: ["异常/提醒", "项目", "说明"],
+              rows: summary.anomalies.map((a) => [a.status, a.name, a.detail]),
+            },
+          ]
+        : []),
+    ],
+  });
+  if (!result)
+    sections[model ? 1 : 0].title =
+      run.status === "failed" ? "失败诊断" : "未完成运行诊断";
   if (format !== "html")
     return (
       "# " +
@@ -650,9 +690,9 @@ export function report(run: Run, format = "md") {
       sections
         .map(
           (s) =>
-            "## " +
-            s.title +
-            "\n\n" +
+            (s.collapsed
+              ? "<details>\n<summary>" + mdCell(s.title) + "</summary>\n\n"
+              : "## " + s.title + "\n\n") +
             (s.paragraphs ?? []).map(mdCell).join("\n\n") +
             (s.tables?.length
               ? "\n\n" +
@@ -690,15 +730,20 @@ export function report(run: Run, format = "md") {
                         : ""),
                   )
                   .join("\n\n")
-              : ""),
+              : "") +
+            (s.collapsed ? "\n\n</details>" : ""),
         )
         .join("\n\n") +
-      "\n\n## 输入与资产快照\n\n" +
-      jsonFence(run.input) +
-      "\n\n## 完整结果和诊断\n\n" +
-      jsonFence(result ?? run.error) +
-      "\n\n## 可复现性\n\n" +
-      jsonFence(provenance) +
+      "\n\n## 技术附件\n\n[" +
+      attachment.label +
+      "](" +
+      href +
+      ")" +
+      (onlineHref ? " · [在线下载 JSON](" + onlineHref + ")" : "") +
+      "\n\n文件名：" +
+      attachment.filename +
+      "。" +
+      attachmentNote +
       "\n"
     );
   let renderedTables = 0;
@@ -834,7 +879,15 @@ export function report(run: Run, format = "md") {
       (s, i) =>
         '<section id="section-' +
         i +
-        '">' +
+        '"' +
+        (s.title === "验证与诊断摘要" ? ' class="validation-summary"' : "") +
+        (s.contributionCards === undefined
+          ? ""
+          : ' data-contribution-scale="' +
+            s.contributionCards +
+            '"' +
+            (s.contributionCards === result.request.cards ? "" : " hidden")) +
+        ">" +
         (s.collapsed
           ? "<details><summary>" + escape(s.title) + "</summary>"
           : "<h2>" + escape(s.title) + "</h2>") +
@@ -845,7 +898,11 @@ export function report(run: Run, format = "md") {
             ? auditSensitivityCurves(result)
             : s.visual === "method"
               ? auditMethodVisual(result)
-              : "") +
+              : s.visual === "contribution"
+                ? auditContributionChart(result, s.contributionCards)
+                : s.visual === "contribution-controls"
+                  ? auditContributionScaleControl(result)
+                  : "") +
         (s.tables ?? []).map(htmlTable).join("") +
         (s.collapsed ? "</details>" : "") +
         "</section>",
@@ -857,14 +914,14 @@ export function report(run: Run, format = "md") {
     "</title><style>body{max-width:1320px;margin:32px auto;padding:0 24px;font:15px/1.8 system-ui,sans-serif;color:#182d35;background:#f5f6f2}header{background:#163c37;color:white;padding:36px;border-radius:16px}header p{color:#c7dbd4}h1{font-size:32px;line-height:1.4}h2{margin:0 0 20px;color:#176451}section{background:white;border:1px solid #dce3df;border-radius:12px;margin:24px 0;padding:24px;scroll-margin-top:20px}nav{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}nav a{color:#176451;padding:6px 12px;background:#e7eee8;border-radius:8px;text-decoration:none}small{color:#526b63}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}th,td{padding:10px 12px;border-bottom:1px solid #dce3df;text-align:left;vertical-align:top}th{background:#eef3ef}tr:nth-child(even){background:#fafbf8}pre{white-space:pre-wrap;word-break:break-word;background:#eef3ef;padding:20px}summary{cursor:pointer;font-weight:650;padding:12px 0}.chart-row{display:flex;gap:12px;align-items:center;margin:12px 0}.chart-row span{width:210px}.track{flex:1;background:#edf1ea;height:14px;border-radius:8px;overflow:hidden}.bar{height:100%;background:#b78756}.combined{background:#258a75}.chart-row strong{width:90px}@media(max-width:640px){body{padding:0 10px}header,section{padding:18px}.chart-row span{width:115px;font-size:12px}}@media print{body{margin:0;background:white}nav{display:none}header{background:white;color:#182d35;border-bottom:3px solid #137968}section{border:0;padding:10px 0}.table-wrap{overflow:visible}details>*{display:block!important}section,table{break-inside:auto}tr{break-inside:avoid}}" +
     reportEnhancementCss +
     auditChartCss +
-    "</style></head><body><header><p>ReMAP / RELIABILITY MODELING AND ANALYSIS PLATFORM</p><h1>" +
+    ".validation-summary p{overflow-wrap:anywhere}</style></head><body><header><p>ReMAP / RELIABILITY MODELING AND ANALYSIS PLATFORM</p><h1>" +
     escape(title) +
     "</h1><p>" +
     escape(metadata) +
     '</p></header><nav aria-label="报告目录">' +
     sections
       .map((s, i) =>
-        s.collapsed
+        s.collapsed || s.contributionCards !== undefined
           ? ""
           : '<a href="#section-' + i + '">' + escape(s.title) + "</a>",
       )
@@ -873,13 +930,21 @@ export function report(run: Run, format = "md") {
     '<div class="report-actions"><button id="report-print" type="button">打印 / 保存 PDF</button><button id="report-expand" type="button" aria-expanded="false">展开机制明细</button></div>' +
     (isAudit ? auditVisuals(result) : "") +
     sectionHtml +
-    '<details class="report-evidence"><summary>输入与资产快照</summary><pre>' +
-    escape(JSON.stringify(run.input, null, 2)) +
-    '</pre></details><details class="report-evidence"><summary>完整结果和诊断</summary><pre>' +
-    escape(JSON.stringify(result ?? run.error ?? null, null, 2)) +
-    '</pre></details><details class="report-evidence"><summary>模型版本、来源与运行事件</summary><pre>' +
-    escape(JSON.stringify(provenance, null, 2)) +
-    "</pre></details>" +
+    '<section aria-label="技术附件"><h2>技术附件</h2><a download="' +
+    escape(attachment.filename) +
+    '" href="' +
+    escape(href) +
+    '">' +
+    escape(attachment.label) +
+    "</a>" +
+    (onlineHref
+      ? ' · <a href="' + escape(onlineHref) + '" download>在线下载 JSON</a>'
+      : "") +
+    "<p>文件名：" +
+    escape(attachment.filename) +
+    "。</p><p>" +
+    escape(attachmentNote) +
+    "</p></section>" +
     reportInteractionScript +
     "</body></html>"
   );

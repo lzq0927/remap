@@ -8,6 +8,8 @@ import {
   resolveAudit,
 } from "../packages/analysis/src/audit";
 import { report } from "../packages/reports/src/render";
+import { reportPackage } from "../packages/reports/src/report-package";
+import { hash } from "../packages/assets/src/hash";
 const directory = "artifacts/expert-reproduction";
 mkdirSync(directory, { recursive: true });
 const input = getAuditDefaults();
@@ -99,6 +101,8 @@ const run: any = {
   operation: "audit",
   status: "succeeded",
   input,
+  inputHash: hash(input),
+  progress: 1,
   result,
   createdAt: new Date().toISOString(),
   events: [],
@@ -106,6 +110,10 @@ const run: any = {
 writeFileSync(`${directory}/result.json`, JSON.stringify(result));
 writeFileSync(`${directory}/expert-report.html`, report(run, "html"));
 writeFileSync(`${directory}/expert-report.md`, report(run, "markdown"));
+const bundle = reportPackage(run);
+for (const file of bundle.files)
+  writeFileSync(`${directory}/${file.name}`, file.content);
+writeFileSync(`${directory}/${bundle.filename}`, bundle.buffer);
 writeFileSync(
   `${directory}/verification.json`,
   JSON.stringify(

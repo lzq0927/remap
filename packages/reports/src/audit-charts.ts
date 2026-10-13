@@ -1,3 +1,7 @@
+import {
+  auditContributionView,
+  contributionExplanation,
+} from "./audit-contributions";
 /** Charts use frozen simulation points only; connecting points is not interpolation evidence. */
 type Statistics = { mean: number; ciLow: number; ciHigh: number };
 type Point = { x: number; statistics: Statistics; current?: boolean };
@@ -245,7 +249,7 @@ export function auditGainChart(r: any, cards = r.request.cards) {
     258 + ((v - low + padding) / (high - low + 2 * padding)) * 610;
   const zero = X(0),
     height = 75 + rows.length * 38;
-  return `<figure class="reliability-chart gain-chart"><h3>${num(cards)} 卡 · 单项与组合收益排名</h3><div class="reliability-plot" tabindex="0" aria-label="机制收益排名图，可横向滚动"><svg viewBox="0 0 960 ${height}" role="img" aria-label="单项与组合收益排名"><title>单项与组合收益排名</title><desc>条形是相对基线的配对均值增益，横向细线是 95% 配对差值区间。负值向零线左侧延伸。</desc><line x1="${zero}" y1="16" x2="${zero}" y2="${height - 40}" class="chart-zero"/>${rows
+  return `<figure class="reliability-chart gain-chart"><h3>${num(cards)} 卡 · 单项与组合方案收益对照</h3><div class="reliability-plot" tabindex="0" aria-label="方案收益对照图，可横向滚动"><svg viewBox="0 0 960 ${height}" role="img" aria-label="单项与组合方案收益对照"><title>单项与组合方案收益对照</title><desc>条形是相对基线的配对均值增益，横向细线是 95% 配对差值区间。负值向零线左侧延伸。</desc><line x1="${zero}" y1="16" x2="${zero}" y2="${height - 40}" class="chart-zero"/>${rows
     .map((row: any, i: number) => {
       const y = 30 + i * 38,
         mean = row.delta.mean * 100,
@@ -258,17 +262,65 @@ export function auditGainChart(r: any, cards = r.request.cards) {
     })
     .join(
       "",
-    )}<text x="${zero}" y="${height - 16}" text-anchor="middle">0</text><text x="560" y="${height - 16}" text-anchor="middle">相对基线提升 · 百分点（pp）</text></svg></div><figcaption>每场景 ${escape(r.request.trials)} 条配对轨迹。条形为增益均值，横向细线为 95% 配对差值区间；区间跨 0 时，暂不能区分改善与抽样波动。负值保留，组合收益不能与单项相加；此排名用于方案比较，Shapley 分摊另列。</figcaption></figure>`;
+    )}<text x="${zero}" y="${height - 16}" text-anchor="middle">0</text><text x="560" y="${height - 16}" text-anchor="middle">相对基线提升 · 百分点（pp）</text></svg></div><figcaption>每场景 ${escape(r.request.trials)} 条配对轨迹。条形为增益均值，横向细线为 95% 配对差值区间；区间跨 0 时，当前采样不能明确判断改善或下降。负值保留，组合收益不能与单项相加；每行比较完整方案相对当前基线的增量，方案收益为负时新增开销超过改善。Shapley贡献分摊另列，不能按名次宣称显著优劣。</figcaption></figure>`;
 }
 
 export function auditGainCharts(r: any) {
   const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
     (a, b) => a - b,
   );
-  return `<label class="gain-scale-control">收益排名规模 <select id="gain-scale" aria-label="收益排名规模">${scales.map((cards) => `<option value="${cards}" ${cards === r.request.cards ? "selected" : ""}>${num(cards)} 卡</option>`).join("")}</select></label>${scales.map((cards) => `<div data-gain-scale="${cards}" ${cards !== r.request.cards ? "hidden" : ""}>${auditGainChart(r, cards)}</div>`).join("")}`;
+  return `<label class="gain-scale-control">方案收益对照规模 <select id="gain-scale" aria-label="方案收益对照规模">${scales.map((cards) => `<option value="${cards}" ${cards === r.request.cards ? "selected" : ""}>${num(cards)} 卡</option>`).join("")}</select></label>${scales.map((cards) => `<div data-gain-scale="${cards}" ${cards !== r.request.cards ? "hidden" : ""}>${auditGainChart(r, cards)}</div>`).join("")}`;
+}
+
+export function auditContributionChart(r: any, cards = r.request.cards) {
+  const v = auditContributionView(r, cards),
+    rows = v.rows;
+  if (!rows.length) return "";
+  const bounds = rows.flatMap((row: any) =>
+    [row.statistics.mean, row.statistics.ciLow, row.statistics.ciHigh]
+      .filter(Number.isFinite)
+      .map((n: number) => n * 100),
+  );
+  const low = Math.min(0, ...bounds),
+    high = Math.max(0, ...bounds),
+    padding = Math.max(0.01, (high - low) * 0.1);
+  const X = (n: number) =>
+    215 + ((n - low + padding) / (high - low + 2 * padding)) * 485;
+  const zero = X(0),
+    height = 68 + rows.length * 42;
+  return `<figure class="reliability-chart contribution-chart"><div class="reliability-plot" tabindex="0" aria-label="贡献分摊图，可横向滚动"><svg viewBox="0 0 800 ${height}" role="img" aria-label="组合贡献分摊图"><title>${escape(v.title)}</title><desc>同一批Shapley样本的正确有效产出贡献；负贡献向零线左侧延伸，横向线为95%区间。</desc><line x1="${zero}" y1="12" x2="${zero}" y2="${height - 32}" class="chart-zero"/>${rows
+    .map((row: any, i: number) => {
+      const s = row.statistics,
+        y = 28 + i * 42,
+        mean = s.mean * 100,
+        x = X(mean);
+      const intervalLabel =
+        Number.isFinite(s.ciLow) && Number.isFinite(s.ciHigh)
+          ? `${num(s.ciLow * 100)} ～ ${num(s.ciHigh * 100)} pp`
+          : "历史未记录";
+      const interval =
+        Number.isFinite(s.ciLow) && Number.isFinite(s.ciHigh)
+          ? `<path d="M${X(s.ciLow * 100)},${y} H${X(s.ciHigh * 100)} M${X(s.ciLow * 100)},${y - 6} v12 M${X(s.ciHigh * 100)},${y - 6} v12" stroke="#233d37" stroke-width="1.4"/>`
+          : "";
+      return `<g data-contribution="${escape(row.id)}" data-mean="${s.mean}"><title>${escape(row.name)}：${num(mean)} pp；95%区间 ${intervalLabel}</title><text x="8" y="${y + 5}">${escape(row.name.length > 16 ? row.name.slice(0, 15) + "…" : row.name)}</text><rect x="${Math.min(x, zero)}" y="${y - 10}" width="${Math.max(0.5, Math.abs(x - zero))}" height="20" rx="3" fill="${mean < 0 ? "#b75b46" : "#16816a"}"/>${interval}<text x="790" y="${y + 5}" text-anchor="end">${num(mean)} pp</text></g>`;
+    })
+    .join(
+      "",
+    )}<text x="${zero}" y="${height - 9}" text-anchor="middle">0</text><text x="480" y="${height - 9}" text-anchor="middle">Shapley贡献 · 百分点（pp）</text></svg></div><figcaption>条形为贡献均值，横向线为95%区间；负贡献保留。${escape(contributionExplanation)}</figcaption></figure>`;
+}
+
+export function auditContributionScaleControl(r: any) {
+  const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
+    (a, b) => a - b,
+  );
+  const selected = scales.includes(r.request.cards)
+    ? r.request.cards
+    : scales[0];
+  return `<label class="gain-scale-control">贡献分摊规模 <select id="contribution-scale" aria-label="贡献分摊规模">${scales.map((cards) => `<option value="${cards}" ${cards === selected ? "selected" : ""}>${num(cards)} 卡</option>`).join("")}</select></label>`;
 }
 
 export const auditChartCss = `
+.contribution-chart .reliability-plot svg{min-width:720px}
 .reliability-chart{margin:24px 0;padding:20px;background:#f8faf8;border:1px solid #dfe8e2;border-radius:10px;min-width:0}.reliability-chart h3{margin:0 0 12px;font-size:17px;color:#244f40}.reliability-legend{display:flex;gap:12px 20px;flex-wrap:wrap;font-size:12px;color:#4c665d;margin-bottom:8px}.reliability-legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:7px}.reliability-legend .interval-key{color:#6f8077}.reliability-plot{overflow:auto;max-width:100%}.reliability-plot svg{display:block;width:100%;min-width:960px;font-family:inherit;font-size:12px;color:#536d62}.reliability-plot text{fill:currentColor}.reliability-plot .axis-label{font-size:12px;fill:#5b7266}.reliability-plot .chart-grid{stroke:#dce6df;stroke-width:1}.reliability-plot .chart-target{stroke:#b17d40;stroke-width:1.5;stroke-dasharray:6 5}.reliability-plot .target-label{fill:#906025}.reliability-plot .chart-zero{stroke:#82968a;stroke-width:1.2}.reliability-chart figcaption{font-size:12px;line-height:1.7;color:#61766a;margin-top:10px;max-width:1050px}.audit-curves{min-width:0}.audit-curves>summary{cursor:pointer;font-weight:600}
 @media(max-width:640px){.reliability-chart{padding:12px;margin:18px 0}.reliability-chart h3{font-size:16px}.reliability-legend{gap:8px 12px}.reliability-plot:before{content:'横向滑动查看完整图表';display:block;font-size:11px;color:#7a897f;margin:4px 0}.reliability-chart figcaption{font-size:12px}}
 @media print{.reliability-chart{padding:10px;background:white;break-inside:avoid}.reliability-plot{overflow:visible}.reliability-plot svg{width:100%;min-width:0}.reliability-plot:before{display:none}.reliability-plot svg *{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
