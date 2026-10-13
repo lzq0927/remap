@@ -75,6 +75,8 @@ export const reportInteractionScript = `<script>
  scale?.addEventListener('change',()=>document.querySelectorAll('[data-summary-scale]').forEach(el=>{el.hidden=el.dataset.summaryScale!==scale.value;}));
  const gain=document.getElementById('gain-scale');
  gain?.addEventListener('change',()=>document.querySelectorAll('[data-gain-scale]').forEach(el=>{el.hidden=el.dataset.gainScale!==gain.value;}));
+ const contribution=document.getElementById('contribution-scale');
+ contribution?.addEventListener('change',()=>document.querySelectorAll('[data-contribution-scale]').forEach(el=>{el.hidden=el.dataset.contributionScale!==contribution.value;}));
  const revealSource=id=>{const detail=document.getElementById(id);if(detail){detail.open=true;const register=detail.closest('.source-register');if(register)register.open=true;}};
  document.addEventListener('click',e=>{const link=e.target.closest?.('.source-link');if(link)revealSource(link.getAttribute('href').slice(1));});
  const openSource=()=>{const id=location.hash.slice(1);if(id.startsWith('event-source-'))revealSource(id);};openSource();window.addEventListener('hashchange',openSource);

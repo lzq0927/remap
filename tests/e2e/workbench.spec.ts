@@ -27,9 +27,12 @@ test("training evaluation, evidence snapshot, report, changed input and cancella
   ).toBeVisible();
   await page.getByLabel("正确交付目标（0–1）").fill(".95");
   await expect(page.getByText("输入已改变；已有结果需重算")).toBeVisible();
-  await page.getByText("输入快照、模型版本、来源与详细计算").click();
   await expect(
-    page.getByText("输入快照、模型版本、来源与详细计算"),
+    page.getByRole("heading", { name: "验证与诊断摘要", exact: true }),
+  ).toBeVisible();
+  await page.getByText("输入与资产追溯", { exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "下载结果 JSON", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "下载报告" })).toHaveAttribute(
     "href",

@@ -61,6 +61,7 @@ test("homepage requires explicit task choice and task inputs and sessions remain
     .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
   await page.getByLabel("集群卡数").fill("12345");
+  await page.getByText("会话与连接管理", { exact: true }).click();
   await page.getByLabel("关联 OpenCode 会话").selectOption(`session-${a.id}`);
   await expect(
     page.getByLabel("关联 OpenCode 会话").locator("option"),
@@ -77,6 +78,7 @@ test("homepage requires explicit task choice and task inputs and sessions remain
     .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
   await expect(page.getByLabel("集群卡数")).not.toHaveValue("12345");
+  await page.getByText("会话与连接管理", { exact: true }).click();
   await expect(page.getByLabel("关联 OpenCode 会话")).toHaveValue(
     `session-${b.id}`,
   );
@@ -96,6 +98,7 @@ test("homepage requires explicit task choice and task inputs and sessions remain
     .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
   await expect(page.getByLabel("集群卡数")).toHaveValue("12345");
+  await page.getByText("会话与连接管理", { exact: true }).click();
   await expect(page.getByLabel("关联 OpenCode 会话")).toHaveValue(
     `session-${a.id}`,
   );

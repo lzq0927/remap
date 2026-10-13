@@ -13,6 +13,9 @@ import { codespacesBrowserUrl } from "../../../packages/contracts/src/codespaces
 export default function OpenCodePanel({
   session,
   taskName,
+  stageName,
+  moduleName,
+  inputRevision,
   onSession,
   context,
   onNotice,
@@ -22,6 +25,9 @@ export default function OpenCodePanel({
 }: {
   session: string;
   taskName: string;
+  stageName?: string;
+  moduleName?: string;
+  inputRevision?: number;
   onSession: (id: string) => void;
   context: unknown;
   onNotice: (text: string) => void;
@@ -147,110 +153,124 @@ export default function OpenCodePanel({
           {connected ? `已连接 · ${web?.version ?? ""}` : "未连接"}
         </span>
       </div>
+      <div className="agent-current-context" aria-label="Agent 当前上下文">
+        <strong>{taskName}</strong>
+        <span>
+          {moduleName ? `当前视图：${moduleName} · ` : ""}当前步骤：
+          {stageName ?? "任务协助"} · 输入修订 {inputRevision ?? "未加载"}
+        </span>
+      </div>
       <div className="agent-toolbar">
-        <label>
-          关联会话
-          <select
-            aria-label="关联 OpenCode 会话"
-            value={session}
-            onChange={(e) => onSession(e.target.value)}
-          >
-            <option value="">请创建或选择当前任务的会话</option>
-            {web?.sessions?.map((s: any) => (
-              <option key={s.id} value={s.id}>
-                {s.title} · {s.id.slice(-6)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="actions">
+        <div className="agent-primary-actions">
           <button
             disabled={!session || !connected || busy}
             onClick={() => void startSkill()}
           >
             加载 Skill 并选择执行方式
           </button>
-          <button disabled={busy || !connected} onClick={() => void create()}>
-            <Plus size={14} />
-            新建关联会话
-          </button>
-          <button
-            disabled={busy || !connected}
-            onClick={() => void create("topic")}
-          >
-            新建专题会话
-          </button>
-          <button
-            disabled={!session || !connected || busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await beforeContext();
-                await api(`/agent/${session}/context`, context);
-                onNotice(
-                  "当前设计已写入关联会话；尚未调用模型。请在官方输入框提出评估要求。",
-                );
-              } catch (e) {
-                onError((e as Error).message);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Link2 size={14} />
-            同步当前设计
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText("/sd-dfr-remap");
-                onNotice("已复制 /sd-dfr-remap，粘贴到官方输入框后发送。");
-              } catch {
-                onNotice("请在官方输入框输入 /sd-dfr-remap。");
-              }
-            }}
-          >
-            <Copy size={14} />
-            复制 Skill 命令
-          </button>
-        </div>
-        <div className="agent-controls">
-          <button disabled={!web} onClick={() => setUrl(web.url + "/")}>
-            <Settings size={14} />
-            官方设置
-          </button>
-          <button
-            disabled={!session || !web}
-            onClick={() => setUrl(web.projectUrl + "/" + session)}
-          >
-            返回关联会话
-          </button>
           <button onClick={onExpand}>放大面板</button>
-          <button
-            aria-label="刷新 OpenCode 页面"
-            onClick={() => {
-              void refresh();
-              setUrl(url ? url.split("?")[0] + "?remReload=" + Date.now() : "");
-            }}
-          >
-            <RefreshCw size={14} />
-          </button>
-          {web && (
-            <a
-              href={url || web.url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="独立打开本地 OpenCode"
-            >
-              <ExternalLink size={14} />
-            </a>
-          )}
         </div>
-        <p>
-          模型选择在官方输入框旁；API Key、自定义 Base URL 与模型在官方「设置 →
-          提供商」配置。当前任务使用独立的本地 OpenCode
-          会话数据库；模型凭据仍由本机 OpenCode 管理。
-        </p>
+        <details className="agent-management">
+          <summary>会话与连接管理</summary>
+          <label>
+            关联会话
+            <select
+              aria-label="关联 OpenCode 会话"
+              value={session}
+              onChange={(e) => onSession(e.target.value)}
+            >
+              <option value="">请创建或选择当前任务的会话</option>
+              {web?.sessions?.map((s: any) => (
+                <option key={s.id} value={s.id}>
+                  {s.title} · {s.id.slice(-6)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="actions">
+            <button disabled={busy || !connected} onClick={() => void create()}>
+              <Plus size={14} />
+              新建关联会话
+            </button>
+            <button
+              disabled={busy || !connected}
+              onClick={() => void create("topic")}
+            >
+              新建专题会话
+            </button>
+            <button
+              disabled={!session || !connected || busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await beforeContext();
+                  await api(`/agent/${session}/context`, context);
+                  onNotice(
+                    "当前设计已写入关联会话；尚未调用模型。请在官方输入框提出评估要求。",
+                  );
+                } catch (e) {
+                  onError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Link2 size={14} />
+              同步当前设计
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText("/sd-dfr-remap");
+                  onNotice("已复制 /sd-dfr-remap，粘贴到官方输入框后发送。");
+                } catch {
+                  onNotice("请在官方输入框输入 /sd-dfr-remap。");
+                }
+              }}
+            >
+              <Copy size={14} />
+              复制 Skill 命令
+            </button>
+          </div>
+          <div className="agent-controls">
+            <button disabled={!web} onClick={() => setUrl(web.url + "/")}>
+              <Settings size={14} />
+              官方设置
+            </button>
+            <button
+              disabled={!session || !web}
+              onClick={() => setUrl(web.projectUrl + "/" + session)}
+            >
+              返回关联会话
+            </button>
+            <button
+              aria-label="刷新 OpenCode 页面"
+              onClick={() => {
+                void refresh();
+                setUrl(
+                  url ? url.split("?")[0] + "?remReload=" + Date.now() : "",
+                );
+              }}
+            >
+              <RefreshCw size={14} />
+            </button>
+            {web && (
+              <a
+                href={url || web.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="独立打开本地 OpenCode"
+              >
+                <ExternalLink size={14} />
+              </a>
+            )}
+          </div>
+          <p>
+            模型选择在官方输入框旁；API Key、自定义 Base URL 与模型在官方「设置
+            → 提供商」配置。当前任务使用独立的本地 OpenCode
+            会话数据库；模型凭据仍由本机 OpenCode 管理。
+          </p>
+        </details>
       </div>
       {connected && url ? (
         <iframe

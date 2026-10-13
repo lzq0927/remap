@@ -1,4 +1,10 @@
 import { auditSummary } from "./audit-summary";
+import {
+  auditContributionView,
+  auditContributionSummary,
+  auditContributionEvidence,
+  gainExplanation,
+} from "./audit-contributions";
 import { parameterLabels, sensitivityLabels } from "./audit-labels";
 import {
   auditSelectedMechanisms,
@@ -55,7 +61,13 @@ export interface AuditSection {
   paragraphs?: string[];
   tables?: AuditTable[];
   collapsed?: boolean;
-  visual?: "overview" | "sensitivity" | "method";
+  visual?:
+    | "overview"
+    | "sensitivity"
+    | "method"
+    | "contribution"
+    | "contribution-controls";
+  contributionCards?: number;
 }
 export function auditSections(r: any): AuditSection[] {
   const selected = r.request.cards,
@@ -276,6 +288,7 @@ export function auditSections(r: any): AuditSection[] {
       visual: "overview",
       paragraphs: [
         `${r.request.trials} 条配对轨迹 / 场景；${r.rows[0].statistics.intervalMethod.includes("normal") ? "95% 正态近似（1.96）" : "95% Student-t"} 均值区间仅反映抽样误差，不含参数及模型误差。运行时间变化会改变故障暴露，配对种子不意味着逐事件完全对齐。`,
+        gainExplanation,
       ],
       tables: [
         {
@@ -456,101 +469,66 @@ export function auditSections(r: any): AuditSection[] {
     });
   }
   sections.push({
-    title: "06 / 组合贡献与条件依赖",
+    title: "06 / 组合贡献分摊",
+    visual: "contribution-controls",
     paragraphs: [
-      "组合增益不等于单项之和；保留负贡献。成对交互只描述相对空组合的二阶差分，不包含全部高阶交互。Shapley 的加入顺序不代表实际恢复链的先后顺序。",
-      "φᵢ = Σₛ |S|! (m−|S|−1)! / m! × [A(S∪{i})−A(S)]；Σφᵢ = A(全部启用措施)−A(空组合基线)。枚举全部子集不代表模型和参数无误差；step 单独无收益，也可能因为依赖检测而分得组合贡献。",
+      "规模默认跟随本次任务。贡献采用本节Shapley样本的正确有效产出，运行可用度单独报告。",
     ],
   });
-  if (r.rankings) {
-    const baseline = r.baseline;
+  if (r.baseline?.active)
     sections.push({
       title: "条件基线 / 剩余机制排序",
+      collapsed: true,
       paragraphs: [
-        `固定部署：${baseline?.mechanisms?.join("、") || "无"}；假设已完全消除事件：${baseline?.resolvedEvents?.map((e: any) => e.id).join("、") || "无"}。${baseline?.note || ""}`,
-        "选定已消除事件仅在本次情景中FIT置零，不改写故障库；已部署机制保留实际检测覆盖、恢复效果和剩余风险。它们在所有候选、组合及独立复核中固定存在，收益与新增成本均不重复计入。",
-        "单项增量=A(B＋i)−A(B)；条件Shapley以固定基线B为前提，枚举剩余候选子集分摊A(B＋S＋i)−A(B＋S)。按收益均值排序，保留负收益；区间重叠不能证明排序具有显著性。",
+        `固定部署：${r.baseline.mechanisms.join("、") || "无"}；假设已完全消除事件：${r.baseline.resolvedEvents.map((e: any) => e.id).join("、") || "无"}。${r.baseline.note || ""}`,
+        "已部署机制在所有候选组合中固定存在，不重复计入新增收益和成本；故障消除只在本次条件假设中置零FIT，不改变故障库。条件改变必须重新求解，不能重排旧结果冒充新条件结果。",
       ],
       tables: [
-        ...(baseline?.resolvedEvents?.length
-          ? [
-              {
-                heads: ["假设已消除事件", "原始FIT（本次校准输入）", "条件FIT"],
-                rows: baseline.resolvedEvents.map((e: any) => [
-                  e.id,
-                  num(e.originalFit),
-                  "0（情景假设）",
-                ]),
-              },
-            ]
-          : []),
-        ...r.rankings.flatMap((ranking: any) =>
-          ["single", "shapley"].flatMap((mode) =>
-            ranking[mode] === null
-              ? []
-              : [
-                  {
-                    heads: [
-                      "规模",
-                      "排序依据",
-                      "排名",
-                      "剩余机制",
-                      "新增收益",
-                      "95%区间",
-                      "新增正确小时",
-                    ],
-                    rows: ranking[mode].map((row: any) => [
-                      num(ranking.cards, 0),
-                      mode === "single" ? "单项增量" : "条件Shapley",
-                      row.rank,
-                      row.name,
-                      pp(row.statistics.mean),
-                      pp(row.statistics.ciLow) +
-                        " ～ " +
-                        pp(row.statistics.ciHigh),
-                      num(row.statistics.mean * hours),
-                    ]),
-                  },
-                ],
-          ),
-        ),
+        {
+          heads: ["假设已消除事件", "原始FIT", "条件FIT"],
+          rows: r.baseline.resolvedEvents.map((e: any) => [
+            e.id,
+            num(e.originalFit),
+            "0（情景假设）",
+          ]),
+        },
       ],
+    });
+  for (const cards of scales) {
+    const v = auditContributionView(r, cards),
+      detail = auditContributionEvidence(r, cards);
+    sections.push({
+      title: `${num(cards, 0)}卡 / ${v.title}`,
+      contributionCards: cards,
+      visual: "contribution",
+      paragraphs: [
+        v.rows.length ? auditContributionSummary(v) : v.unavailable,
+        `额外固定部署：${v.scope.fixedNames.join("、") || "无"}。新增候选：${v.scope.candidateNames.join("、") || "无"}。仅作探索对照、不参与本次分摊：${v.scope.exploratoryNames.join("、") || "无"}。`,
+      ],
+      tables: v.rows.length
+        ? [
+            {
+              heads: ["机制", "Shapley贡献", "95%区间", "新增正确计算小时"],
+              rows: v.rows.map((c: any) => [
+                c.name,
+                pp(c.statistics.mean),
+                Number.isFinite(c.statistics.ciLow) &&
+                Number.isFinite(c.statistics.ciHigh)
+                  ? pp(c.statistics.ciLow) + " ～ " + pp(c.statistics.ciHigh)
+                  : "历史未记录",
+                num(c.hours),
+              ]),
+            },
+          ]
+        : [],
+    });
+    sections.push({
+      title: `计算依据与详细审核 · ${num(cards, 0)}卡`,
+      collapsed: true,
+      contributionCards: cards,
+      ...detail,
     });
   }
-  for (const a of r.attribution)
-    sections.push({
-      title: `${num(a.cards, 0)} 卡 / Shapley 审核`,
-      paragraphs: [
-        `每个组合 ${a.trials} 条轨迹，${a.coalitions.length} 个子集。总提升 ${pp(a.gain)}；与单项之和差值 ${pp(a.nonAdditivity)}；守恒残差 ${num(a.residual, 12)}。`,
-        `已启用静默检测后，step 的额外提升 ${pp(a.conditionalStep.mean)}，95% 区间 ${pp(a.conditionalStep.ciLow)} ～ ${pp(a.conditionalStep.ciHigh)}。此条件比较使用主评估 ${r.request.trials} 条轨迹。`,
-      ],
-      tables: [
-        {
-          heads: ["机制", "Shapley 贡献", "95% 区间", "新增正确计算 h / 窗口"],
-          rows: a.contributions.map((c: any) => [
-            c.name,
-            pp(c.statistics.mean),
-            pp(c.statistics.ciLow) + " ～ " + pp(c.statistics.ciHigh),
-            num(c.statistics.mean * hours),
-          ]),
-        },
-        {
-          heads: ["机制对", "基线二阶交互", "95% 区间"],
-          rows: a.interactions.map((i: any) => [
-            i.a + " + " + i.b,
-            pp(i.statistics.mean),
-            pp(i.statistics.ciLow) + " ～ " + pp(i.statistics.ciHigh),
-          ]),
-        },
-      ],
-    });
-  if (!r.attribution.length)
-    sections.push({
-      title: "组合分摊未启用",
-      paragraphs: [
-        "已提供单项与组合前向结果，本次未计算 Shapley；不能由未计算推断收益完全可加。",
-      ],
-    });
   sections.push({
     title: "07 / 关键参数敏感性",
     visual: "sensitivity",

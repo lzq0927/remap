@@ -8,6 +8,10 @@ import type {
 } from "../../../packages/contracts/src/types";
 import { pretty, useTaskApi } from "./api";
 import AuditResult from "./AuditResult";
+import {
+  validationSummary,
+  diagnosticText,
+} from "../../../packages/reports/src/validation-summary";
 
 export interface ResultViewProps {
   run: Run | null | undefined;
@@ -774,40 +778,105 @@ function ResultBody({
     );
   return (
     <p className="note">
-      计算已完成。此工具的完整结构化结果可在下方计算详情中查看。
+      计算已完成。此工具的完整结构化结果可通过独立 JSON 附件下载。
     </p>
   );
 }
-function Snapshot({
-  run,
-  result,
-  warnings,
-}: {
-  run: Run;
-  result: any;
-  warnings: any[];
-}) {
-  const [open, setOpen] = useState(false);
+function Snapshot({ run }: { run: Run }) {
+  const { taskId } = useTaskApi();
+  const summary = validationSummary(run, taskId);
   return (
-    <details onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary>输入快照、模型版本、来源与详细计算</summary>
-      <p className="note">
-        运行输入是发起计算时的快照，后续设计编辑不会改变这次结果。
-      </p>
-      {open && (
-        <pre>
-          {pretty({
-            inputHash: run.inputHash,
-            input: run.input,
-            modelVersion: result?.modelVersion,
-            source: result?.config?.sourceCommit,
-            assumptions: result?.assumptions ?? result?.details?.assumptions,
-            warnings,
-            result,
-          })}
-        </pre>
+    <div className="validation-summary" aria-label="验证与诊断摘要">
+      <h3>验证与诊断摘要</h3>
+      <Table heads={["摘要项", "内容"]} rows={summary.rows} />
+      {summary.anomalies.length > 0 && (
+        <Table
+          heads={["异常/提醒", "项目", "说明"]}
+          rows={summary.anomalies.map((a) => [a.status, a.name, a.detail])}
+        />
       )}
-    </details>
+      {summary.omittedAnomalies > 0 && (
+        <p className="note">
+          另有 {summary.omittedAnomalies} 条异常/提醒，见 JSON 附件。
+        </p>
+      )}
+      <p className="note">{summary.note}</p>
+      <details>
+        <summary>输入与资产追溯</summary>
+        {summary.trace.map((text, i) => (
+          <p key={i}>{text}</p>
+        ))}
+      </details>
+    </div>
+  );
+}
+function ReportExport({ run }: { run: Run }) {
+  const { url } = useTaskApi();
+  const [format, setFormat] = useState("html"),
+    [technical, setTechnical] = useState(false);
+  const terminal = ["succeeded", "failed", "cancelled"].includes(run.status);
+  const succeeded = run.status === "succeeded";
+  const path = `/runs/${encodeURIComponent(run.id)}/report`;
+  return (
+    <div className="report-export" aria-label="报告导出">
+      <label>
+        报告格式{" "}
+        <select
+          aria-label="报告格式"
+          value={format}
+          onChange={(e) => setFormat(e.target.value)}
+        >
+          <option value="html">HTML</option>
+          <option value="md">Markdown</option>
+        </select>
+      </label>
+      <label className="technical-export">
+        <input
+          type="checkbox"
+          checked={technical}
+          onChange={(e) => setTechnical(e.target.checked)}
+        />
+        包含完整技术附件
+      </label>
+      {terminal ? (
+        <a
+          className="button"
+          href={url(
+            `${path}?format=${format}${technical ? "&includeTechnical=true" : ""}`,
+          )}
+          download
+        >
+          <Download size={15} />
+          {technical
+            ? "下载离线报告包"
+            : succeeded
+              ? "下载报告"
+              : run.status === "failed"
+                ? "下载诊断报告"
+                : "下载状态诊断"}
+        </a>
+      ) : (
+        <button disabled type="button">
+          <Download size={15} />
+          完成后下载报告
+        </button>
+      )}
+      {terminal && (
+        <a
+          className="button secondary"
+          href={url(`${path}?format=json`)}
+          download
+        >
+          <Download size={15} />
+          {succeeded ? "下载结果 JSON" : "下载诊断 JSON"}
+        </a>
+      )}
+      <small>
+        {technical
+          ? "ZIP 包包含 HTML、Markdown、完整 JSON 和校验清单；解压后可离线阅读。"
+          : "默认仅导出简洁正文；离线阅读请选择包含完整技术附件。"}
+      </small>
+    </div>
   );
 }
 export default function ResultView({
@@ -815,11 +884,9 @@ export default function ResultView({
   onApplyCandidate,
   onApplyAudit,
 }: ResultViewProps) {
-  const { url } = useTaskApi();
   if (!run) return null;
   const succeeded = run.status === "succeeded",
     result = succeeded ? run.result : undefined;
-  const warnings = result?.warnings ?? [];
   const model = runAssessmentModel(run);
   return (
     <section className="paper result" aria-label="评估结果">
@@ -827,24 +894,11 @@ export default function ResultView({
         <div>
           <span className="eyebrow">评估 / {run.id.slice(0, 8)}</span>
           <h2>
-            计算结果 <small>{statusNames[run.status] ?? run.status}</small>
+            {succeeded ? "计算结果" : "运行诊断"}{" "}
+            <small>{statusNames[run.status] ?? run.status}</small>
           </h2>
         </div>
-        {succeeded ? (
-          <a
-            className="button"
-            href={url(`/runs/${encodeURIComponent(run.id)}/report?format=html`)}
-            download
-          >
-            <Download size={15} />
-            下载报告
-          </a>
-        ) : (
-          <button disabled type="button" title="成功完成计算后可下载报告">
-            <Download size={15} />
-            完成后下载报告
-          </button>
-        )}
+        <ReportExport key={run.id} run={run} />
       </div>
       {model && (
         <p className="result-model" aria-label="结果口径">
@@ -855,9 +909,13 @@ export default function ResultView({
         </p>
       )}
       {run.error && (
-        <p className="error" role="alert">
-          {run.error.message} <small>（{run.error.code}）</small>
-        </p>
+        <div className="failure-diagnostics" aria-label="失败诊断">
+          <h3>失败诊断</h3>
+          <p className="error" role="alert">
+            {diagnosticText(run.error.message)}{" "}
+            <small>（{diagnosticText(run.error.code)}）</small>
+          </p>
+        </div>
       )}
       {!succeeded && (
         <p className="note">
@@ -870,12 +928,13 @@ export default function ResultView({
       )}
       {result && (
         <ResultBody
+          key={run.id}
           result={result}
           onApplyCandidate={onApplyCandidate}
           onApplyAudit={onApplyAudit}
         />
       )}
-      <Snapshot run={run} result={result} warnings={warnings} />
+      <Snapshot run={run} />
       <details>
         <summary>运行事件 · {run.events?.length ?? 0} 条</summary>
         <Table

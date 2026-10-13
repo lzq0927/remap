@@ -161,6 +161,7 @@ test("locally installed OpenCode is the embedded UI with native model and API co
   await page
     .getByRole("button", { name: "打开 OpenCode 面板", exact: true })
     .click();
+  await page.getByText("会话与连接管理", { exact: true }).click();
   await page.getByRole("button", { name: "新建关联会话" }).click();
   const frame = page.frameLocator('iframe[title="本地官方 OpenCode Web"]');
   await expect(

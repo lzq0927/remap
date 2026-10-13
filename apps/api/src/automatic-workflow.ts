@@ -237,7 +237,7 @@ export function registerAutomaticWorkflow(
               runId: run.id,
               data: {
                 runId: run.id,
-                formats: ["html", "md", "json"],
+                formats: ["html", "md", "json", "zip"],
                 checks: completed.result.reviewChecks,
               },
             },

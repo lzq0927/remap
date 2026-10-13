@@ -3,6 +3,7 @@ import type { TaskServices } from "../../../packages/tasks/src/service";
 import type { AgentIntegration } from "./agent-integration";
 import { assertSessionBound } from "../../../packages/agents/src/task-binding";
 import { DomainError } from "../../../packages/contracts/src/errors";
+import { steps } from "../../../packages/workflow/src/service";
 
 export function registerAgentRoutes(
   app: FastifyInstance,
@@ -119,10 +120,30 @@ export function registerAgentRoutes(
     const input =
       assessment?.input ??
       (design.activeAssessment === "audit" ? {} : design.request);
+    const stage =
+      Number.isInteger(design.stage) &&
+      design.stage >= 0 &&
+      design.stage < steps.length
+        ? design.stage
+        : 0;
+    const view = [
+      "workbench",
+      "inputs",
+      "catalogs",
+      "tools",
+      "runs",
+      "settings",
+    ].includes(req.body?.view)
+      ? req.body.view
+      : undefined;
     const summary = {
       taskId: task.id,
       taskName: task.name,
       inputRevision: design.revision,
+      stage,
+      step: steps[stage],
+      view,
+      runId: design.runId,
       operation: assessment?.operation ?? "training",
       metricId: assessment?.metricId ?? "training.correct-delivery",
       valid: assessment?.valid ?? true,
@@ -138,6 +159,8 @@ export function registerAgentRoutes(
     store.putDocument("agent-context", {
       sessionId: req.params.id,
       inputRevision: design.revision,
+      step: steps[stage],
+      view,
       syncedAt: new Date().toISOString(),
     });
     return {

@@ -10,7 +10,9 @@ workflow_start 的 body 为 {inputRevision,mode}，返回 executionId/revision�
 
 正式训练 analysis_solve body 为 {operation:'training',input:<完整design.request>,executionId,inputRevision}。当前执行须已确认前四阶段，输入必须一致；独立试算省略 executionId，不可作为正式交付。solve 返回 {runId,status,artifactRefs:[],warnings:[]}，run_status 查询，run_cancel 保留取消记录。
 
-operation 支持 training/allocate/rbd/fta/bdd/ctmc/compare/search/sensitivity/attribute/estimateRate。CTMC 为 {Q,p0,times,rewards?}，假设指数驻留时间。报告包含输入摘要、模型、固定资产/来源快照、结果与诊断。
+operation 支持 training/allocate/rbd/fta/bdd/ctmc/compare/search/sensitivity/attribute/estimateRate。CTMC 为 {Q,p0,times,rewards?}，假设指数驻留时间。报告正文显示结果与简短验证诊断摘要；完整输入、固化资产/来源快照、结构化结果和运行事件由独立 JSON 附件提供，原运行资产继续保留。
+
+report_export 的 query.format=md/html 返回简洁正文，json 返回原始完整运行结构，manifest 返回正文/附件/离线包下载描述。query.format=zip 或 includeTechnical=true 在 MCP 中返回下载描述，API 对应请求才返回二进制 ZIP。离线包含 HTML、Markdown、完整 JSON、说明和 SHA-256 清单，使用相对附件链接。下载描述不包含任务令牌；鉴权不变。详见[报告摘要与离线技术附件](2026-10-13-报告摘要与离线技术附件.md)。
 
 catalog_search/create/validate 管理任务草稿及验证；catalog_examples/public 只读检索；catalog_copy 指定来源、固定 revision 与 contentHash；catalog_submit 仅候选。用户冻结 validated 私有版本；公共发布独立审核且目前关闭。refs {id,revision,contentHash,taskId?} 始终在任务本地存储解析。
 

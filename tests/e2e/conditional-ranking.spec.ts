@@ -76,6 +76,10 @@ test("users choose arbitrary resolved events and deployed mechanisms, then pipel
     data: { inputRevision: design.revision },
   });
   expect(start.status()).toBe(202);
+  await expect(
+    page.getByText("冻结条件基线与剩余机制排序", { exact: true }),
+  ).toBeVisible({ timeout: 30000 });
+  await page.getByText("冻结条件基线与剩余机制排序", { exact: true }).click();
   const ranking = page.getByRole("region", {
     name: "剩余机制排序",
     exact: true,
