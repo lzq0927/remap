@@ -67,6 +67,6 @@ GitHub仓库连接和Codespaces管理使用各自的权限。若Codespaces API�
 
 ## 当前验证边界
 
-2026-10-13：配置通过Dev Container/Codespaces核心schema与Bash语法检查；浏览器地址适配的四项回归、项目类型检查、lint、构建以及238项单元/集成测试通过。真实Vite服务使用当前Codespace预览Host返回200，其他Codespace的Host返回403。
+2026-10-13：配置通过Dev Container/Codespaces核心schema与Bash语法检查；浏览器地址适配的四项回归、项目类型检查、lint、构建以及261项单元/集成测试通过（5项按环境条件跳过）；检查已包含准备期间合并的远端最新工作台和报告更新。真实Vite服务使用当前Codespace预览Host返回200，其他Codespace的Host返回403。
 
 当前环境的Codespaces列表API返回Forbidden，尚未创建或SSH连接真实Codespace。容器内首次初始化、GitHub私有转发认证及真实模型请求需在实际Codespace中验证，不能将当前云端测试记录当成已经连接的证明。
