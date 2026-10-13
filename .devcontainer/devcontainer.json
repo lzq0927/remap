@@ -1,0 +1,44 @@
+{
+  "name": "ReMAP cloud development",
+  "build": { "dockerfile": "Dockerfile", "context": "." },
+  "features": {
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "24",
+      "pnpmVersion": "11.25.0"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "remoteUser": "vscode",
+  "hostRequirements": { "cpus": 2, "memory": "8gb" },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "ReMAP",
+      "onAutoForward": "openBrowserOnce",
+      "protocol": "http"
+    },
+    "4178": { "label": "ReMAP API", "onAutoForward": "silent" },
+    "5174": { "label": "Browser tests", "onAutoForward": "ignore" },
+    "20000-55000": {
+      "label": "Task OpenCode",
+      "onAutoForward": "notify",
+      "protocol": "http"
+    }
+  },
+  "otherPortsAttributes": { "onAutoForward": "ignore" },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "ReMAP",
+        "terminal.integrated.profiles.linux": {
+          "ReMAP": {
+            "path": "/bin/bash",
+            "args": ["--rcfile", "${workspaceFolder}/.devcontainer/bashrc"]
+          }
+        }
+      }
+    }
+  }
+}

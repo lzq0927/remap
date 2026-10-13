@@ -8,6 +8,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useTaskApi } from "./api";
+import { codespacesBrowserUrl } from "../../../packages/contracts/src/codespaces";
 
 export default function OpenCodePanel({
   session,
@@ -70,7 +71,14 @@ export default function OpenCodePanel({
           onError("Skill 启动失败：" + dispatch.error);
         }
       }
-      setWeb(info);
+      setWeb({
+        ...info,
+        url: codespacesBrowserUrl(info.url, window.location.origin),
+        projectUrl: codespacesBrowserUrl(
+          info.projectUrl,
+          window.location.origin,
+        ),
+      });
       setConnected(true);
     } catch {
       if (!disposed.current) setConnected(false);

@@ -12,6 +12,8 @@ Reliability Modeling and Analysis Platform — 系统可靠性建模评估验证
 
 ## 安装与启动
 
+GitHub Codespaces 可使用[一键创建入口](https://codespaces.new/lzq0927/remap?ref=main)，仓库已提供自动初始化和私有端口预览配置，步骤见[Codespaces开发指南](docs/GitHub-Codespaces开发.md)。
+
 Linux 云端开发可按 [云端开发指南](docs/云端开发指南.md) 初始化依赖、浏览器与本地工具状态，并执行验收。
 
 公司内网部署与持续开发请先阅读 [内网开发指南](docs/内网开发指南.md)。通用核心版本单向导入内网，企业代码、模型配置和真实资产留在内网；实现范围和验收见 [实施计划](docs/superpowers/plans/2026-10-11-internal-development-plan.md)。

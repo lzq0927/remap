@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
+import { codespacesViteHosts } from "../../packages/contracts/src/codespaces";
 export default defineConfig({
   root: resolve("apps/web"),
   plugins: [react()],
   server: {
+    allowedHosts: codespacesViteHosts(process.env),
     host: "127.0.0.1",
     port: Number(process.env.WEB_PORT ?? 5173),
     strictPort: true,
