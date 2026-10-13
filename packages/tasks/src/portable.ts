@@ -2,6 +2,7 @@ import { Store } from "../../assets/src/store";
 import { hash } from "../../assets/src/hash";
 import { DomainError } from "../../contracts/src/errors";
 import { TaskServices } from "./service";
+import { validateEngineeringDocument } from "../../modeling/src/service";
 const columns = {
   assets: [
     "id",
@@ -90,6 +91,8 @@ function validateBundle(bundle: any) {
         throw new DomainError("HASH_MISMATCH", "资产内容摘要无效");
       if (table === "runs") {
         const run = JSON.parse(row.payload);
+        if (run.operation === "engineering")
+          validateEngineeringDocument("engineering-model", run.input?.snapshot);
         if (
           run.id !== row.id ||
           !["succeeded", "failed", "cancelled"].includes(run.status) ||
@@ -105,6 +108,8 @@ function validateBundle(bundle: any) {
           "TASK_BUNDLE_INVALID",
           "任务包不得包含会话或凭据配置",
         );
+      if (table === "documents" && row.kind.startsWith("engineering-"))
+        validateEngineeringDocument(row.kind, JSON.parse(row.payload));
     }
   }
 }

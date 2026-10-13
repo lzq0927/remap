@@ -2,6 +2,8 @@ import type { AgentEvent } from "../../contracts/src/types";
 export interface AgentMessage {
   id: string;
   role: string;
+  model?: { provider?: string; id?: string };
+  error?: unknown;
   parts: Array<{
     id: string;
     type: "text" | "tool";
@@ -20,7 +22,7 @@ export interface AgentPort {
   }>;
   createSession(options?: { title?: string }): Promise<{ sessionId: string }>;
   messages(id: string): Promise<AgentMessage[]>;
-  sendMessage(id: string, text: string): Promise<unknown>;
+  sendMessage(id: string, text: string, signal?: AbortSignal): Promise<unknown>;
   runCommand(id: string, args?: string, signal?: AbortSignal): Promise<unknown>;
   abort(id: string): Promise<unknown>;
   events(id: string, signal: AbortSignal): AsyncIterable<AgentEvent>;

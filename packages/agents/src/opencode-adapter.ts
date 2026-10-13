@@ -158,6 +158,16 @@ export class OpenCodeAdapter implements WorkspaceAgentPort {
     return list.map((m: any) => ({
       id: m.info.id,
       role: m.info.role,
+      model: m.info.modelID
+        ? { provider: m.info.providerID, id: m.info.modelID }
+        : undefined,
+      error: m.info.error
+        ? {
+            name: m.info.error.name,
+            message: m.info.error.data?.message,
+            statusCode: m.info.error.data?.statusCode,
+          }
+        : undefined,
       parts: m.parts
         .filter((p: any) => ["text", "tool"].includes(p.type))
         .map((p: any) => ({
@@ -170,11 +180,22 @@ export class OpenCodeAdapter implements WorkspaceAgentPort {
         })),
     }));
   }
-  async sendMessage(id: string, text: string) {
-    return this.request("/session/" + encodeURIComponent(id) + "/message", {
-      parts: [{ type: "text", text }],
-      ...this.model(),
-    });
+  async sendMessage(id: string, text: string, signal?: AbortSignal) {
+    const result = await this.request(
+      "/session/" + encodeURIComponent(id) + "/message",
+      {
+        parts: [{ type: "text", text }],
+        ...this.model(),
+      },
+      undefined,
+      signal ?? AbortSignal.timeout(300000),
+    );
+    if (result.info?.error)
+      throw new Error(
+        "OpenCode 模型执行失败：" +
+          (result.info.error.data?.message ?? result.info.error.name),
+      );
+    return result;
   }
   async runCommand(id: string, args = "", signal?: AbortSignal) {
     return this.request(

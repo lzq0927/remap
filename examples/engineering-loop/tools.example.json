@@ -1,0 +1,20 @@
+[
+  {
+    "id": "bdd-cli-example",
+    "name": "BDD CLI 接口实跑示例",
+    "version": "1",
+    "methods": ["external"],
+    "mode": "cli",
+    "command": "C:/Program Files/nodejs/node.exe",
+    "args": [
+      "D:/remap/examples/engineering-loop/bdd-cli-adapter.mjs"
+    ]
+  },
+  {
+    "id": "p-file",
+    "name": "内网 P 文件交换（需人工执行）",
+    "version": "administrator-managed",
+    "methods": ["p"],
+    "mode": "file"
+  }
+]

@@ -8,7 +8,10 @@ process.once("message", async (message: any) => {
       ...input
     } = message.input;
     let result: any;
-    if (message.operation === "audit") {
+    if (message.operation === "engineering") {
+      const { executeEngineering } = await import("../../modeling/src/execute");
+      result = await executeEngineering(input);
+    } else if (message.operation === "audit") {
       const { audit } = await import("../../analysis/src/audit");
       result = audit(input, (done: number, total: number) => {
         process.send?.({
