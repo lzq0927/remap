@@ -86,7 +86,7 @@ test("Agent stage assets appear centrally and human review gates the same real s
     })
   ).json();
   await expect(
-    page.getByText("训练有效可用度（正确交付产出率）", { exact: true }),
+    page.getByText("可用度（历史模型 V4）", { exact: true }),
   ).toBeVisible();
   flow = await (await request.get(prefix + "/workflow")).json();
   expect(flow.runId).toBe(run.id);

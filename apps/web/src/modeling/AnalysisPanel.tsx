@@ -139,6 +139,17 @@ export default function AnalysisPanel({
 }) {
   const [caseId, setCaseId] = useState(model.cases[0]?.id ?? "");
   const c = model.cases.find((c) => c.id === caseId) ?? model.cases[0];
+  const runnable =
+    c &&
+    (c.method === "rbd" ||
+      c.method === "fta" ||
+      tools.some(
+        (t) =>
+          t.id === c.toolId &&
+          t.methods.includes(c.method) &&
+          t.available &&
+          t.mode !== "file",
+      ));
   const change = (fn: (c: AnalysisCase) => void) =>
     edit((d) => {
       const x = d.cases.find((x) => x.id === c!.id)!;
@@ -188,7 +199,7 @@ export default function AnalysisPanel({
             ))}
           </select>
         </label>
-        {(["rbd", "fta", "tlc", "p", "external"] as const).map((m) => (
+        {(["rbd", "fta", "p", "external"] as const).map((m) => (
           <button key={m} onClick={() => add(m)}>
             ＋{m.toUpperCase()}
           </button>
@@ -336,6 +347,7 @@ export default function AnalysisPanel({
                     logic={c.logic}
                     model={model}
                     method={c.method}
+                    analysisCase={c}
                   />
                   <details>
                     <summary>
@@ -368,14 +380,11 @@ export default function AnalysisPanel({
                       })
                     }
                   >
-                    <option value="">
-                      {c.method === "tlc" ? "内置 TLC" : "选择内网工具适配器"}
-                    </option>
+                    <option value="">选择内网工具适配器</option>
                     {tools
                       .filter(
                         (t) =>
-                          t.methods.includes(c.method) &&
-                          !["static-bdd", "tlc"].includes(t.id),
+                          t.methods.includes(c.method) && t.id !== "static-bdd",
                       )
                       .map((t) => (
                         <option key={t.id} value={t.id}>
@@ -442,12 +451,7 @@ export default function AnalysisPanel({
                 onClick={() =>
                   change((c) => {
                     c.files.push({
-                      name:
-                        c.method === "p"
-                          ? "Model.p"
-                          : c.files.some((f) => f.name.endsWith(".tla"))
-                            ? "Model.cfg"
-                            : "Model.tla",
+                      name: `Model${c.files.length + 1}.${c.method === "p" ? "p" : "json"}`,
                       content: "",
                     });
                   })
@@ -466,17 +470,18 @@ export default function AnalysisPanel({
             </button>
             <button
               className="primary"
-              disabled={busy || dirty}
+              disabled={busy || dirty || !runnable}
               onClick={() => onRun(c.id)}
             >
               运行真实
-              {c.method === "tlc"
-                ? " TLC"
-                : c.method === "rbd" || c.method === "fta"
-                  ? " BDD"
-                  : "工具"}
+              {c.method === "rbd" || c.method === "fta" ? " BDD" : "工具"}
             </button>
             {dirty && <span className="note">请先保存当前修改再运行。</span>}
+            {!runnable && (
+              <span className="note">
+                此方法未配置可执行工具。可保留历史证据，或通过文件交换导出输入。
+              </span>
+            )}
           </div>
         </>
       ) : (

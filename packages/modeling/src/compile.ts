@@ -33,6 +33,8 @@ export function compileStatic(value: EngineeringModel, caseId: string) {
     probability: number;
     originalRate: unknown;
     appliedRate: unknown;
+    originalRecoveryHours: number | null;
+    appliedRecoveryHours: number | null;
     sourceRefs: string[];
     excluded: boolean;
   }> = [];
@@ -51,7 +53,8 @@ export function compileStatic(value: EngineeringModel, caseId: string) {
       (c.impacts.length && !f.impacts.some((i) => c.impacts.includes(i)))
     );
     const effect = effects.get(f.id),
-      rate = effect?.rate ?? f.rate;
+      rate = effect?.rate ?? f.rate,
+      recoveryHours = effect?.recoveryHours ?? f.recoveryHours;
     let success = 1;
     if (!excluded) {
       if (c.metric === "probability") {
@@ -62,7 +65,7 @@ export function compileStatic(value: EngineeringModel, caseId: string) {
         if (!rate) throw new Error("缺少失效率参数：" + f.name);
         const lambda = rate.value * (rate.unit === "FIT" ? 1e-9 : 1);
         if (c.metric === "availability") {
-          const mttr = effect?.recoveryHours ?? f.recoveryHours;
+          const mttr = recoveryHours;
           if (mttr === null) throw new Error("缺少恢复时间参数：" + f.name);
           success = 1 / (1 + lambda * mttr);
         } else success = Math.exp(-lambda * c.hours);
@@ -77,6 +80,8 @@ export function compileStatic(value: EngineeringModel, caseId: string) {
         probability,
         originalRate: f.rate,
         appliedRate: rate,
+        originalRecoveryHours: f.recoveryHours,
+        appliedRecoveryHours: recoveryHours,
         sourceRefs: f.sourceRefs,
         excluded,
       });

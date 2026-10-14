@@ -20,7 +20,7 @@ test("cancelling a new run retains the previous completed evaluation", async ({
   await page.getByLabel("观察窗口（小时）").fill("24");
   await page.getByRole("button", { name: "开始评估", exact: true }).click();
   await expect(
-    page.getByText("训练有效可用度（正确交付产出率）", { exact: true }),
+    page.getByText("可用度（历史模型 V4）", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("仿真轨迹数").fill("8192");
   await page.getByLabel("观察窗口（小时）").fill("8760");
@@ -30,6 +30,6 @@ test("cancelling a new run retains the previous completed evaluation", async ({
     page.getByRole("heading", { name: "上次完整结果" }),
   ).toBeVisible();
   await expect(
-    page.getByText("训练有效可用度（正确交付产出率）", { exact: true }),
+    page.getByText("可用度（历史模型 V4）", { exact: true }),
   ).toBeVisible();
 });

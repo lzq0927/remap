@@ -132,7 +132,7 @@ function training(r: any, target: unknown): Section[] {
     {
       title: "训练结论",
       paragraphs: [
-        "训练有效可用度（正确交付产出率）均值 " +
+        "可用度（历史模型 V4）均值 " +
           pct(s.mean) +
           "；" +
           point +
@@ -146,7 +146,7 @@ function training(r: any, target: unknown): Section[] {
         {
           heads: ["指标", "结果"],
           rows: [
-            ["正确交付均值", pct(s.mean)],
+            ["可用度均值", pct(s.mean)],
             [
               "距目标（均值 − 目标）",
               finite(target) ? points(s.mean - target) : "—",
@@ -172,7 +172,7 @@ function training(r: any, target: unknown): Section[] {
       title: "指标口径与风险",
       paragraphs: [
         "正确进展乘以期末无未解决污染指示，再除以窗口理想产出。期末仍存在污染时，整条轨迹交付为零，污染前正确工作也计入终末污染连带丢弃。",
-        "单窗口满足目标的比例与均值是否达到目标分别判断。运行可用度、MTBF 与正确交付产出率不能混用。",
+        "单窗口满足目标的比例与均值是否达到目标分别判断。运行可用度、MTBF 与主指标可用度的计算口径不同，不能混用。",
       ],
     },
     {
@@ -404,7 +404,7 @@ function core(r: any, run: Run): Section[] {
       {
         title: r.parameter ? "参数敏感性" : "方案比较",
         paragraphs: [
-          "基线正确交付均值 " +
+          "基线可用度均值 " +
             pct(r.base.statistics.mean) +
             "。" +
             (r.parameter
@@ -442,7 +442,7 @@ function core(r: any, run: Run): Section[] {
         title: "CTMC 状态与奖励",
         paragraphs: [
           "稳态期望奖励是输入状态奖励的加权平均，保留原奖励单位；只有输入奖励为 0/1 可用状态指示时，才可另行解释为可用度。",
-          "恒定转移率与指数停留时间；稳态分布要求唯一。累计奖励从时间零积分至最后请求时刻，不等同于训练正确交付。",
+          "恒定转移率与指数停留时间；稳态分布要求唯一。累计奖励从时间零积分至最后请求时刻，不等同于训练可用度。",
         ],
         tables: [
           {

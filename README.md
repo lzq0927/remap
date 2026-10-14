@@ -18,7 +18,9 @@ Reliability Modeling and Analysis Platform — 系统可靠性建模评估验证
 
 GitHub Codespaces 可使用[一键创建入口](https://codespaces.new/lzq0927/remap?ref=main)，仓库已提供自动初始化和私有端口预览配置，步骤见[Codespaces开发指南](docs/GitHub-Codespaces开发.md)。
 
-新增「系统建模」工程闭环：专家材料 → Agent 提案 → 人工审阅 → 架构/部署/行为设计 → RBD/FTA/TLC 真实分析验证 → 证据、决策与任务资产复用。详见 [工程闭环使用与内网工具适配](docs/2026-10-13-Agent工程闭环使用与适配.md) 和 [实施计划](docs/superpowers/plans/2026-10-13-agent-engineering-loop.md)。
+AI 集群默认使用 [可靠性设计与评估六阶段样例](docs/AI集群样例验收.md)，可用 `pnpm verify:ai-cluster` 验收计算与报告。
+
+「系统建模」工程闭环：专家材料 → Agent 提案 → 人工审阅 → 架构/部署/行为设计 → RBD/FTA/BDD 真实分析 → 证据、决策与任务资产复用。详见 [工程闭环使用与内网工具适配](docs/2026-10-13-Agent工程闭环使用与适配.md) 和 [实施计划](docs/superpowers/plans/2026-10-13-agent-engineering-loop.md)。
 
 Linux 云端开发可按 [云端开发指南](docs/云端开发指南.md) 初始化依赖、浏览器与本地工具状态，并执行验收。
 

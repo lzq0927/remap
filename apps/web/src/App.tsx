@@ -1339,7 +1339,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                     <div className="fields">
                       {[
                         ["cards", "集群卡数"],
-                        ["target", "正确交付目标（0–1）"],
+                        ["target", "可用度目标（0–1）"],
                         ["hours", "观察窗口（小时）"],
                         ["trials", "仿真轨迹数"],
                         ["seed", "随机种子"],
@@ -1386,7 +1386,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                       >
                         十万卡 · 94.3%
                       </button>
-                      <span>MTBF 单独记录；不能直接换算成正确交付比例。</span>
+                      <span>MTBF 单独记录；不能直接换算成可用度。</span>
                     </div>
                     <p className="note">
                       {request.cards === 10000 && request.target === 0.99
@@ -2308,7 +2308,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
               {operation === "allocate" && (
                 <>
                   <p className="note">
-                    此处为子模型目标分配；训练正确交付目标不能按组件可靠度直接相乘。沿用当前目标/窗口作为设计输入，请确认子模型映射与口径。
+                    此处为子模型目标分配；训练可用度目标不能按组件可靠度直接相乘。沿用当前目标/窗口作为设计输入，请确认子模型映射与口径。
                   </p>
                   <AllocationEditor value={toolJson} onChange={setToolJson} />
                   <div className="tabs">

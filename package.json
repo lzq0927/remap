@@ -19,6 +19,8 @@
     "test:expert": "vitest run tests/expert",
     "test:e2e": "playwright test",
     "verify:release": "tsx scripts/verify-release.ts",
+    "verify:ai-cluster": "tsx scripts/verify-ai-cluster.ts",
+    "verify:engineering": "tsx scripts/verify-engineering-loop.ts",
     "export:release": "tsx scripts/build-release.ts",
     "agent": "node scripts/launch.mjs agent",
     "mcp:http": "tsx apps/mcp/src/http.ts",

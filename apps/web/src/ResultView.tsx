@@ -261,7 +261,7 @@ function Training({ result }: { result: any }) {
     <>
       <div className="metrics">
         <Metric
-          name="训练有效可用度（正确交付产出率）"
+          name="可用度（历史模型 V4）"
           value={pct(s.mean)}
           note={
             finite(target)
@@ -441,7 +441,7 @@ function Comparison({
     <>
       <h3>{result.parameter ? "参数敏感性" : "方案比较"}</h3>
       <p>
-        基线正确交付均值 <strong>{pct(base?.mean)}</strong> ·{" "}
+        基线可用度均值 <strong>{pct(base?.mean)}</strong> ·{" "}
         {result.parameter &&
           `${parameterNames[result.parameter] ?? result.parameter} · `}
         使用配对样本比较变化。
@@ -717,7 +717,7 @@ function Ctmc({ result }: { result: any }) {
         )}
       </details>
       <p className="note">
-        使用指数停留时间与恒定转移率；稳态分布要求唯一。奖励与时间的单位由输入定义，不能自动解释为训练正确交付。
+        使用指数停留时间与恒定转移率；稳态分布要求唯一。奖励与时间的单位由输入定义，不能自动解释为训练可用度。
       </p>
     </>
   );

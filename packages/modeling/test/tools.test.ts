@@ -4,8 +4,6 @@ import { tmpdir } from "node:os";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { createServer } from "node:http";
 import { runExternal } from "../src/tools";
-import { runTlc, tlcRuntime, validateTlc } from "../src/tlc";
-import { nativeCheckpoint } from "../src/sample";
 import { toolResultSchema } from "../src/tool-contract";
 
 const original = process.env.REMAP_ENGINEERING_TOOLS;
@@ -140,49 +138,6 @@ describe("real tool boundaries", () => {
       await new Promise<void>((r) => server.close(() => r()));
     }
   });
-  it("rejects TLC traversal, missing properties and unsupported native modules", () => {
-    expect(() =>
-      validateTlc({
-        ...input,
-        files: [
-          { name: "../Model.tla", content: "---- MODULE Model ----" },
-          { name: "Model.cfg", content: "INVARIANT Safe" },
-        ],
-      }),
-    ).toThrow();
-    const files = nativeCheckpoint(true);
-    files[1].content = "SPECIFICATION Spec";
-    expect(() => validateTlc({ ...input, files })).toThrow(/性质/);
-  });
-  it.skipIf(!tlcRuntime().available)(
-    "real TLC distinguishes counterexample, exhaustive pass, syntax failure and timeout",
-    async () => {
-      const bad = await runTlc({ ...input, files: nativeCheckpoint(false) }),
-        good = await runTlc({ ...input, files: nativeCheckpoint(true) });
-      expect(bad.verdict).toBe("violated");
-      expect(bad.trace.length).toBe(4);
-      expect(good.verdict).toBe("satisfied");
-      expect(good.metrics.distinctStates).toBe(4);
-      const broken = nativeCheckpoint(true);
-      broken[0].content = broken[0].content.replace(
-        "VARIABLES epoch",
-        "VARIABLES ? epoch",
-      );
-      expect((await runTlc({ ...input, files: broken })).verdict).toBe(
-        "inconclusive",
-      );
-      expect(
-        (
-          await runTlc({
-            ...input,
-            files: nativeCheckpoint(true),
-            timeoutMs: 1,
-          })
-        ).completed,
-      ).toBe(false);
-    },
-    20000,
-  );
   it("does not accept a successful verdict with incomplete verification", () => {
     expect(() =>
       toolResultSchema.parse({

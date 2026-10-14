@@ -59,10 +59,7 @@ export async function executeEngineering(input: {
         }),
       },
     };
-    result = await getToolAdapter(
-      c.toolId ?? (c.method === "tlc" ? "tlc" : ""),
-      c.method,
-    ).execute(request);
+    result = await getToolAdapter(c.toolId ?? "", c.method).execute(request);
   }
   return {
     ...result,

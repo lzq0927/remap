@@ -1,5 +1,15 @@
 import type { SavedModel } from "../../../../packages/modeling/src/schema";
 import { labels, download } from "./shared";
+function probabilityLabel(run: any) {
+  const c = run.input.snapshot?.model.cases.find(
+    (c: any) => c.id === run.input.caseId,
+  );
+  if (c?.metric === "availability")
+    return c.method === "fta" ? "运行不可用率" : "运行可用度";
+  if (c?.metric === "mission-reliability")
+    return c.method === "fta" ? "任务失效概率" : "任务可靠度";
+  return "模型概率";
+}
 export default function EvidencePanel({
   saved,
   runs,
@@ -71,13 +81,7 @@ export default function EvidencePanel({
                 {Object.entries(run.result.metrics ?? {}).map(([key, v]) => (
                   <div key={key}>
                     <small>
-                      {key === "probability"
-                        ? "模型概率"
-                        : key === "distinctStates"
-                          ? "不同状态"
-                          : key === "generatedStates"
-                            ? "生成状态"
-                            : key}
+                      {key === "probability" ? probabilityLabel(run) : key}
                     </small>
                     <strong>
                       {key === "probability"

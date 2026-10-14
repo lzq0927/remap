@@ -49,7 +49,7 @@ export const registry = [
   ],
   [
     "engineering_run",
-    "以保存修订运行真实 BDD/TLC/管理员工具，body={expectedRevision,caseId}；结果用 run_status 查询",
+    "以保存修订运行真实 BDD/管理员工具，body={expectedRevision,caseId}；结果用 run_status 查询",
     "POST",
     "/engineering/models/:id/runs",
   ],

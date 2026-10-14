@@ -16,9 +16,13 @@ test("target, budget, workflow and allocation stay consistent after refresh", as
   taskId,
 }) => {
   await page.goto("/?view=workflow&task=" + taskId);
-  await page.getByLabel("正确交付目标（0–1）").fill(".995");
+  await page
+    .getByRole("spinbutton", { name: "可用度目标（0–1）", exact: true })
+    .fill(".995");
   await page.getByLabel("集群卡数").fill("10000");
-  await expect(page.getByLabel("正确交付目标（0–1）")).toHaveValue(".995");
+  await expect(
+    page.getByRole("spinbutton", { name: "可用度目标（0–1）", exact: true }),
+  ).toHaveValue(".995");
   await page
     .getByRole("button", { name: "十万卡 · 94.3%", exact: true })
     .click();
@@ -66,7 +70,9 @@ test("target, budget, workflow and allocation stay consistent after refresh", as
   await page
     .getByRole("button", { name: "可靠性设计与评估", exact: true })
     .click();
-  await page.getByLabel("正确交付目标（0–1）").fill(".95");
+  await page
+    .getByRole("spinbutton", { name: "可用度目标（0–1）", exact: true })
+    .fill(".95");
   await expect(
     page.getByText("目标或窗口已改变，旧预算已失效，请重新确认。"),
   ).toBeVisible();
@@ -112,7 +118,7 @@ test("published bindings can be reviewed, manual GPU FIT edits are not overwritt
   expect(persisted.input.model.fits[1]).toBe(1200);
   expect(persisted.input.assetRefs).toEqual([]);
   await expect(
-    page.getByText("训练有效可用度（正确交付产出率）", { exact: true }),
+    page.getByText("可用度（历史模型 V4）", { exact: true }),
   ).toBeVisible();
 });
 test("CSV template imports as reviewable library drafts and version history remains selectable", async ({

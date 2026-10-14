@@ -1,5 +1,7 @@
 # ReMAP AI 集群工程闭环 Implementation Plan
 
+> 历史设计记录：2026-10-14 已按需求移除 TLC 实现、安装脚本和执行入口。下文相关方案不再代表当前功能，现行验收见 [AI 集群样例](../../AI集群样例验收.md)。
+
 > **For agentic workers:** Use executing-plans and project sr-build sequentially in this session. 用户已批准新版设计、计划后直接实施；不再请求执行方式选择，不委派其它 Agent。用下列复选框追踪实现和实际证据。
 
 **Goal:** 从专家材料、Agent 建模草案、专家确认到系统设计、真实 RBD/FTA/TLC 分析验证、决策与资产复用形成前后端闭环。

@@ -1,4 +1,4 @@
-import { modelSchema, type EngineeringModel } from "./schema";
+import { modelSchema, type EngineeringModel, type Logic } from "./schema";
 import { hash } from "../../assets/src/hash";
 
 export const expertMaterial = `# AI 集群检查点恢复设计（合成专家材料）
@@ -13,47 +13,13 @@ export const expertMaterial = `# AI 集群检查点恢复设计（合成专家�
 主协调器失联后备用接管。未隔离旧主时，旧主仍可能持有过期令牌并提交。
 候选机制：fencing，以当前代数令牌拒绝旧主提交。
 验证性质 SingleWriter：同一当前代最多一个协调器的提交被接受。
-有限模型包含两个协调器、至多一次故障接管，不证明实现与模型一致，也不验证恢复时延或任意规模。
+该协议性质仅作为待验证约束保存，不宣称已经验证，也不计入定量收益。
+定量比较：单协调器与双协调器的100小时不中断概率；双协调器与增加存储快恢复的稳态运行可用度。
+存储快恢复为合成候选措施：保持800 FIT不变，将平均恢复时间由1小时缩短至0.1小时；需演练数据验证。
 正常时序：训练节点→协调器A 请求检查点；协调器A→存储 提交；存储→训练节点 确认。
 故障时序：协调器B接管并增加代数；旧主A尝试提交；启用fencing时存储拒绝过期令牌。
 取舍：增加令牌校验与状态管理，需要后续评估恢复延迟和性能开销。`;
 
-export const checkpointTla = `---- MODULE Checkpoint ----
-EXTENDS Naturals, Integers, FiniteSets
-CONSTANT Fencing
-Nodes == {"A", "B"}
-VARIABLES epoch, tokens, committed
-vars == <<epoch, tokens, committed>>
-Init == /\\ epoch = 0
-        /\\ tokens = [n \\in Nodes |-> IF n = "A" THEN 0 ELSE -1]
-        /\\ committed = {}
-Takeover == /\\ epoch = 0
-            /\\ epoch' = 1
-            /\\ tokens' = [tokens EXCEPT !["B"] = 1]
-            /\\ committed' = {}
-Commit(n) == /\\ tokens[n] >= 0
-             /\\ (~Fencing \\/ tokens[n] = epoch)
-             /\\ n \\notin committed
-             /\\ committed' = committed \\cup {n}
-             /\\ UNCHANGED <<epoch, tokens>>
-Next == Takeover \\/ (\\E n \\in Nodes : Commit(n))
-TypeOK == /\\ epoch \\in 0..1
-          /\\ tokens \\in [Nodes -> -1..1]
-          /\\ committed \\subseteq Nodes
-SingleWriter == Cardinality(committed) <= 1
-Spec == Init /\\ [][Next]_vars
-====
-`;
-export function nativeCheckpoint(fencing: boolean) {
-  const tla = checkpointTla;
-  return [
-    { name: "Checkpoint.tla", content: tla },
-    {
-      name: "Checkpoint.cfg",
-      content: `CONSTANT Fencing = ${fencing ? "TRUE" : "FALSE"}\nSPECIFICATION Spec\nINVARIANTS TypeOK SingleWriter\nCHECK_DEADLOCK FALSE\n`,
-    },
-  ];
-}
 export function clusterModel(): EngineeringModel {
   const sourceRefs = ["expert-material"];
   const entities = [
@@ -87,7 +53,23 @@ export function clusterModel(): EngineeringModel {
     files: [],
     scope: "合成双协调器协调链路，100小时窗口",
   };
-  const event = (id: string) => ({ type: "event", id });
+  const event = (id: string): Logic => ({ type: "event", id });
+  const dependencies = [
+    event("network-loss"),
+    event("power-loss"),
+    event("storage-loss"),
+  ];
+  const singlePath: Logic = {
+    type: "series",
+    children: [event("a-loss"), ...dependencies],
+  };
+  const redundantPath: Logic = {
+    type: "series",
+    children: [
+      { type: "parallel", children: [event("a-loss"), event("b-loss")] },
+      ...dependencies,
+    ],
+  };
   return modelSchema.parse({
     schemaVersion: "1.0.0",
     name: "AI 集群 · 检查点恢复设计",
@@ -151,6 +133,19 @@ export function clusterModel(): EngineeringModel {
         status: "deployed",
         sourceRefs,
         effects: [],
+      },
+      {
+        id: "storage-fast-recovery",
+        name: "存储快恢复",
+        kind: "recovery",
+        entityRefs: ["storage"],
+        failureRefs: ["storage-loss"],
+        description:
+          "保持源 FIT 不变，将存储平均恢复时间由 1 小时降至 0.1 小时",
+        conditions: "合成情景；故障检测与恢复链路可用，恢复时间需通过演练校准",
+        status: "candidate",
+        sourceRefs,
+        effects: [{ failureId: "storage-loss", recoveryHours: 0.1 }],
       },
       {
         id: "fencing",
@@ -230,15 +225,7 @@ export function clusterModel(): EngineeringModel {
         name: "协调链路 RBD",
         method: "rbd",
         mechanismRefs: ["redundancy"],
-        logic: {
-          type: "series",
-          children: [
-            { type: "parallel", children: [event("a-loss"), event("b-loss")] },
-            event("network-loss"),
-            event("power-loss"),
-            event("storage-loss"),
-          ],
-        },
+        logic: redundantPath,
       },
       {
         ...base,
@@ -256,24 +243,47 @@ export function clusterModel(): EngineeringModel {
           ],
         },
       },
-      ...[false, true].map((fencing) => ({
+      {
         ...base,
-        id: fencing ? "fenced-tlc" : "unfenced-tlc",
-        name: fencing ? "已隔离旧主 · TLC" : "未隔离旧主 · TLC",
-        method: "tlc",
-        metric: "verification",
-        question: "是否存在同代多个有效提交者？",
-        propertyRefs: ["single-writer"],
-        bindings: [
-          { symbol: "A", entityId: "coordinatorA" },
-          { symbol: "B", entityId: "coordinatorB" },
-          { symbol: "committed", entityId: "storage" },
+        id: "single-coordinator-rbd",
+        name: "单协调器基线 RBD",
+        method: "rbd",
+        logic: singlePath,
+        scope: "合成单协调器协调链路，100小时窗口；与双协调器使用相同共享依赖",
+      },
+      {
+        ...base,
+        id: "coordination-availability",
+        name: "双协调器 · 运行可用度",
+        question:
+          "在共享网络、供电与存储依赖下，双协调器的稳态运行可用度是多少？",
+        method: "rbd",
+        metric: "availability",
+        mechanismRefs: ["redundancy"],
+        logic: redundantPath,
+        assumptions: [
+          "独立二态失效/修复；共享事件保持同 ID",
+          "不包含检查点保存、回滚及静默污染造成的训练损失",
         ],
-        mechanismRefs: fencing ? ["fencing"] : [],
-        files: nativeCheckpoint(fencing),
-        assumptions: ["两个协调器；至多一次接管；提交校验原子执行"],
-        scope: "有限状态穷尽检查；仅安全性质，不证明无限规模或实际实现",
-      })),
+        scope: "合成协调链路的稳态运行可用度；不等于训练集群主指标",
+      },
+      {
+        ...base,
+        id: "recovery-availability",
+        name: "双协调器 + 存储快恢复 · 运行可用度",
+        question: "保持源 FIT 不变，缩短存储恢复时间能改善多少运行可用度？",
+        method: "rbd",
+        metric: "availability",
+        mechanismRefs: ["redundancy", "storage-fast-recovery"],
+        logic: redundantPath,
+        assumptions: [
+          "独立二态失效/修复；共享事件保持同 ID",
+          "不包含检查点保存、回滚及静默污染造成的训练损失",
+          "存储快恢复为待演练校准的合成候选措施",
+        ],
+        scope:
+          "相同共享依赖、相同 FIT；仅存储平均恢复时间由 1 小时降至 0.1 小时",
+      },
     ],
     decisions: [],
   });

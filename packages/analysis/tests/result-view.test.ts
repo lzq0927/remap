@@ -56,7 +56,7 @@ it("uses actual training ledger losses without double counting gross work or del
   const html = renderToStaticMarkup(
     createElement(ResultView, { run: run(result) }),
   );
-  expect(html).toContain("正确交付");
+  expect(html).toContain("可用度（历史模型 V4）");
   expect(html).toContain("保存阻塞");
   expect(html).toContain("采样误差");
 });
@@ -104,7 +104,7 @@ it("keeps unfinished runs non-exportable and separates terminal diagnostics from
       expect(html).toContain("下载诊断 JSON");
       expect(html).not.toContain(">下载报告</a>");
     }
-    expect(html).not.toContain("正确交付比例");
+    expect(html).not.toContain("可用度（历史模型 V4）");
   }
 });
 it("renders real allocation, comparison and sensitivity structures as readable tables", () => {

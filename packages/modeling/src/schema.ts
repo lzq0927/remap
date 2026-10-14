@@ -46,7 +46,7 @@ const nativeFile = z
   .object({
     name: z
       .string()
-      .regex(/^[A-Za-z][A-Za-z0-9_-]*\.(tla|cfg|p|pproj|json|txt)$/),
+      .regex(/^[A-Za-z][A-Za-z0-9_-]*\.[A-Za-z][A-Za-z0-9]{0,9}$/),
     content: z.string().max(300000),
   })
   .strict();
@@ -55,7 +55,8 @@ export const caseSchema = z
     id,
     name: z.string().min(1).max(200),
     question: text,
-    method: z.enum(["rbd", "fta", "tlc", "p", "external"]),
+    // Keep archived methods readable; execution requires an available adapter.
+    method: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/),
     metric: z.enum([
       "mission-reliability",
       "availability",

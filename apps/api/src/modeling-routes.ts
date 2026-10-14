@@ -97,10 +97,7 @@ export function registerModelingRoutes(
         if (c.method === "rbd" || c.method === "fta")
           compileStatic(m.model, c.id);
         else
-          getToolAdapter(
-            c.toolId ?? (c.method === "tlc" ? "tlc" : ""),
-            c.method,
-          ).validateInputs({
+          getToolAdapter(c.toolId ?? "", c.method).validateInputs({
             files: c.files,
             scope: c.scope,
             timeoutMs: 60000,
@@ -147,6 +144,13 @@ export function registerModelingRoutes(
     const c = snapshot.model.cases.find((x) => x.id === req.body.caseId);
     if (!c) throw new Error("分析案例不存在");
     if (["rbd", "fta"].includes(c.method)) compileStatic(snapshot.model, c.id);
+    else
+      getToolAdapter(c.toolId ?? "", c.method).validateInputs({
+        files: c.files,
+        scope: c.scope,
+        timeoutMs: 60000,
+        metadata: {},
+      });
     return tasks
       .resolve(req.params.taskId)
       .runs.start(

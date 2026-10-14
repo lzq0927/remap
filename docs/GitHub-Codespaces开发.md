@@ -6,7 +6,7 @@
 
 打开 [创建 ReMAP Codespace](https://codespaces.new/lzq0927/remap?ref=main)，登录你的 GitHub 账号，选择 `main` 和仓库提供的 **ReMAP cloud development** 配置，然后创建环境。配置要求至少2核、8GB内存；最终机器与计费设置以 GitHub 页面为准。
 
-仓库 `.devcontainer` 提供 Python 3.12 / Debian Bookworm、Node.js 24、pnpm 11.25.0、GitHub CLI、Chromium、中文字体和 Java 17。创建后自动运行 `scripts/setup-cloud.sh`：按锁文件安装Node/OpenCode依赖，安装CTMC的NumPy/SciPy/pytest，准备本机配置与Skill并执行doctor；再运行 `scripts/setup-tlc.sh` 下载并核验 TLA+ Tools 1.7.4，供系统建模的真实形式化验证使用。初始化结束会显示 `ReMAP ready`。
+仓库 `.devcontainer` 提供 Python 3.12 / Debian Bookworm、Node.js 24、pnpm 11.25.0、GitHub CLI、Chromium 和中文字体。创建后自动运行 `scripts/setup-cloud.sh`：按锁文件安装Node/OpenCode依赖，安装CTMC的NumPy/SciPy/pytest，准备本机配置与Skill并执行doctor，AI 集群与 RBD/FTA 样例均不需要 Java。初始化结束会显示 `ReMAP ready`。
 
 如果你先前已经创建了没有此配置的Codespace，拉取最新代码后，在命令面板执行 **Codespaces: Rebuild Container**。初始化保留已有 `.env`，不会自动启动模型对话。
 

@@ -163,7 +163,6 @@ await writeFile(
         pnpm: "11",
         python: "optional CTMC: NumPy/SciPy",
         opencode: "optional Agent",
-        tlc: "optional TLA+ Tools and Java; administrator-managed runtime, not bundled",
       },
       excluded: [
         "task data",

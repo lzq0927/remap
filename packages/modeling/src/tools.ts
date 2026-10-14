@@ -8,7 +8,6 @@ import {
   readRuntimePolicy,
   assertEndpointAllowed,
 } from "../../runtime-policy/src/index";
-import { tlcRuntime, validateTlc, runTlc } from "./tlc";
 import {
   toolResultSchema,
   type ToolInput,
@@ -23,7 +22,7 @@ const externalSchema = z
         id: z.string().regex(/^[\w-]+$/),
         name: z.string(),
         version: z.string(),
-        methods: z.array(z.enum(["p", "external", "tlc"])),
+        methods: z.array(z.enum(["p", "external"])),
         mode: z.enum(["cli", "http", "file"]),
         command: z.string().optional(),
         args: z.array(z.string()).optional(),
@@ -49,14 +48,6 @@ export function toolCapabilities() {
       methods: ["rbd", "fta"],
       mode: "builtin",
       available: true,
-    },
-    {
-      id: "tlc",
-      name: "TLA+ TLC",
-      version: "1.7.4",
-      methods: ["tlc"],
-      mode: "cli",
-      available: tlcRuntime().available,
     },
     ...externalTools().map((x) => ({
       id: x.id,
@@ -192,12 +183,11 @@ export function getToolAdapter(id: string, method: string): ToolAdapter {
       if (!capability.available) throw new Error("工具尚未安装：" + id);
       if (capability.mode === "file")
         throw new Error("该工具使用文件交换，请导出输入并导入执行结果");
-      if (id === "tlc") validateTlc(input);
-      else if (!input.files.length) throw new Error("外部工具需要原生输入文件");
+      if (!input.files.length) throw new Error("外部工具需要原生输入文件");
     },
     execute(input) {
       this.validateInputs(input);
-      return id === "tlc" ? runTlc(input) : runExternal(id, method, input);
+      return runExternal(id, method, input);
     },
   };
 }

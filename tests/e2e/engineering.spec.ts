@@ -11,15 +11,13 @@ test("engineering journey: sources, human review, views, real analysis, decision
   await page.getByRole("button", { name: "系统建模", exact: true }).click();
   await page.getByRole("button", { name: "创建 AI 集群示例" }).click();
   await expect(page.getByTestId("engineering-save-status")).toContainText("v1");
-  await page
-    .getByLabel("导入专家材料", { exact: true })
-    .setInputFiles({
-      name: "expert-notes.md",
-      mimeType: "text/markdown",
-      buffer: Buffer.from(
-        "合成专家补充：协调器 A 与 B 共享机柜，fencing 拒绝过期代数令牌。",
-      ),
-    });
+  await page.getByLabel("导入专家材料", { exact: true }).setInputFiles({
+    name: "expert-notes.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
+      "合成专家补充：协调器 A 与 B 共享机柜，fencing 拒绝过期代数令牌。",
+    ),
+  });
   await expect(page.getByTestId("engineering-save-status")).toContainText(
     "未保存",
   );
@@ -82,37 +80,68 @@ test("engineering journey: sources, human review, views, real analysis, decision
   await expect(page.getByText("计算完成", { exact: true })).toBeVisible({
     timeout: 20000,
   });
-  await page.getByRole("tab", { name: "分析与验证", exact: true }).click();
-  await page
-    .getByLabel("分析与验证案例", { exact: true })
-    .selectOption("unfenced-tlc");
-  await page.getByRole("button", { name: "运行真实 TLC", exact: true }).click();
-  await expect(page.getByText("发现反例", { exact: true })).toBeVisible({
-    timeout: 25000,
-  });
-  await expect(page.getByText(/反例轨迹 · 4 个状态/)).toBeVisible();
-  await page.getByRole("tab", { name: "分析与验证", exact: true }).click();
-  await page
-    .getByLabel("分析与验证案例", { exact: true })
-    .selectOption("fenced-tlc");
-  await page.getByRole("button", { name: "运行真实 TLC", exact: true }).click();
-  await expect(
-    page.getByText("性质成立（当前检查范围）", { exact: true }),
-  ).toBeVisible({ timeout: 25000 });
+  for (const caseId of [
+    "coordination-fta",
+    "single-coordinator-rbd",
+    "coordination-availability",
+    "recovery-availability",
+  ]) {
+    await page.getByRole("tab", { name: "分析与验证", exact: true }).click();
+    await page
+      .getByLabel("分析与验证案例", { exact: true })
+      .selectOption(caseId);
+    if (caseId === "recovery-availability") {
+      const diagram = page.getByRole("img", { name: "可靠性成功路径框图" });
+      await expect(diagram).toContainText("800 FIT");
+      await expect(diagram).toContainText("MTTR 1 → 0.1 h");
+      await diagram.screenshot({
+        path: "artifacts/engineering-loop/rbd-recovery-1440.png",
+      });
+    }
+    await page
+      .getByRole("button", { name: "运行真实 BDD", exact: true })
+      .click();
+    await expect(
+      page.getByText("计算完成", { exact: true }).first(),
+    ).toBeVisible({ timeout: 20000 });
+    await expect
+      .poll(async () => {
+        const runs = await (
+          await request.get(base + "/models/" + saved.id + "/runs")
+        ).json();
+        return runs.find((r: any) => r.input.caseId === caseId)?.status;
+      })
+      .toBe("succeeded");
+  }
   await page.getByRole("tab", { name: "决策与复用", exact: true }).click();
   await page.getByRole("button", { name: "记录决策", exact: true }).click();
   await page
     .getByLabel("决定", { exact: true })
-    .fill("采用 fencing，并继续验证恢复延迟");
+    .fill("采用双协调器，演练存储快恢复");
   await page
     .getByLabel("依据与重审条件", { exact: true })
-    .fill("同一 SingleWriter 性质的反例与修复验证；有限模型范围。");
+    .fill(
+      "共享事件保持唯一；冗余提高任务可靠度，快恢复提高运行可用度；合成参数待校准。",
+    );
   const runList = await (
     await request.get(base + "/models/" + saved.id + "/runs")
   ).json();
+  const probability = (id: string) =>
+    runList.find((r: any) => r.input.caseId === id).result.metrics.probability;
+  expect(
+    probability("coordination-rbd") + probability("coordination-fta"),
+  ).toBeCloseTo(1, 12);
+  expect(probability("coordination-rbd")).toBeGreaterThan(
+    probability("single-coordinator-rbd"),
+  );
+  expect(probability("recovery-availability")).toBeGreaterThan(
+    probability("coordination-availability"),
+  );
   await page
     .getByLabel("关联真实运行", { exact: true })
-    .selectOption(runList.find((r: any) => r.input.caseId === "fenced-tlc").id);
+    .selectOption(
+      runList.find((r: any) => r.input.caseId === "recovery-availability").id,
+    );
   await page
     .getByRole("button", { name: "保存设计为任务资产", exact: true })
     .click();
@@ -132,7 +161,7 @@ test("engineering journey: sources, human review, views, real analysis, decision
   const importedRuns = await (
     await request.get(base + "/models/" + current.id + "/runs")
   ).json();
-  expect(importedRuns).toHaveLength(3);
+  expect(importedRuns).toHaveLength(5);
   expect(importedRuns.every((r: any) => r.imported)).toBe(true);
   await page.screenshot({
     path: "artifacts/engineering-loop/browser-desktop.png",

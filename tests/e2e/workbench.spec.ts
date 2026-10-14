@@ -23,9 +23,11 @@ test("training evaluation, evidence snapshot, report, changed input and cancella
   await page.getByLabel("观察窗口（小时）").fill("24");
   await page.getByRole("button", { name: "开始评估", exact: true }).click();
   await expect(
-    page.getByText("训练有效可用度（正确交付产出率）", { exact: true }),
+    page.getByText("可用度（历史模型 V4）", { exact: true }),
   ).toBeVisible();
-  await page.getByLabel("正确交付目标（0–1）").fill(".95");
+  await page
+    .getByRole("spinbutton", { name: "可用度目标（0–1）", exact: true })
+    .fill(".95");
   await expect(page.getByText("输入已改变；已有结果需重算")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "验证与诊断摘要", exact: true }),

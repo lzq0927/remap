@@ -58,7 +58,7 @@ export default function TargetBudget({
       </div>
       <div className="budget-root">
         <span>
-          整体正确交付目标 <strong>{(target * 100).toFixed(3)}%</strong>
+          整体可用度目标 <strong>{(target * 100).toFixed(3)}%</strong>
         </span>
         <span>
           总允许损失 <strong>{r.totalLossHours.toFixed(2)} 等效小时</strong>

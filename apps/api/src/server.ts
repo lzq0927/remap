@@ -199,7 +199,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         id: "training",
         name: "AI 训练集群",
         state: "implemented",
-        metric: "正确交付产出比例",
+        metric: "可用度",
       },
       {
         id: "ai-system",
@@ -478,7 +478,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ),
       skipped,
       warnings: [
-        "同指标目标分配对比；各方法假设仍需评审，训练正确交付需要完整回代验证。",
+        "同指标目标分配对比；各方法假设仍需评审，训练可用度需要完整回代验证。",
       ],
     };
   });

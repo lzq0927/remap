@@ -5,6 +5,45 @@ import { compileStatic } from "../src/compile";
 import { solveStatic } from "../../solvers/src/static";
 
 describe("engineering model semantics", () => {
+  it("compares the AI cluster sample against analytical reliability and repair formulas", () => {
+    const model = clusterModel();
+    const probability = (id: string) =>
+      solveStatic(compileStatic(model, id).input).probability;
+    const coordinator = Math.exp(-1000e-9 * 100),
+      shared = Math.exp(-(500 + 100 + 800) * 1e-9 * 100);
+    expect(probability("single-coordinator-rbd")).toBeCloseTo(
+      coordinator * shared,
+      14,
+    );
+    const redundant = (1 - (1 - coordinator) ** 2) * shared;
+    expect(probability("coordination-rbd")).toBeCloseTo(redundant, 14);
+    expect(probability("coordination-fta")).toBeCloseTo(1 - redundant, 14);
+    const common =
+      (1 - (1 - 1 / (1 + 1000e-9)) ** 2) /
+      (1 + 500e-9 * 0.5) /
+      (1 + 100e-9 * 2);
+    expect(probability("coordination-availability")).toBeCloseTo(
+      common / (1 + 800e-9),
+      14,
+    );
+    expect(probability("recovery-availability")).toBeCloseTo(
+      common / (1 + 800e-9 * 0.1),
+      14,
+    );
+    expect(
+      compileStatic(model, "recovery-availability").mapping.every(
+        (e) => JSON.stringify(e.originalRate) === JSON.stringify(e.appliedRate),
+      ),
+    ).toBe(true);
+    expect(
+      compileStatic(model, "recovery-availability").mapping.find(
+        (e) => e.eventId === "storage-loss",
+      ),
+    ).toMatchObject({
+      originalRecoveryHours: 1,
+      appliedRecoveryHours: 0.1,
+    });
+  });
   it("keeps presentation outside the semantic identity", () => {
     const model = clusterModel();
     const moved = structuredClone(model);
