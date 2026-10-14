@@ -1,3 +1,4 @@
+import { optimizationSampling } from "../../../packages/contracts/src/audit-optimization";
 import {
   auditLossBudgetLabels,
   auditBudgetDefaults,
@@ -13,11 +14,15 @@ import AuditAllocationEditor from "./AuditAllocationEditor";
 import AuditBaselineEditor from "./AuditBaselineEditor";
 import AuditEventCatalog from "./AuditEventCatalog";
 import AuditReliabilityDiagram from "./AuditReliabilityDiagram";
+import AuditOptimizationEditor from "./AuditOptimizationEditor";
 import { auditDraftEvents } from "../../../packages/contracts/src/audit-objects";
 import {
   changeAuditCards,
   auditSamplingPreset,
   auditReferenceMechanisms,
+  auditScalePresets,
+  auditDefaultTargets,
+  auditScaleOrder,
 } from "../../../packages/contracts/src/audit-presets";
 
 import {
@@ -37,6 +42,7 @@ export default function AuditWorkbench({
   busy,
   onRun,
   stage,
+  lastResult,
 }: {
   defaults: AuditRequest;
   draft?: AuditDraft;
@@ -47,6 +53,7 @@ export default function AuditWorkbench({
   onRun: (request: AuditRequest) => void;
   /** Undefined retains the complete configuration editor. */
   stage?: number;
+  lastResult?: any;
 }) {
   const [request, setRequest] = useState<AuditRequest>(() =>
     structuredClone(draft?.request ?? defaults),
@@ -120,7 +127,7 @@ export default function AuditWorkbench({
         </p>
         <div className="audit-context">
           <strong>本次衡量：窗口结束时保留的正确计算进度</strong>
-          <span>外网参考参数 · 中断数据待内网校准 · 机制能力为待验证假设</span>
+          <span>已注明来源的参考参数 · 当前故障基准 · 机制能力需验证</span>
         </div>
       </div>
       {stage !== undefined && (
@@ -154,7 +161,7 @@ export default function AuditWorkbench({
               }}
             >
               <option value="expert-reproduction">
-                专家复现 · 正式评估（默认）
+                完整采样 · 正式评估（默认）
               </option>
               <option value="quick">快速试算 · 方向探索</option>
               <option value="custom">自定义 / 历史采样</option>
@@ -164,7 +171,7 @@ export default function AuditWorkbench({
         <details className="audit-help" open={stage === undefined}>
           <summary>采样配置与适用边界</summary>
           <p className="note">
-            专家复现：主场景4000条、Shapley每子集2000条、敏感性每点2000条；五规模曲线、50万卡13点扫描及原始三组种子。快速试算为128
+            沿用专家采样量：主场景4000条、Shapley每子集2000条、敏感性每点2000条；五规模曲线、50万卡13点扫描及原始三组种子。快速试算为128
             / 64 /
             128条，不能作为正式达标确认。切换配置保留已编辑目标、故障证据和措施；修改方案后会在报告中列出与专家原始配置的差异。
           </p>
@@ -182,7 +189,7 @@ export default function AuditWorkbench({
                 type="number"
                 min={Number(min)}
                 max={Number(max)}
-                step={key === "target" ? 0.001 : key === "hours" ? 0.01 : 1}
+                step={key === "target" ? 0.000001 : key === "hours" ? 0.01 : 1}
                 value={(request as any)[key]}
                 onChange={(e) =>
                   setRequest(
@@ -198,12 +205,36 @@ export default function AuditWorkbench({
         <details className="audit-help" open={stage === undefined}>
           <summary>规模目标与 MTBF 口径说明</summary>
           <p className="note">
-            默认可用度目标：万卡 99%、十万卡 95%、二十万卡 90%、五十万卡
-            80%；分别对应专家参考中断 MTBF 约 30、3、1.5、0.6
-            小时。目标由需求给定，MTBF
-            来自中断事件率；内网更新事件率后重新计算，二者不互相推导。
+            初始目标以五十万卡 98.5%、参考 MTBF 0.6 小时为锚点， 按 A = MTBF /
+            (MTBF + 参考恢复预算) 推导其他规模目标。 参考 MTBF：二十万卡 1.5
+            小时、十万卡 3 小时、万卡 30 小时。
+            这些仅用于需求推导；实际可用度仍由故障模式
+            FIT、措施和时间损失账计算，恢复时间不会被统一替换。
           </p>
+          <div className="target-preset-grid">
+            {auditScalePresets.map((p) => (
+              <div key={p.cards}>
+                <b>{(p.cards / 10000).toLocaleString()} 万卡</b>
+                <strong>{(p.target * 100).toFixed(2)}%</strong>
+                <small>参考 MTBF {p.hardMtbfHours} h</small>
+              </div>
+            ))}
+          </div>
         </details>
+        <button
+          type="button"
+          onClick={() => {
+            setRequest({
+              ...request,
+              cards: 500000,
+              target: 0.985,
+              targets: { ...auditDefaultTargets },
+            });
+            setAllScales(true);
+          }}
+        >
+          载入当前四规模初始目标
+        </button>
         <div className="fields">
           <label>
             <input
@@ -211,7 +242,7 @@ export default function AuditWorkbench({
               checked={allScales}
               onChange={(e) => setAllScales(e.target.checked)}
             />
-            同时对比万卡、十万卡、二十万卡、五十万卡
+            同时对比五十万卡、二十万卡、十万卡、万卡
           </label>
         </div>
         {allScales && request.samplingProfile && (
@@ -222,6 +253,7 @@ export default function AuditWorkbench({
         {allScales && (
           <div className="fields" aria-label="分规模目标">
             {[...new Set([request.cards, 10000, 100000, 200000, 500000])]
+              .sort(auditScaleOrder)
               .filter((n) => n !== request.cards)
               .map((n) => (
                 <label key={n}>
@@ -230,7 +262,7 @@ export default function AuditWorkbench({
                     type="number"
                     min="0"
                     max="1"
-                    step="0.001"
+                    step="0.000001"
                     value={request.targets?.[String(n)] ?? request.target}
                     onChange={(e) =>
                       setRequest({
@@ -254,6 +286,34 @@ export default function AuditWorkbench({
         <h3 className="audit-step-title" id="audit-evidence">
           02 / 故障模式
         </h3>
+        <label>
+          故障模式基准
+          <select
+            aria-label="故障模式基准"
+            value={request.eventCatalogVersion ?? "expert-2026-10-09"}
+            onChange={(e) =>
+              setRequest({
+                ...request,
+                eventCatalogVersion: e.target
+                  .value as AuditRequest["eventCatalogVersion"],
+              })
+            }
+          >
+            <option value="baseline-2026-10-14">
+              当前基准 · CORE中断6% / SRAM中断10%
+            </option>
+            <option value="expert-2026-10-09">
+              专家原始基准 · 2026-10-09（历史对照）
+            </option>
+          </select>
+        </label>
+        {request.eventCatalogVersion === "baseline-2026-10-14" && (
+          <p className="note">
+            中断类内：CORE 6%、SRAM
+            10%；其余模式按原比例分配剩余84%。CORE、SRAM亚健康分别按原值的6/14、10/5折算，其余亚健康补足本类总量。静默保持原值；三类总量保持96.6%
+            / 2% / 1.4%，万卡中断 MTBF 约30小时。逐项更新仍优先使用你填写的值。
+          </p>
+        )}
         <AuditEventCatalog
           events={currentEvents}
           onEdit={(id) => {
@@ -271,12 +331,12 @@ export default function AuditWorkbench({
           <summary>更新故障证据与基线 FIT</summary>
           <p>
             只替换明确提供的事件。中断总量或 CORE-hard
-            等细分比例变化时，静默和亚健康保留各自外网先验，不随旧比例缩放。零观测不能直接推断零
+            等细分比例变化时，静默和亚健康保留各自已确认值，不随旧比例缩放。零观测不能直接推断零
             FIT。
           </p>
           <p className="note">
             选择故障模式，填写已换算为 NPU 等效运行小时的 FIT
-            和证据来源。器件物理 FIT 需要先换算；后续可逐项替换为内网数据。
+            和证据来源。器件物理 FIT 需要先换算；后续可逐项用观测数据校准。
           </p>
           <EventEditor
             title="基线事件更新"
@@ -303,117 +363,141 @@ export default function AuditWorkbench({
       <div className="audit-stage" hidden={stage !== undefined && stage !== 2}>
         <section id="audit-budget" aria-label="损失预算分配">
           <h3 className="audit-step-title">03 / 可用度分配</h3>
-          <AuditAllocationEditor
+          <AuditOptimizationEditor
             request={request}
-            events={currentEvents}
             onChange={setRequest}
-            onApplyHardware={setHardware}
+            defaults={defaults}
+            mode="allocation"
+            lastResult={lastResult}
           />
-          <h4>检测恢复与运行损失预算</h4>
-          <label>
-            训练损失预算分配方法
-            <select
-              aria-label="训练损失预算分配方法"
-              value={request.lossBudgetMethod ?? "custom"}
-              onChange={(e) =>
+          <details
+            className="audit-help"
+            open={
+              !!request.submodelAllocation ||
+              (request.lossBudgetMethod !== undefined &&
+                request.lossBudgetMethod !== "none")
+            }
+          >
+            <summary>高级：独立子模型与第一轮损失预算</summary>
+            <p className="note">
+              第一轮现状评估默认不做分配。以下保留历史任务与专项设计的手动分配功能。
+            </p>
+            <AuditAllocationEditor
+              request={request}
+              events={currentEvents}
+              onChange={setRequest}
+              onApplyHardware={setHardware}
+            />
+            <h4>检测恢复与运行损失预算</h4>
+            <label>
+              训练损失预算分配方法
+              <select
+                aria-label="训练损失预算分配方法"
+                value={request.lossBudgetMethod ?? "custom"}
+                onChange={(e) =>
+                  setRequest({
+                    ...request,
+                    lossBudgetMethod: e.target.value as LossBudgetMethod,
+                    lossBudgetWeights:
+                      e.target.value === "baseline-proportional" ||
+                      e.target.value === "none"
+                        ? undefined
+                        : e.target.value === "equal"
+                          ? { ...equalLossWeights }
+                          : (request.lossBudgetWeights ?? {
+                              ...equalLossWeights,
+                            }),
+                  })
+                }
+              >
+                <option value="none">第一轮不分配 · 固定现状</option>
+                <option value="equal">均分六项损失预算</option>
+                <option value="baseline-proportional">
+                  按本次基线损失比例分配
+                </option>
+                <option value="custom">用户指定权重</option>
+              </select>
+            </label>
+            {request.lossBudgetMethod === "baseline-proportional" && (
+              <p className="note">
+                先计算各规模基线，再按损失比例冻结预算，随后评估措施。最终报告列出实际权重与预算。
+              </p>
+            )}
+            <p>
+              允许总损失 =（1 − 目标）× 窗口。六项预算用于追踪缺口，不是直接降低
+              FIT 的比例；工程措施需再经正向仿真验证。
+            </p>
+            <p>
+              当前规模允许损失{" "}
+              <strong>
+                {((1 - request.target) * request.hours).toFixed(3)} 小时
+              </strong>
+              {request.lossBudgetMethod !== "none" &&
+                request.lossBudgetMethod !== "baseline-proportional" && (
+                  <>
+                    ；权重合计{" "}
+                    <strong>
+                      {(
+                        Object.values(request.lossBudgetWeights ?? {}).reduce(
+                          (a, b) => a + b,
+                          0,
+                        ) * 100
+                      ).toFixed(2)}
+                      %
+                    </strong>
+                    （需为 100%）。
+                  </>
+                )}
+            </p>
+            {request.lossBudgetMethod !== "none" &&
+              request.lossBudgetMethod !== "baseline-proportional" && (
+                <div className="fields">
+                  {Object.entries(auditLossBudgetLabels).map(([id, name]) => (
+                    <label key={id}>
+                      {name}预算（%）
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        disabled={
+                          request.lossBudgetMethod === "baseline-proportional"
+                        }
+                        value={
+                          Math.round(
+                            (request.lossBudgetWeights?.[id] ?? 0) * 10000,
+                          ) / 100
+                        }
+                        onChange={(e) =>
+                          setRequest({
+                            ...request,
+                            lossBudgetMethod: "custom",
+                            lossBudgetWeights: {
+                              ...request.lossBudgetWeights,
+                              [id]: Number(e.target.value) / 100,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            <button
+              onClick={() =>
                 setRequest({
                   ...request,
-                  lossBudgetMethod: e.target.value as LossBudgetMethod,
-                  lossBudgetWeights:
-                    e.target.value === "baseline-proportional"
-                      ? undefined
-                      : e.target.value === "equal"
-                        ? { ...equalLossWeights }
-                        : (request.lossBudgetWeights ?? {
-                            ...equalLossWeights,
-                          }),
+                  lossBudgetMethod: "custom",
+                  lossBudgetWeights: { ...auditBudgetDefaults },
                 })
               }
             >
-              <option value="equal">均分六项损失预算</option>
-              <option value="baseline-proportional">
-                按本次基线损失比例分配
-              </option>
-              <option value="custom">用户指定权重</option>
-            </select>
-          </label>
-          {request.lossBudgetMethod === "baseline-proportional" && (
+              载入参考预算
+            </button>
             <p className="note">
-              先计算各规模基线，再按损失比例冻结预算，随后评估措施。最终报告列出实际权重与预算。
+              参考权重为设计假设，请按产品优先级调整并在流程中确认。
             </p>
-          )}
-          <p>
-            允许总损失 =（1 − 目标）× 窗口。六项预算用于追踪缺口，不是直接降低
-            FIT 的比例；工程措施需再经正向仿真验证。
-          </p>
-          <p>
-            当前规模允许损失{" "}
-            <strong>
-              {((1 - request.target) * request.hours).toFixed(3)} 小时
-            </strong>
-            {request.lossBudgetMethod !== "baseline-proportional" && (
-              <>
-                ；权重合计{" "}
-                <strong>
-                  {(
-                    Object.values(request.lossBudgetWeights ?? {}).reduce(
-                      (a, b) => a + b,
-                      0,
-                    ) * 100
-                  ).toFixed(2)}
-                  %
-                </strong>
-                （需为 100%）。
-              </>
-            )}
-          </p>
-          {request.lossBudgetMethod !== "baseline-proportional" && (
-            <div className="fields">
-              {Object.entries(auditLossBudgetLabels).map(([id, name]) => (
-                <label key={id}>
-                  {name}预算（%）
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    disabled={
-                      request.lossBudgetMethod === "baseline-proportional"
-                    }
-                    value={
-                      Math.round(
-                        (request.lossBudgetWeights?.[id] ?? 0) * 10000,
-                      ) / 100
-                    }
-                    onChange={(e) =>
-                      setRequest({
-                        ...request,
-                        lossBudgetMethod: "custom",
-                        lossBudgetWeights: {
-                          ...request.lossBudgetWeights,
-                          [id]: Number(e.target.value) / 100,
-                        },
-                      })
-                    }
-                  />
-                </label>
-              ))}
-            </div>
-          )}
-          <button
-            onClick={() =>
-              setRequest({
-                ...request,
-                lossBudgetMethod: "custom",
-                lossBudgetWeights: { ...auditBudgetDefaults },
-              })
-            }
-          >
-            载入参考预算
-          </button>
-          <p className="note">
-            参考权重为设计假设，请按产品优先级调整并在流程中确认。
-          </p>
+          </details>
         </section>
       </div>
       <div className="audit-stage" hidden={stage !== undefined && stage !== 3}>
@@ -421,8 +505,8 @@ export default function AuditWorkbench({
           04 / 可靠性措施
         </h3>
         <p className="note">
-          按第三步的目标选择措施。硬件改进改变事件
-          FIT；检测、恢复、隔离和检查点策略改变故障后果。第五步统一计算是否达到可用度要求。
+          第一轮固定现有措施与参数，评估现状。第二轮再比较参数改进和新增机制。
+          降低 FIT 会提高 MTBF；检测、恢复、隔离和检查点策略减少恢复及进度损失。
         </p>
         <details className="hardware-target-editor">
           <summary>硬件降 FIT · 设计目标与来源</summary>
@@ -452,7 +536,7 @@ export default function AuditWorkbench({
           mechanisms={mechanisms}
         />
         <fieldset className="mechanism-picker">
-          <legend>选择组合措施</legend>
+          <legend>第一轮：现状组合措施</legend>
           <button
             type="button"
             onClick={() =>
@@ -528,6 +612,7 @@ export default function AuditWorkbench({
                 />
                 <span>
                   <strong>{m.name}</strong>
+                  <small>{m.effect}</small>
                   <small>{descriptions[m.id]}</small>
                   {request.baseline?.mechanisms?.includes(m.id) && (
                     <small>已部署 · 固定基线，不参与新增排序</small>
@@ -554,6 +639,18 @@ export default function AuditWorkbench({
             ]}
           />
         </details>
+        <AuditOptimizationEditor
+          request={request}
+          onChange={setRequest}
+          defaults={{
+            ...defaults,
+            model: parsedModel ?? defaults.model,
+            policy: parsedPolicy ?? defaults.policy,
+          }}
+          mode="mechanisms"
+          events={currentEvents}
+          lastResult={lastResult}
+        />
       </div>
       {error && (
         <p className="error" role="alert">
@@ -655,6 +752,44 @@ export default function AuditWorkbench({
               </label>
             ))}
           </div>
+          {request.optimization?.enabled && (
+            <details className="audit-help">
+              <summary>第二轮筛选与贡献采样</summary>
+              <p>
+                复评沿用下方独立复核轨迹数。增加归因轨迹与排列可检查排名稳定性；低采样或置信区间跨零时不要把名次当作确定结论。
+              </p>
+              <div className="fields">
+                {(
+                  [
+                    ["screeningTrials", "第二轮筛选轨迹数", 256],
+                    ["attributionTrials", "第二轮归因轨迹数", 128],
+                    ["permutations", "第二轮 Shapley 排列数", 32],
+                  ] as const
+                ).map(([key, label, max]) => (
+                  <label key={key}>
+                    {label}
+                    <input
+                      aria-label={label}
+                      type="number"
+                      min="2"
+                      max={max}
+                      step="1"
+                      value={optimizationSampling(request)[key]}
+                      onChange={(e) =>
+                        setRequest({
+                          ...request,
+                          optimization: {
+                            ...request.optimization!,
+                            [key]: Number(e.target.value),
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </details>
+          )}
           <div className="fields">
             <label>
               置信区间口径

@@ -10,6 +10,9 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
   const panel = page.getByRole("region", { name: "故障事件与机制收益审核" });
   await expect(panel).toBeVisible();
   await panel
+    .getByText("高级：独立子模型与第一轮损失预算", { exact: true })
+    .click();
+  await panel
     .getByLabel("训练损失预算分配方法", { exact: true })
     .selectOption("baseline-proportional");
   await panel.getByLabel("启用对象目标分配", { exact: true }).check();

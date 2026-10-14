@@ -63,7 +63,11 @@ export function hardwareTargetOverrides(
       }));
   });
 }
-export type LossBudgetMethod = "equal" | "baseline-proportional" | "custom";
+export type LossBudgetMethod =
+  | "none"
+  | "equal"
+  | "baseline-proportional"
+  | "custom";
 export const lossKeys = [
   "downtime",
   "save",
@@ -75,6 +79,72 @@ export const lossKeys = [
 export const equalLossWeights = Object.fromEntries(
   lossKeys.map((key) => [key, 1 / lossKeys.length]),
 );
+
+/** HAC-D classical AGREE shape, normalized to a finite-window loss budget.
+ * E is an explicit engineering importance suggestion, not an inferred failure probability.
+ * This planning adaptation never replaces the forward retained-progress calculation.
+ */
+export function agreeLossAllocation(
+  allowedHours: number,
+  horizonHours: number,
+  items: Array<{
+    id: string;
+    name: string;
+    importance: number;
+    complexity: number;
+    actualHours: number;
+  }>,
+) {
+  if (
+    !Number.isFinite(allowedHours) ||
+    allowedHours < 0 ||
+    !(horizonHours > 0) ||
+    allowedHours > horizonHours ||
+    !items.length ||
+    new Set(items.map((i) => i.id)).size !== items.length ||
+    items.some(
+      (i) =>
+        !Number.isFinite(i.importance) ||
+        i.importance <= 0 ||
+        i.importance > 1 ||
+        !Number.isFinite(i.complexity) ||
+        i.complexity <= 0 ||
+        !Number.isFinite(i.actualHours) ||
+        i.actualHours < 0,
+    )
+  )
+    throw new Error("AGREE 预算、重要度 (0,1]、复杂度及实际损失必须有效");
+  const N = items.reduce((s, i) => s + i.complexity, 0),
+    proxyReliability = Math.exp(-allowedHours / horizonHours);
+  const raw = items.map((i) => {
+    const failure =
+      -Math.expm1(((-allowedHours / horizonHours) * i.complexity) / N) /
+      i.importance;
+    if (failure >= 1)
+      throw new Error("AGREE 重要度过低，分配结果无效；请提高重要度或缩小预算");
+    return -Math.log1p(-failure);
+  });
+  const sum = raw.reduce((a, b) => a + b, 0);
+  const rows = items.map((item, index) => ({
+    ...item,
+    weight: sum ? raw[index] / sum : item.complexity / N,
+    allowedHours: sum ? (allowedHours * raw[index]) / sum : 0,
+    excessHours:
+      item.actualHours - (sum ? (allowedHours * raw[index]) / sum : 0),
+  }));
+  return {
+    method: "agree.classical-normalized-loss.v1",
+    formula: "Rᵢ = 1 − (1 − R*^(nᵢ/Σn))/Eᵢ；bᵢ = B × (−ln Rᵢ)/Σ(−ln Rⱼ)",
+    interpretation:
+      "R*=exp(−B/T) 是损失预算映射，不是训练可用度；重要度越高，允许损失越少。Shapley仅生成可编辑工程建议，最终需正向仿真。",
+    source:
+      "HAC-D@5ddfd65 · user manual §7 / allocation/index.ts；有限窗口损失预算适配",
+    allowedHours,
+    proxyReliability,
+    items: rows,
+    residual: rows.reduce((s, i) => s + i.allowedHours, 0) - allowedHours,
+  };
+}
 
 /** Training progress is additive; series allocation belongs to a separate submodel. */
 export function auditSubmodelPlan(input?: AuditSubmodelAllocation) {
@@ -139,29 +209,33 @@ export function lossAllocation(
 ) {
   const total = lossKeys.reduce((sum, key) => sum + (baseline[key] ?? 0), 0);
   const weights =
-    method === "equal"
-      ? { ...equalLossWeights }
-      : method === "baseline-proportional"
-        ? Object.fromEntries(
-            lossKeys.map((key) => [
-              key,
-              total > 0 ? (baseline[key] ?? 0) / total : 1 / lossKeys.length,
-            ]),
-          )
-        : custom
-          ? { ...custom }
-          : null;
+    method === "none"
+      ? null
+      : method === "equal"
+        ? { ...equalLossWeights }
+        : method === "baseline-proportional"
+          ? Object.fromEntries(
+              lossKeys.map((key) => [
+                key,
+                total > 0 ? (baseline[key] ?? 0) / total : 1 / lossKeys.length,
+              ]),
+            )
+          : custom
+            ? { ...custom }
+            : null;
   return {
     cards,
     method,
     weights,
     allowedHours: (1 - target) * hours,
     basis:
-      method === "baseline-proportional"
-        ? "本次基线仿真损失账，候选措施计算前冻结"
-        : method === "equal"
-          ? "六项损失均分"
-          : "用户设计权重",
+      method === "none"
+        ? "第一轮固定现状，不提前分配损失指标"
+        : method === "baseline-proportional"
+          ? "本次基线仿真损失账，候选措施计算前冻结"
+          : method === "equal"
+            ? "六项损失均分"
+            : "用户设计权重",
     baselineLossHours: total,
   };
 }

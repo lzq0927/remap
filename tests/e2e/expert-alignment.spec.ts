@@ -1,4 +1,8 @@
 import { test, expect } from "./task-fixture";
+import {
+  auditDefaultTargets,
+  auditScalePresets,
+} from "../../packages/contracts/src/audit-presets";
 
 for (const width of [1440, 390]) {
   test(`expert report and four default output targets work end to end at ${width}px`, async ({
@@ -12,20 +16,18 @@ for (const width of [1440, 390]) {
     const panel = page.getByRole("region", { name: "故障事件与机制收益审核" });
     const target = panel.getByLabel("可用度目标（0–1）", { exact: true });
     const cards = panel.getByLabel("评估卡数", { exact: true });
-    await expect(target).toHaveValue("0.99");
+    await expect(target).toHaveValue("0.985");
     await expect(
-      panel.getByLabel("同时对比万卡、十万卡、二十万卡、五十万卡"),
+      panel.getByLabel("同时对比五十万卡、二十万卡、十万卡、万卡"),
     ).toBeChecked();
-    for (const [n, t] of [
-      [100000, "0.95"],
-      [200000, "0.9"],
-      [500000, "0.8"],
-    ] as const)
+    for (const { cards: n, target: t } of auditScalePresets.filter(
+      (p) => p.cards !== 500000,
+    ))
       await expect(
         panel.getByLabel(`${n.toLocaleString()} 卡目标（0–1）`, {
           exact: true,
         }),
-      ).toHaveValue(t);
+      ).toHaveValue(String(t));
     await expect(panel.getByLabel("采样配置", { exact: true })).toHaveValue(
       "expert-reproduction",
     );
@@ -34,7 +36,7 @@ for (const width of [1440, 390]) {
     ).toBeVisible();
     await panel.getByLabel("采样配置", { exact: true }).selectOption("quick");
     await cards.fill("500000");
-    await expect(target).toHaveValue("0.8");
+    await expect(target).toHaveValue("0.985");
     await target.fill("0.82");
     await cards.fill("10000");
     await expect(
@@ -42,7 +44,7 @@ for (const width of [1440, 390]) {
     ).toHaveValue("0.82");
     await panel
       .getByLabel("500,000 卡目标（0–1）", { exact: true })
-      .fill("0.8");
+      .fill("0.985");
     await panel.getByLabel("评估窗口（小时）", { exact: true }).fill("24");
     await panel.getByText("参数核对", { exact: true }).click();
     await expect(
@@ -87,12 +89,7 @@ for (const width of [1440, 390]) {
     const frozen = (
       await (await request.get(`/api/tasks/${taskId}/runs/${run.id}`)).json()
     ).result;
-    expect(frozen.request.targets).toEqual({
-      10000: 0.99,
-      100000: 0.95,
-      200000: 0.9,
-      500000: 0.8,
-    });
+    expect(frozen.request.targets).toEqual(auditDefaultTargets);
     expect(frozen.sensitivity).toHaveLength(13);
     expect(frozen.request.scales).toContain(1000);
     expect(frozen.request.targets["1000"]).toBeUndefined();
@@ -134,7 +131,7 @@ for (const width of [1440, 390]) {
     });
     await expect(
       scope.getByRole("row").filter({ hasText: "500,000" }),
-    ).toContainText("80%");
+    ).toContainText("98.5%");
     await expect(
       scope.getByRole("row").filter({ hasText: "500,000" }),
     ).toContainText("0.6");

@@ -9,6 +9,9 @@ async function prepare(request: any, taskId: string) {
   const defaults = await (await request.get("/api/defaults")).json();
   const input = {
     ...defaults.audit,
+    cards: 10000,
+    target: 0.99,
+    optimization: undefined,
     hours: 24,
     trials: 4,
     scales: [10000],
@@ -99,9 +102,19 @@ for (const width of [1440, 390])
       JSON.parse(await readFile(join(directory, jsonFile), "utf8")),
     ).toEqual(run);
     // This file URL has no platform origin; JSON must resolve to a local sibling file.
-    await page.goto(
-      pathToFileURL(join(directory, `reliability-${run.id}.html`)).href,
-    );
+    try {
+      await page.goto(
+        pathToFileURL(join(directory, `reliability-${run.id}.html`)).href,
+      );
+    } catch (error) {
+      // Managed Chromium may forbid all file:// navigation. Keep this distinct
+      // from the HTTP report rendering and ZIP integrity checks above.
+      test.skip(
+        String(error).includes("ERR_BLOCKED_BY_ADMINISTRATOR"),
+        "当前浏览器策略禁止 file://；ZIP 内容已核对，原生离线打开需在允许的浏览器验证",
+      );
+      throw error;
+    }
     const link = page.getByRole("link", {
       name: "完整结构化结果 JSON",
       exact: true,

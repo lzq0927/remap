@@ -30,11 +30,25 @@ import {
   auditSubmodelPlan,
   auditHardwareItems,
   lossAllocation,
-  equalLossWeights,
   type AuditSubmodelAllocation,
   type LossBudgetMethod,
 } from "./audit-allocation";
 import { mechanismEventIds } from "../../contracts/src/audit-objects";
+import {
+  auditOptimizationDefaults,
+  type AuditOptimizationRequest,
+} from "../../contracts/src/audit-optimization";
+import {
+  auditOptimization,
+  validateOptimization,
+  optimizationWork,
+} from "./audit-optimization";
+import { existingMechanismClasses } from "../../contracts/src/audit-extensions";
+import {
+  calibratedAuditEvents,
+  currentAuditCatalogVersion,
+  type AuditCatalogVersion,
+} from "../../contracts/src/audit-catalog";
 
 const createEngine = createRequire(import.meta.url)(
   "../../solvers/src/vendor/review-engine.cjs",
@@ -62,6 +76,8 @@ export type EventOverride = {
   note?: string;
 };
 export interface AuditRequest {
+  eventCatalogVersion?: AuditCatalogVersion;
+  optimization?: AuditOptimizationRequest;
   rateArithmetic?: "expert-reference" | "catalog";
   samplingProfile?: "expert-reproduction" | "quick" | "custom";
   confidenceMethod?: "student-t" | "normal-1.96";
@@ -132,14 +148,15 @@ function numberIn(
 }
 export function getAuditDefaults() {
   return {
-    cards: 10000,
+    cards: 500000,
+    eventCatalogVersion: currentAuditCatalogVersion,
     hours: 720,
     ...auditSamplingPreset("expert-reproduction"),
     seed: sourceConfig.seed,
-    target: 0.99,
+    target: 0.985,
     targets: { ...auditDefaultTargets },
-    lossBudgetWeights: { ...equalLossWeights },
-    lossBudgetMethod: "equal" as const,
+    lossBudgetMethod: "none" as const,
+    optimization: structuredClone(auditOptimizationDefaults),
     verifyRecommendation: true,
     scales: [...auditReferenceScales],
     mechanisms: [...auditReferenceMechanisms],
@@ -156,7 +173,7 @@ export function getAuditDefaults() {
     modelVersion: AUDIT_VERSION,
   };
 }
-export function getAuditEvents() {
+function getAuditReferenceEvents() {
   return sourceInputs.current.events.map((event) => {
     const old = sourceInputs.legacy.events.find((e) => e.id === event.id)!;
     return {
@@ -179,16 +196,25 @@ export function getAuditEvents() {
       fitEvidence: old.fitEvidence,
       note:
         event.type === "中断"
-          ? "中断总量及 CORE-hard 等类内占比待内网数据校准"
-          : "暂用外网先验；缺少内网观测不代表零风险",
+          ? "参考版本的中断总量及类内占比，可用观测数据校准"
+          : "采用参考参数；缺少观测不代表零风险",
     };
   });
+}
+export function getAuditEvents(
+  version: AuditCatalogVersion = currentAuditCatalogVersion,
+) {
+  const events = getAuditReferenceEvents();
+  return version === "baseline-2026-10-14"
+    ? calibratedAuditEvents(events)
+    : events;
 }
 export const auditMechanisms = scenarios.map(([id, name, code]) => ({
   ...sourceMechanisms.mechanisms.find((m) => m.id === code),
   id,
   name,
   code,
+  ...existingMechanismClasses[id],
 }));
 function applyOverrides(
   events: ReturnType<typeof getAuditEvents>,
@@ -228,10 +254,43 @@ function applyOverrides(
   return out;
 }
 export function resolveAudit(request: AuditRequest) {
+  if (
+    request.eventCatalogVersion !== undefined &&
+    !["expert-2026-10-09", "baseline-2026-10-14"].includes(
+      request.eventCatalogVersion,
+    )
+  )
+    throw new Error("未知故障模式基准版本");
+  validateOptimization(request);
+  if (
+    request.optimization?.enabled &&
+    (request.optimization.model ||
+      request.optimization.policy ||
+      request.optimization.fitTargets)
+  ) {
+    resolveAudit({
+      ...request,
+      optimization: undefined,
+      model: { ...request.model, ...request.optimization.model },
+      policy: Object.fromEntries(
+        [
+          ...new Set([
+            ...Object.keys(request.policy ?? {}),
+            ...Object.keys(request.optimization.policy ?? {}),
+          ]),
+        ].map((id) => [
+          id,
+          { ...request.policy?.[id], ...request.optimization?.policy?.[id] },
+        ]),
+      ),
+      candidateFitOverrides:
+        request.optimization.fitTargets ?? request.candidateFitOverrides,
+    });
+  }
   const submodelPlan = auditSubmodelPlan(request.submodelAllocation);
   if (
     request.lossBudgetMethod !== undefined &&
-    !["equal", "baseline-proportional", "custom"].includes(
+    !["none", "equal", "baseline-proportional", "custom"].includes(
       request.lossBudgetMethod,
     )
   )
@@ -350,7 +409,7 @@ export function resolveAudit(request: AuditRequest) {
   )
     throw new Error("Unknown or repeated mechanism");
   const originalEvents = applyOverrides(
-    getAuditEvents(),
+    getAuditEvents(request.eventCatalogVersion ?? "expert-2026-10-09"),
     request.eventOverrides,
   );
   const baseline = resolveConditionalBaseline(
@@ -495,7 +554,11 @@ export function resolveAudit(request: AuditRequest) {
     (s, r) => s + ((r.cards * totalFit) / 1e9) * request.hours * r.runs,
     0,
   );
-  if (sampleRuns > 1000000 || expectedEvents > 450000000)
+  const extraWork = optimizationWork(request, scales);
+  if (
+    sampleRuns + extraWork.trajectories > 1000000 ||
+    expectedEvents + (extraWork.events * totalFit) / 1e9 > 450000000
+  )
     throw new Error(
       "Audit work budget exceeded (1,000,000 trajectories / 450,000,000 expected events); reduce scales, trials, mechanisms or event rates",
     );
@@ -518,7 +581,7 @@ export function resolveAudit(request: AuditRequest) {
     baseline,
   };
 }
-export function audit(
+function auditOneRound(
   request: AuditRequest,
   onProgress?: (done: number, total: number) => void,
 ) {
@@ -912,7 +975,7 @@ export function audit(
         )
       : null,
   }));
-  const referenceEvents = getAuditEvents();
+  const referenceEvents = getAuditEvents("expert-2026-10-09");
   const metadata = events.map((event) => ({
     ...event,
     referenceFit: referenceEvents.find((e) => e.id === event.id)!.fit,
@@ -925,6 +988,7 @@ export function audit(
   }));
   return {
     kind: "expert-review-audit",
+    optimization: null as any,
     metricId: AUDIT_METRIC,
     modelVersion: AUDIT_VERSION,
     request: structuredClone(request),
@@ -972,6 +1036,7 @@ export function audit(
       recoveryOrder,
       sourceCommit: commit,
       sourcePath: "catalogs/review-2026-10-09",
+      eventCatalogVersion: request.eventCatalogVersion ?? "expert-2026-10-09",
       inputHash: createHash("sha256")
         .update(
           JSON.stringify({
@@ -1005,12 +1070,33 @@ export function audit(
       "DP 为容量等效近似；同步阻塞、共因与备用资源耗尽需扩展模型",
     ],
     warnings: [
-      "中断类内占比（包括 CORE-hard）优先用内网数据替换；未提供的静默/亚健康保留外网先验",
-      "机制不改变源 FIT；硬件降 FIT 必须显式输入目标事件率",
+      "故障模式基准、补充观测和设计假设分开记录；更新事件时保留未修改项目的冻结值",
+      "第一轮检测恢复措施不改变源 FIT；第二轮硬件目标或筛查机制会显式记录残余事件率",
       "Shapley 的加入顺序是贡献分摊，不是恢复链执行顺序；收益完全可加时不必使用 Shapley",
       "固定时延与周期检查点采用离散事件仿真；CTMC 仅适用于指数停留时间等前提",
       "置信区间只反映抽样误差；不同参数下配对种子不保证事件逐一对齐",
       "费用与工程可行性需现场确认；候选达到均值目标不等于生产 SLA 或全局最优",
     ],
   };
+}
+
+export function audit(
+  request: AuditRequest,
+  onProgress?: (done: number, total: number) => void,
+) {
+  const enabled = request.optimization?.enabled === true;
+  const result = auditOneRound(
+    request,
+    enabled ? (done, total) => onProgress?.(done, total * 2) : onProgress,
+  );
+  if (enabled) {
+    result.optimization = auditOptimization(
+      request,
+      result,
+      resolveAudit(request),
+      (fraction) => onProgress?.(1 + fraction, 2),
+    );
+    onProgress?.(1, 1);
+  }
+  return result;
 }

@@ -4,6 +4,7 @@ import WorkspaceViewTabs, { useViewPreference } from "./WorkspaceViewTabs";
 import AuditRunContext from "./AuditRunContext";
 import AuditContribution from "./AuditContribution";
 import AuditReliabilityDiagram from "./AuditReliabilityDiagram";
+import AuditOptimizationResult from "./AuditOptimizationResult";
 import { gainExplanation } from "../../../packages/reports/src/audit-contributions";
 import {
   auditSummary,
@@ -26,10 +27,12 @@ export default function AuditResult({
   const [scale, setScale] = useState(r.request.cards);
   const viewId = useId();
   const { taskId } = useTaskApi();
-  const [view, setView] = useViewPreference(
+  const [savedView, setView] = useViewPreference(
     `remap.results.${taskId}`,
-    "overview",
+    r.optimization ? "decision" : "overview",
   );
+  const view =
+    savedView === "decision" && !r.optimization ? "overview" : savedView;
   const visible = (name: string) => view === "all" || view === name;
   const cards = r.rows.some((x: any) => x.cards === scale)
     ? scale
@@ -49,10 +52,14 @@ export default function AuditResult({
         idPrefix={viewId}
         panelId={`${viewId}-panel`}
         options={[
-          { id: "overview", label: "结论概览" },
+          ...(r.optimization ? [{ id: "decision", label: "两轮决策" }] : []),
+          { id: "overview", label: r.optimization ? "第一轮现状" : "结论概览" },
           { id: "gains", label: "方案收益" },
           { id: "diagram", label: "可靠性框图" },
-          { id: "contributions", label: "贡献分摊" },
+          {
+            id: "contributions",
+            label: r.optimization ? "现状贡献" : "贡献分摊",
+          },
           { id: "risks", label: "风险与敏感性" },
           { id: "all", label: "全部分析" },
         ]}
@@ -63,10 +70,13 @@ export default function AuditResult({
         aria-labelledby={`${viewId}-${view}`}
         tabIndex={0}
       >
+        <div className="workspace-result-panel" hidden={!visible("decision")}>
+          <AuditOptimizationResult result={r} onApply={onApply} />
+        </div>
         <AuditRunContext result={r} cards={cards} open={view === "all"} />
         {overview.total > 1 && (
           <p className="note">
-            本次核对 {overview.total} 个规模：采样支持 {overview.supported}{" "}
+            第一轮核对 {overview.total} 个规模：采样支持 {overview.supported}{" "}
             个，低于目标 {overview.below} 个，证据不足 {overview.uncertain}{" "}
             个。下方判读针对当前查看规模，不代表所有规模达标。
           </p>
@@ -283,10 +293,10 @@ export default function AuditResult({
                       <td>{d.remaining.toFixed(3)}</td>
                       <td>
                         {d.evidence === "internal-measured"
-                          ? "内部观测"
+                          ? "观测数据"
                           : d.evidence === "scenario"
                             ? "方案假设"
-                            : "外网先验"}
+                            : "参考数据"}
                       </td>
                     </tr>
                   ))}

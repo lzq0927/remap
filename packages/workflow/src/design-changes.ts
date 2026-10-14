@@ -20,6 +20,7 @@ export function changedAuditStage(previous: any, current: any): number {
       metricId,
       modelVersion,
       eventOverrides,
+      eventCatalogVersion,
       rateArithmetic,
       baseline,
       lossBudgetMethod,
@@ -46,6 +47,7 @@ export function changedAuditStage(previous: any, current: any): number {
       sensitivitySeed,
       verifyRecommendation,
       verificationTrials,
+      optimization,
       ...unknown
     } = design.assessment.input;
     return [
@@ -61,6 +63,7 @@ export function changedAuditStage(previous: any, current: any): number {
       },
       {
         eventOverrides,
+        eventCatalogVersion,
         rateArithmetic,
         resolvedEvents: baseline?.resolvedEventIds,
         note: baseline?.note,
@@ -70,6 +73,13 @@ export function changedAuditStage(previous: any, current: any): number {
         lossBudgetWeights,
         submodelAllocation,
         hardwareAllocation,
+        optimizationStrategy: optimization && {
+          enabled: optimization.enabled,
+          autoTune: optimization.autoTune,
+          allowFitTargets: optimization.allowFitTargets,
+          importance: optimization.importance,
+          complexity: optimization.complexity,
+        },
       },
       {
         mechanisms,
@@ -79,6 +89,12 @@ export function changedAuditStage(previous: any, current: any): number {
         recoveryOrder,
         costs,
         deployed: baseline?.mechanisms,
+        optimizationMeasures: optimization && {
+          extensions: optimization.extensions,
+          model: optimization.model,
+          policy: optimization.policy,
+          fitTargets: optimization.fitTargets,
+        },
       },
       {
         samplingProfile,
@@ -95,6 +111,11 @@ export function changedAuditStage(previous: any, current: any): number {
         sensitivitySeed,
         verifyRecommendation,
         verificationTrials,
+        optimizationSampling: optimization && {
+          screeningTrials: optimization.screeningTrials,
+          attributionTrials: optimization.attributionTrials,
+          permutations: optimization.permutations,
+        },
       },
     ];
   };

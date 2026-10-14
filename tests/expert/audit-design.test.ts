@@ -12,6 +12,10 @@ const createEngine = createRequire(import.meta.url)(
 );
 const small = () => ({
   ...getAuditDefaults(),
+  cards: 10000,
+  target: 0.99,
+  optimization: undefined,
+  lossBudgetMethod: "equal" as const,
   samplingProfile: undefined,
   sensitivityMode: "expert-reference" as const,
   sensitivityTrials: 4,

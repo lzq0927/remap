@@ -1,4 +1,5 @@
 import { auditSummary } from "./audit-summary";
+import { auditOptimizationSections } from "./audit-optimization";
 import { auditObjectComparison } from "./audit-object-diagram";
 import {
   auditContributionView,
@@ -63,6 +64,8 @@ export interface AuditSection {
   tables?: AuditTable[];
   collapsed?: boolean;
   visual?:
+    | "optimization"
+    | "optimized-objects"
     | "overview"
     | "sensitivity"
     | "method"
@@ -77,7 +80,7 @@ export function auditSections(r: any): AuditSection[] {
   const selectedRows = r.rows.filter((row: any) => row.cards === selected),
     p = r.config.model;
   const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
-    (a, b) => a - b,
+    (a, b) => b - a,
   );
   const hardFit = r.events
     .filter((e: any) => e.type === "hard")
@@ -104,8 +107,8 @@ export function auditSections(r: any): AuditSection[] {
         num(loss(x) - (x.downtime ?? 0)),
         denominator ? pct(loss(x) / denominator) : "—",
         {
-          "internal-measured": "内部观测",
-          "external-prior": "外网先验",
+          "internal-measured": "观测数据",
+          "external-prior": "参考数据",
           scenario: "方案假设",
         }[e.evidence as string] ?? e.evidence,
       ];
@@ -148,14 +151,17 @@ export function auditSections(r: any): AuditSection[] {
       pct(events.reduce((s: number, e: any) => s + e.share, 0)),
       `${events.filter((e: any) => e.evidence === "internal-measured").length} / ${events.length}`,
       type === "hard"
-        ? "优先用内网中断总量与类内占比校准"
-        : "缺内网数据时保留外网先验，不置零",
+        ? "优先用观测中断总量与类内占比校准"
+        : "缺少观测时保留参考数据，不置零",
     ];
   });
   const brief = auditSummary(r);
   const sections: AuditSection[] = [
+    ...auditOptimizationSections(r),
     {
-      title: "审核结论与行动重点",
+      title: r.optimization
+        ? "第一轮 / 现状结论与行动重点"
+        : "审核结论与行动重点",
       paragraphs: [
         ...(r.workflowContext
           ? [
@@ -171,7 +177,7 @@ export function auditSections(r: any): AuditSection[] {
           .slice(0, 3)
           .map((d: any) => d.id)
           .join("、")} 的数据来源与机制覆盖。`,
-        `${r.events.length} 条事件中 ${brief.internal} 条标记为内部观测；其余为外网先验或方案假设。`,
+        `${r.events.length} 条事件中 ${brief.internal} 条标记为观测数据；其余为参考数据或方案假设。`,
         "下表是本次实际评估组合；后文推荐的是候选子集，不会自动替换本次组合。常规CKPT与人工恢复已包含在基线；硬件降FIT须单独提供目标。专家六项是对照方案，不表示每个规模的最优部署。",
       ],
       tables: [
@@ -189,6 +195,7 @@ export function auditSections(r: any): AuditSection[] {
       title: "01 / 确认口径与数据证据",
       paragraphs: [
         `单作业 ${num(selected, 0)} 卡，${num(hours)} 小时窗口；计算 ${num(p.checkpointComputeSeconds)} 秒 / 保存 ${num(p.checkpointSaveSeconds)} 秒。`,
+        `故障模式基准：${r.config.eventCatalogVersion ?? "expert-2026-10-09"}。${r.config.eventCatalogVersion === "baseline-2026-10-14" ? "CORE中断类内6%、SRAM中断类内10%；其余中断按比例补足84%。CORE与SRAM亚健康按各自中断变化倍数折算，其余亚健康补足总量；静默不变。逐项更新以冻结FIT为准。" : "沿用历史专家事件值；本次更新以冻结FIT为准。"}`,
         `自动恢复尝试 ${num(p.recoveryAttemptSeconds)} 秒，成功率 ${pct(p.recoverySuccess)}，失败额外人工 ${num(p.manualAdditionalSeconds / 60)} 分钟；静默漏检兜底 ${num(p.sdcDelayHours)} 小时。`,
         "指标：期末保留的正确计算进度 / 窗口理想产出；仍污染时保留最后干净检查点。与旧 V4 整条任务清零结果不直接比较。",
         "FIT 为每十亿 NPU 等效运行小时的业务影响事件率，不能直接当成器件物理 FIT。0 FIT 是当前预算假设，不是不会发生。",
@@ -262,7 +269,7 @@ export function auditSections(r: any): AuditSection[] {
             "事件类型",
             "合计 FIT",
             "总占比",
-            "内部观测来源条目 / 总条目",
+            "观测数据来源条目 / 总条目",
             "更新原则",
           ],
           rows: classification,
@@ -376,8 +383,8 @@ export function auditSections(r: any): AuditSection[] {
             source: e.source,
             evidence:
               {
-                "internal-measured": "内部观测",
-                "external-prior": "外网先验",
+                "internal-measured": "观测数据",
+                "external-prior": "参考数据",
                 scenario: "方案假设",
               }[e.evidence as string] ?? e.evidence,
             note: e.note,
@@ -594,10 +601,10 @@ export function auditSections(r: any): AuditSection[] {
       r.decision.totalCost === null
         ? "缺少完整成本输入，暂不宣称最优性价比；所有机制成本须使用一致单位。"
         : `所选机制总成本 ${num(r.decision.totalCost)}（用户统一成本单位）；未计硬件换型成本及组合耦合成本。`,
-      "优先校准中断总率、CORE-hard 等细分占比和重执行/弹性覆盖；静默和亚健康暂保留外网证据。只更新中断事件不会按旧总比例重缩放其余两类。",
+      "优先校准中断总率、CORE-hard 等细分占比和重执行/弹性覆盖；静默和亚健康暂保留参考证据。只更新中断事件不会按旧总比例重缩放其余两类。",
       "重点扫描全系统静默检出率、漏检兜底时延、恢复耗时和检查点周期；Core 内检出率与全系统覆盖率不同，不能直接替代。",
       ...r.warnings,
-      "本次自动核查只证明模型内数值和记账一致性。真实产品仍需验证误报、检测开销、带宽、备用容量、多作业、共因故障、寿命分布、SDC 长尾、训练收敛和 DP 重构。原专家回归由工程测试执行，不把上游历史“通过”记录充作本次内网数据认证。",
+      "本次自动核查只证明模型内数值和记账一致性。真实产品仍需验证误报、检测开销、带宽、备用容量、多作业、共因故障、寿命分布、SDC 长尾、训练收敛和 DP 重构。原专家回归由工程测试执行，不把上游历史“通过”记录充作本次产品数据认证。",
     ],
     tables: [
       {
@@ -637,7 +644,7 @@ export function auditSections(r: any): AuditSection[] {
     sections.push({
       title: "本次基线数据更新记录",
       paragraphs: [
-        "下列记录取自本次冻结输入；更新中断事件时，未提交的静默与亚健康事件保留外网先验。总占比、类内占比及中断 MTBF 随本次 FIT 重新计算，需求目标保持用户给定值。",
+        "下列记录取自本次冻结输入；更新中断事件时，未提交的静默与亚健康事件保留参考数据。总占比、类内占比及中断 MTBF 随本次 FIT 重新计算，需求目标保持用户给定值。",
       ],
       tables: [
         {
@@ -660,10 +667,10 @@ export function auditSections(r: any): AuditSection[] {
               pct(e.share),
               pct(e.withinTypeShare),
               e.evidence === "internal-measured"
-                ? "内部观测"
+                ? "观测数据"
                 : e.evidence === "scenario"
                   ? "方案假设"
-                  : "外网先验",
+                  : "参考数据",
             ]),
         },
       ],
@@ -796,7 +803,7 @@ export function auditSections(r: any): AuditSection[] {
     title: "可靠性框图与对象改善",
     visual: "objects",
     paragraphs: [
-      `${num(selected, 0)} 卡：比较确认基线与本次所选组合。对象中的中断、亚健康、静默故障率使用 NPU 等效小时单位；外网较粗的对象可通过事件数据更新校准。`,
+      `${num(selected, 0)} 卡：比较确认基线与本次所选组合。对象中的中断、亚健康、静默故障率使用 NPU 等效小时单位；较粗粒度的对象可通过事件数据更新校准。`,
       "框图连线表示故障影响传递，不假设所有对象按独立串联系统相乘。检测恢复改善后果，源 FIT 仅由明确硬件目标改变；达标结论仍使用原有仿真。公共保存开销单列，未重复分配到对象。",
     ],
     tables: [

@@ -54,7 +54,9 @@ export function registerAutomaticWorkflow(
       resolved = resolveAudit(input);
     if (
       !input.lossBudgetWeights &&
-      !["equal", "baseline-proportional"].includes(input.lossBudgetMethod)
+      !["none", "equal", "baseline-proportional"].includes(
+        input.lossBudgetMethod,
+      )
     )
       throw new DomainError("INPUT_UNCONFIRMED", "请先选择损失预算分配方法");
     const started = service.start(
@@ -112,7 +114,7 @@ export function registerAutomaticWorkflow(
               hours: input.hours,
               metricId: design.assessment.metricId,
             },
-            note: "采用当前已保存需求；自动完成不表示人工确认，外网先验仍需审核。",
+            note: "采用当前已保存需求；自动完成不表示人工确认，参考数据仍需复核。",
           },
           {
             id: "describe",
@@ -132,9 +134,10 @@ export function registerAutomaticWorkflow(
             data: {
               submodel: resolved.submodelPlan,
               lossBudgetMethod: input.lossBudgetMethod ?? "custom",
+              optimization: input.optimization,
               lossBudgetWeights: input.lossBudgetWeights,
             },
-            note: "先分配目标；基线比例预算在基线样本完成后、候选措施计算前冻结。Shapley 使用真实组合结果。",
+            note: "先冻结现状并评估六项措施；未达标时根据各规模 Shapley 贡献进行第二轮 AGREE 分配，再验证具体改进方案。",
           },
           {
             id: "prepare",

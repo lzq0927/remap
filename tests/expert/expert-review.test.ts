@@ -16,6 +16,10 @@ const original = require("../../references/expert-review-2026-10-09/engine.cjs")
 const createEngine = require("../../packages/solvers/src/vendor/review-engine.cjs");
 const small = () => ({
   ...getAuditDefaults(),
+  cards: 10000,
+  target: 0.99,
+  eventCatalogVersion: "expert-2026-10-09" as const,
+  optimization: undefined,
   samplingProfile: undefined,
   sensitivityMode: "expert-reference" as const,
   sensitivityTrials: 4,
@@ -79,6 +83,10 @@ it("pins the requested review sources separately from strict-clean-end V4", () =
 it("reproduces the expert HTML data baseline at 10000 cards over 4000 trajectories", () => {
   const result = audit({
     ...getAuditDefaults(),
+    cards: 10000,
+    target: 0.99,
+    eventCatalogVersion: "expert-2026-10-09" as const,
+    optimization: undefined,
     trials: 4000,
     scales: [10000],
     targets: undefined,
@@ -95,7 +103,7 @@ it("reproduces the expert HTML data baseline at 10000 cards over 4000 trajectori
     expect(base.ledger[key]).toBeCloseTo((expected.ledger as any)[key], 8);
 }, 60000);
 it("updates only supplied interruption FIT and keeps external silent/slow priors", () => {
-  const old = getAuditEvents(),
+  const old = getAuditEvents("expert-2026-10-09"),
     req = small();
   const updated = resolveAudit({
     ...req,
@@ -213,6 +221,8 @@ it("rejects ambiguous rate units, missing provenance and excessive work", () => 
   expect(() =>
     resolveAudit({
       ...getAuditDefaults(),
+      eventCatalogVersion: "expert-2026-10-09" as const,
+      optimization: undefined,
       cards: 1000000,
       scales: [1000000],
       targets: undefined,

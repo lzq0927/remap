@@ -18,7 +18,7 @@ const app = await buildApp({ dataDir: ":memory:", seed: false });
 const evidence: any = {
   startedAt: new Date().toISOString(),
   scope:
-    "Public expert inputs; workflow acceptance, not internal calibration or expert sign-off",
+    "Versioned fault baseline and explicit engineering scenarios; workflow acceptance, not measured achievement or expert sign-off",
   agentInference: false,
 };
 try {
@@ -83,6 +83,41 @@ try {
   assert.deepEqual(frozenInput, design.assessment.input);
   assert.deepEqual(assetSnapshot, []);
   assert.equal(run.result.events.length, 54);
+  assert.equal(request.cards, 500000);
+  assert.equal(request.target, 0.985);
+  assert(
+    Math.abs(
+      run.result.events.find((e: any) => e.id === "CORE-hard").withinTypeShare -
+        0.06,
+    ) < 1e-14,
+  );
+  assert(
+    Math.abs(
+      run.result.events.find((e: any) => e.id === "SRAM-hard").withinTypeShare -
+        0.1,
+    ) < 1e-14,
+  );
+  assert.equal(run.result.optimization.status, "evaluated");
+  assert.equal(run.result.optimization.scales.length, 4);
+  assert.equal(run.result.optimization.attribution.length, 4);
+  for (const row of run.result.optimization.scales) {
+    assert.equal(
+      row.status === "supported",
+      row.optimized.statistics.ciLow >= row.target,
+    );
+    assert(
+      Math.abs(
+        Object.values(row.optimized.ledger).reduce(
+          (s: number, x: any) => s + x,
+          0,
+        ) +
+          row.optimized.statistics.mean * request.hours -
+          request.hours,
+      ) < 1e-7,
+    );
+  }
+  for (const row of run.result.optimization.attribution)
+    assert(Math.abs(row.residual) < 1e-10);
   assert(
     Math.abs(
       run.result.events.reduce((sum: number, e: any) => sum + e.share, 0) - 1,
@@ -143,7 +178,9 @@ try {
   assert(html.includes("可靠性框图与对象改善"));
   assert(html.includes("独立故障事件库"));
   assert(html.includes("Shapley"));
-  assert(!/正确有效产出|正确产出/.test(html));
+  assert(!/正确有效产出|正确产出|内网|外网/.test(html));
+  assert(html.includes("两轮评估与设计决策"));
+  assert(html.includes("优化增量排名"));
   Object.assign(evidence, {
     status: "passed",
     samplingProfile: request.samplingProfile,
@@ -153,6 +190,7 @@ try {
     workflow: flow,
     comparisons,
     recommendation: run.result.recommendation,
+    optimization: run.result.optimization,
     report: "ai-cluster-report.zip",
   });
   console.log(

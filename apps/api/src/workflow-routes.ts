@@ -58,7 +58,7 @@ export function registerWorkflowRoutes(
       if (
         ["select", "prepare"].includes(req.body.stepId) &&
         !savedDesign.assessment.input.lossBudgetWeights &&
-        !["equal", "baseline-proportional"].includes(
+        !["none", "equal", "baseline-proportional"].includes(
           savedDesign.assessment.input.lossBudgetMethod,
         )
       )

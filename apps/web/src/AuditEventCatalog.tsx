@@ -8,8 +8,8 @@ import {
 const fit = (value: number) =>
   value.toLocaleString("zh-CN", { maximumFractionDigits: 3 });
 const evidence: Record<string, string> = {
-  "external-prior": "外网先验",
-  "internal-measured": "内部观测",
+  "external-prior": "参考数据",
+  "internal-measured": "观测数据",
   scenario: "方案假设",
 };
 export default function AuditEventCatalog({
@@ -158,7 +158,7 @@ export default function AuditEventCatalog({
                         (e) => e.evidence === "internal-measured",
                       ).length
                     }{" "}
-                    / {object.events.length} 内部观测
+                    / {object.events.length} 观测数据
                   </td>
                 </tr>
                 {open && (

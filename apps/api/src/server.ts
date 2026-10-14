@@ -49,6 +49,7 @@ import { registerAgentRoutes } from "./agent-routes";
 import { registerCatalogRoutes } from "./catalog-routes";
 import { registerModelingRoutes } from "./modeling-routes";
 import { registerPortableRoutes } from "./portable-routes";
+import { auditExtensionCatalog } from "../../../packages/contracts/src/audit-extensions";
 
 export interface BuildAppOptions {
   agentIntegration?: AgentIntegration;
@@ -191,7 +192,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
   app.get("/api/defaults", async () => ({
     audit: getAuditDefaults(),
     auditEvents: getAuditEvents(),
+    auditEventCatalogs: {
+      "expert-2026-10-09": getAuditEvents("expert-2026-10-09"),
+      "baseline-2026-10-14": getAuditEvents("baseline-2026-10-14"),
+    },
     auditMechanisms,
+    auditExtensionCatalog,
     training: getTrainingDefaults(),
     factors: getFactors(),
     scenarios: [

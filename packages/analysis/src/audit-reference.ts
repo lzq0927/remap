@@ -27,6 +27,11 @@ export function auditReferenceComparison(
     if (!ok) differences.push(label);
   };
   check(
+    !request.eventCatalogVersion ||
+      request.eventCatalogVersion === "expert-2026-10-09",
+    "故障模式基准已更新：CORE中断6%、SRAM中断10%，亚健康相应折算，静默保持原值",
+  );
+  check(
     !request.baseline?.mechanisms?.length &&
       !request.baseline?.resolvedEventIds?.length,
     "基线包含已部署机制或已消除故障假设，属于条件评估",

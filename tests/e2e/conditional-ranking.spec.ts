@@ -19,6 +19,9 @@ test("users choose arbitrary resolved events and deployed mechanisms, then pipel
       activeAssessment: "audit",
       auditDraft: draftFromAuditRequest({
         ...defaults,
+        cards: 10000,
+        target: 0.99,
+        optimization: undefined,
         scales: [10000],
         targets: undefined,
         hours: 24,

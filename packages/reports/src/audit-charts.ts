@@ -28,7 +28,7 @@ const valid = (s: Statistics) =>
 const legend = (series: Series[]) =>
   `<div class="reliability-legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${escape(s.name)}</span>`).join("")}<span class="interval-key">细竖线：95% 均值区间</span></div>`;
 
-function lineChart({
+export function lineChart({
   title,
   series,
   xLabel,

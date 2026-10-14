@@ -26,12 +26,32 @@ export default function AuditReliabilityDiagram({
   const [leftId, setLeft] = useState("base"),
     [rightId, setRight] = useState("combined");
   const rows = result?.rows.filter((r: any) => r.cards === cards) ?? [];
+  const optimized = result?.optimization?.scales?.find(
+    (r: any) => r.cards === cards,
+  );
+  if (optimized)
+    rows.push(
+      {
+        ...optimized.current,
+        id: "current-verified",
+        name: "第一轮现状（独立复核）",
+        target: optimized.target,
+      },
+      {
+        ...optimized.optimized,
+        id: "optimized",
+        name: "第二轮优化预期",
+        target: optimized.target,
+      },
+    );
   const left = rows.find((r: any) => r.id === leftId),
     right = rows.find((r: any) => r.id === rightId);
   const catalog = (id: string) =>
-    id === "hardware" && result?.candidateEvents?.length
-      ? result.candidateEvents
-      : events;
+    id === "optimized"
+      ? result.optimization.optimizedEvents
+      : id === "hardware" && result?.candidateEvents?.length
+        ? result.candidateEvents
+        : events;
   const covered = (mechanisms ?? [])
     .filter((m) => selectedMechanisms?.includes(m.id))
     .flatMap((m) => m.eventIds ?? mechanismEventIds(events, m.scope));
@@ -112,6 +132,9 @@ export default function AuditReliabilityDiagram({
           <small>
             公共保存开销 {left.ledger.save.toFixed(3)} →{" "}
             {right.ledger.save.toFixed(3)} h，未重复计入对象模块。
+            {right.ledger.mechanismOverhead
+              ? ` 另有机制开销 ${right.ledger.mechanismOverhead.toFixed(3)} h。`
+              : ""}
           </small>
         </div>
       )}

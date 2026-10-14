@@ -96,8 +96,8 @@ export function EventEditor({
             onChange={(e) => setEvidence(e.target.value)}
           >
             <option value="scenario">方案假设</option>
-            <option value="internal-measured">内部观测</option>
-            <option value="external-prior">外网先验</option>
+            <option value="internal-measured">观测数据</option>
+            <option value="external-prior">参考数据</option>
           </select>
         </label>
         <label>

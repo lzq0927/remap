@@ -59,7 +59,7 @@ export default function AuditRunContext({
               r.events.filter((e: any) => e.evidence === "internal-measured")
                 .length
             }{" "}
-            项内部观测
+            项观测数据
           </p>
           <p className="note">
             中断、亚健康、静默分别保留来源与 FIT；已解决条件固定用于每个方案。
@@ -81,8 +81,18 @@ export default function AuditRunContext({
               ?.basis ?? "未记录损失预算"}
           </p>
           <p className="note">
-            预算在措施评估前冻结；实际损失在“结论概览”核对。
+            {r.optimization
+              ? "第一轮固定现状；第二轮按各规模贡献与缺口分配。实际预算、参数及复评见“两轮决策”。"
+              : "预算在措施评估前冻结；实际损失在“结论概览”核对。"}
           </p>
+          {r.optimization && (
+            <p>
+              第二轮：
+              {r.optimization.status === "evaluated"
+                ? r.optimization.chosenName
+                : r.optimization.reason}
+            </p>
+          )}
           {allocation && (
             <details aria-label="本次目标分配产物">
               <summary>查看对象子目标 · {allocation.selected.method}</summary>

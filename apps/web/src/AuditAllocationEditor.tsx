@@ -219,7 +219,7 @@ export default function AuditAllocationEditor({
       <p className="note">
         统一为每十亿 NPU
         等效运行小时，含软件与未归因对象。中断、亚健康和静默分别保留当前
-        FIT；96.6% / 2% / 1.4% 是外网总量先验，各对象的类内构成以故障库为准。
+        FIT；96.6% / 2% / 1.4% 是参考总量比例，各对象的类内构成以故障库为准。
       </p>
       <div
         className="table-wrap hardware-allocation-table"

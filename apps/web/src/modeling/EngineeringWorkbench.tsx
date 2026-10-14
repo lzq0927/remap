@@ -523,10 +523,10 @@ export default function EngineeringWorkbench({
                   </div>
                 )}
                 <details>
-                  <summary>内网文件工具交换</summary>
+                  <summary>文件工具交换</summary>
                   <p className="note">
                     仅 P /
-                    外部工具案例。导出冻结输入给内网工具；导入结果保留“人工导入”标记。
+                    外部工具案例。导出冻结输入给目标工具；导入结果保留“人工导入”标记。
                   </p>
                   {saved.model.cases
                     .filter((c) => ["p", "external"].includes(c.method))

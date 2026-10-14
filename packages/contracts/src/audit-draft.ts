@@ -1,5 +1,9 @@
 import type { AuditRequest } from "../../analysis/src/audit";
-import { auditReferenceScales, auditReferenceOnly } from "./audit-presets";
+import {
+  auditReferenceScales,
+  auditReferenceOnly,
+  auditScaleOrder,
+} from "./audit-presets";
 /** Shared draft conversion: browser, API and Agent use the same saved assessment. */
 export interface AuditDraft {
   request: AuditRequest;
@@ -23,7 +27,7 @@ export function auditDraftInput(draft: AuditDraft): AuditRequest {
             ? auditReferenceScales
             : [10000, 100000, 200000, 500000]),
         ]),
-      ]
+      ].sort(auditScaleOrder)
     : [request.cards];
   return {
     ...request,

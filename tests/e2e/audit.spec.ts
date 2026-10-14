@@ -26,7 +26,7 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
     .getByRole("group", { name: "基线事件更新", exact: true })
     .getByRole("button", { name: "加入更新" })
     .click();
-  await panel.getByLabel("同时对比万卡、十万卡、二十万卡、五十万卡").check();
+  await panel.getByLabel("同时对比五十万卡、二十万卡、十万卡、万卡").check();
   await panel.getByLabel("100,000 卡目标（0–1）").fill("0.943");
   for (let step = 0; step < 4; step++)
     await page

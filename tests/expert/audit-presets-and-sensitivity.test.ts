@@ -8,6 +8,7 @@ import {
 } from "../../packages/analysis/src/audit";
 import {
   auditScalePresets,
+  auditDefaultTargets,
   changeAuditCards,
 } from "../../packages/contracts/src/audit-presets";
 import { report } from "../../packages/reports/src/render";
@@ -16,6 +17,8 @@ const original = createRequire(import.meta.url)(
 );
 const small = () => ({
   ...getAuditDefaults(),
+  eventCatalogVersion: "expert-2026-10-09" as const,
+  optimization: undefined,
   samplingProfile: undefined,
   scales: auditScalePresets.map((p) => p.cards),
   sensitivityMode: "expert-reference" as const,
@@ -33,12 +36,7 @@ const small = () => ({
 it("defaults to four explicit effective-output targets and the reference interruption MTBF without fitting event rates", () => {
   const request = small(),
     r = audit(request);
-  expect(request.targets).toEqual({
-    10000: 0.99,
-    100000: 0.95,
-    200000: 0.9,
-    500000: 0.8,
-  });
+  expect(request.targets).toEqual(auditDefaultTargets);
   for (const preset of auditScalePresets) {
     const row = r.rows.find(
       (row) => row.cards === preset.cards && row.id === "combined",
@@ -76,7 +74,7 @@ it("defaults to four explicit effective-output targets and the reference interru
   expect(
     updated.events.filter((e) => e.type !== "hard").map((e) => e.fit),
   ).toEqual(
-    getAuditEvents()
+    getAuditEvents("expert-2026-10-09")
       .filter((e) => e.type !== "hard")
       .map((e) => e.fit),
   );
@@ -94,10 +92,7 @@ it("defaults to four explicit effective-output targets and the reference interru
   );
   for (const text of [
     "中断 MTBF",
-    "99%",
-    "95%",
-    "90%",
-    "80%",
+    "98.5%",
     "窗口时间账守恒",
     "0–100%",
     "弹性全局协调暂停",
@@ -107,9 +102,9 @@ it("defaults to four explicit effective-output targets and the reference interru
 });
 
 it("preserves individually edited targets across scale changes", () => {
-  const start = { ...getAuditDefaults(), target: 0.973 };
+  const start = { ...getAuditDefaults(), cards: 10000, target: 0.973 };
   const large = changeAuditCards(start, 500000);
-  expect(large.target).toBe(0.8);
+  expect(large.target).toBe(0.985);
   const edited = { ...large, target: 0.82 };
   const restored = changeAuditCards(edited, 10000);
   expect(restored.target).toBe(0.973);
@@ -183,6 +178,7 @@ it("replays legacy five-point scans and gates selected-combination scans by enab
   const legacy = audit({
     ...small(),
     sensitivityMode: undefined,
+    cards: 10000,
     scales: [10000],
     targets: undefined,
   });

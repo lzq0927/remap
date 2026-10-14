@@ -702,13 +702,28 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
   }
   const [auditEpoch, setAuditEpoch] = useState(0);
   function applyAuditCandidate(value: any) {
+    const previous =
+      auditDraft?.request.optimization ?? defaults.audit.optimization;
+    const strategyChanged = [
+      "enabled",
+      "autoTune",
+      "allowFitTargets",
+      "importance",
+      "complexity",
+    ].some(
+      (key) =>
+        JSON.stringify(previous?.[key]) !==
+        JSON.stringify(value.optimization?.[key]),
+    );
     setAuditDraft(draftFromAuditRequest(value));
     setAuditEpoch((n) => n + 1);
     setDesignMode("audit");
     setPage("workbench");
-    setStage(3);
+    setStage(strategyChanged ? 2 : 3);
     setNotice(
-      "建议组合已载入可靠性措施。未变化的前序确认可沿用，确认措施后重新计算；旧结果保留供比较。",
+      strategyChanged
+        ? "第二轮方案已载入。固定候选参数后，请从可用度分配确认本次策略，再核对措施并复算；目标和故障模式的确认可沿用。"
+        : "建议组合已载入可靠性措施。未变化的前序确认可沿用，确认措施后重新计算；旧结果保留供比较。",
     );
   }
   const activeSteps =
@@ -726,9 +741,9 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
           hint: [
             "明确各规模可用度目标与评估窗口，沿用专家计算口径。",
             "按对象与故障类型核对 FIT、来源及影响范围。",
-            "分配硬件对象目标与损失预算，明确方法和约束。",
-            "选择硬件降 FIT、检测与恢复措施，核对能力和成本。",
-            "按需展开参数核对，运行评估并比较组合收益与达标情况。",
+            "确认两轮策略：先评估固定现状，再按贡献和目标缺口分配改进要求。",
+            "确认第一轮现状措施，选择第二轮参数改进及专家机制候选。",
+            "先计算现状与 Shapley，再进行 AGREE 分配、候选复评和贡献排序。",
             "检查独立复核和待校准项，导出报告并人工确认交付。",
           ][i],
           anchor: [
@@ -1284,8 +1299,18 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                         defaults={defaults.audit}
                         draft={auditDraft}
                         onDraftChange={setAuditDraft}
-                        events={defaults.auditEvents}
+                        events={
+                          defaults.auditEventCatalogs?.[
+                            auditDraft
+                              ? (auditDraft.request.eventCatalogVersion ??
+                                "expert-2026-10-09")
+                              : defaults.audit.eventCatalogVersion
+                          ] ?? defaults.auditEvents
+                        }
                         mechanisms={defaults.auditMechanisms}
+                        lastResult={
+                          run?.operation === "audit" ? run.result : undefined
+                        }
                         stage={configView === "step" ? stage : undefined}
                         busy={
                           busy ||
@@ -2540,7 +2565,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
             <h2>解耦组件与连接状态</h2>
             {settings?.runtime?.profile === "internal" && (
               <p className="note">
-                内网模式：使用管理员批准的企业模型，关闭 Agent
+                企业模式：使用管理员批准的企业模型，关闭 Agent
                 分享和自动更新。网络出口隔离需由公司环境验收。
               </p>
             )}
@@ -2550,7 +2575,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   component: "运行环境",
                   state:
                     settings?.runtime?.profile === "internal"
-                      ? "内网"
+                      ? "企业"
                       : "通用开发",
                   endpoint: settings?.runtime?.provider?.name ?? "本机配置",
                 },

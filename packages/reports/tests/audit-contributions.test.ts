@@ -141,6 +141,9 @@ it.each(["resolved", "fixed", "multiple", "empty", "disabled", "historical"])(
       .map((e) => e.id);
     const input = {
       ...getAuditDefaults(),
+      cards: 10000,
+      target: 0.99,
+      optimization: undefined,
       scales: [10000],
       targets: undefined,
       hours: 24,

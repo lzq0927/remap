@@ -380,7 +380,7 @@ export default function AnalysisPanel({
                       })
                     }
                   >
-                    <option value="">选择内网工具适配器</option>
+                    <option value="">选择工具适配器</option>
                     {tools
                       .filter(
                         (t) =>

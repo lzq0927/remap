@@ -36,7 +36,15 @@ it("rejects a custom Shapley seed that reuses the independent verification traje
 });
 
 it("accepts the complete expert workload and identifies modifications from frozen inputs", () => {
-  const request = getAuditDefaults(),
+  const defaults = getAuditDefaults();
+  expect(
+    auditReferenceComparison(defaults, resolveAudit(defaults)).matchesReference,
+  ).toBe(false);
+  const request = {
+      ...defaults,
+      eventCatalogVersion: "expert-2026-10-09" as const,
+      optimization: undefined,
+    },
     resolved = resolveAudit(request);
   expect(resolved.sampleRuns).toBe(766000);
   expect(resolved.expectedEvents).toBeLessThan(450000000);
@@ -69,12 +77,12 @@ it("adds the 1000-card reference without creating a fifth requirement and preser
   const request = getAuditDefaults();
   const draft = draftFromAuditRequest(request);
   expect(auditDraftInput(draft).scales).toEqual([
-    10000, 1000, 100000, 200000, 500000,
+    500000, 200000, 100000, 10000, 1000,
   ]);
   expect(auditDraftInput(draft).targets).toEqual(request.targets);
   const legacy = { ...request, samplingProfile: undefined };
   expect(auditDraftInput(draftFromAuditRequest(legacy)).scales).toEqual([
-    10000, 100000, 200000, 500000,
+    500000, 200000, 100000, 10000,
   ]);
   const quick = {
     ...request,
@@ -91,6 +99,8 @@ it("adds the 1000-card reference without creating a fifth requirement and preser
 it("matches original independent Shapley and sensitivity seeds, uses scan-count controls and excludes reference-only attribution", () => {
   const request = {
     ...getAuditDefaults(),
+    eventCatalogVersion: "expert-2026-10-09" as const,
+    optimization: undefined,
     trials: 4,
     attributionTrials: 4,
     sensitivityTrials: 4,
@@ -101,7 +111,7 @@ it("matches original independent Shapley and sensitivity seeds, uses scan-count 
   expect(progress.at(-1)).toBe(1);
   expect(progress.every((p, i) => p >= (progress[i - 1] ?? 0))).toBe(true);
   expect(r.attribution.map((a) => a.cards)).toEqual([
-    10000, 100000, 200000, 500000,
+    500000, 200000, 100000, 10000,
   ]);
   expect(r.sensitivity).toHaveLength(13);
   for (const a of r.attribution) {

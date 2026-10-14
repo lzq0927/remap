@@ -16,6 +16,7 @@ for (const width of [1440, 390]) {
       ...defaults.audit,
       samplingProfile: "custom",
       cards: 10000,
+      target: 0.99,
       scales: [10000],
       targets: { "10000": 0.99 },
       hours: 24,
@@ -63,7 +64,7 @@ for (const width of [1440, 390]) {
       });
     };
     await expect(
-      page.getByLabel("可用度目标（0–1）", { exact: true }),
+      page.locator(".audit-workbench").getByLabel("可用度目标（0–1）", { exact: true }),
     ).toHaveValue("0.99");
     await confirm();
     const catalogue = page.getByRole("region", { name: "分类故障模式库" });
@@ -82,6 +83,9 @@ for (const width of [1440, 390]) {
     ).toBeLessThan(50);
     await screenshot("fault-modes");
     await confirm();
+    await page
+      .getByText("高级：独立子模型与第一轮损失预算", { exact: true })
+      .click();
     await page.getByLabel("启用对象目标分配", { exact: true }).check();
     await page
       .getByLabel("子模型分配方法", { exact: true })

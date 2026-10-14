@@ -28,7 +28,7 @@ test("audit design revision, formal workflow and delivery share exactly one save
     expect(save.statusCode, save.body).toBe(200);
     const design = save.json();
     expect(design.assessment.metricId).toBe("training.retained-clean-progress");
-    expect(design.assessment.input.cards).toBe(10000);
+    expect(design.assessment.input.cards).toBe(500000);
     // Hidden V4 edits and UI stage navigation cannot invalidate the audit input.
     expect(
       (

@@ -1,7 +1,16 @@
 // Adapted from the pinned expert review. See references/expert-review-2026-10-09/manifest.json.
 const assert=require('node:assert/strict');
 module.exports=function createReviewEngine(events,P,config){
-function parameters(opts={}){return {...config,...(opts.fast?{checkpointComputeSeconds:P['C-FAST'].computeSeconds,checkpointSaveSeconds:P['C-FAST'].saveSeconds}:{}),...(opts.hardDetect?{detectProbability:P['D-HARD'].coverage,detectSeconds:P['D-HARD'].detectSeconds}:{}),...(opts.slowDetect?{slowDetectProbability:P['D-SLOW'].coverage,slowDetectHours:P['D-SLOW'].detectSeconds/3600}:{})};}
+function parameters(opts={}){
+  const p={...config,...(opts.fast?{checkpointComputeSeconds:P['C-FAST'].computeSeconds,checkpointSaveSeconds:P['C-FAST'].saveSeconds}:{}),...(opts.hardDetect?{detectProbability:P['D-HARD'].coverage,detectSeconds:P['D-HARD'].detectSeconds}:{}),...(opts.slowDetect?{slowDetectProbability:P['D-SLOW'].coverage,slowDetectHours:P['D-SLOW'].detectSeconds/3600}:{})};
+  const async=(p.extensions??[]).find(m=>m.id==='C-ASYNC');
+  if(async){const a=async.parameters,q=a.eligibleShare*a.success;
+    // Expected blocking budget; conservative durability lag applies to the resulting stream.
+    p.checkpointSaveSeconds=p.checkpointSaveSeconds*(1-q)+a.blockSeconds*q+a.eligibleShare*(1-a.success)*a.failureSeconds;
+    p.checkpointDurableLagSeconds=q>0?a.durableLagSeconds:0;
+  }
+  return p;
+}
 const eventGroups=Object.fromEntries(['hard','slow','sdc'].map(t=>[t,events.filter(e=>e.type===t)]));
 const typeTotals=Object.fromEntries(Object.entries(eventGroups).map(([t,es])=>[t,es.reduce((s,e)=>s+e.fit,0)]));
 const referenceRates=config.referenceRateArithmetic===true && config.referenceFitSignature===JSON.stringify(events.map(({id,fit})=>({id,fit})));
@@ -18,29 +27,64 @@ function simulate(cards,stage,seed,p=config,opts={}){
   const arrival=()=>rate?-Math.log(random())/rate:Infinity;
   let remaining=arrival(),t=0,progress=0,cp=0,cleanCp=0,cpDirty=false,phase=0,dirty=null,downUntil=0;
   const slows=[],locals=[];
+  const extras=p.extensions??[],degrades=[],pending=[];
+  const overhead=1-extras.reduce((product,m)=>product*(1-m.parameters.overhead),1);
+  const lag=(p.checkpointDurableLagSeconds??0)/3600;
+  const eligible=(m,id)=>!m.eventIds.length||m.eventIds.includes(id);
   const perEvent={};
   function item(id){return perEvent[id]??=(Object.fromEntries(['events','recoveries','downtime','rollback','slowdown','localLoss','terminalInvalid'].map(k=>[k,0])));}
   let currentId=null;
   const schedule=eventGroups;
   function pick(type,u){const es=schedule[type],sum=typeTotals[type];let v=u*sum;for(const e of es){v-=e.fit;if(v<0)return e;}return es.at(-1);}
-  function snapshot(){cp=progress;cpDirty=!!dirty;if(!dirty)cleanCp=cp;phase=0;}
+  function snapshot(){cp=progress;cpDirty=!!dirty;if(!dirty)cleanCp=cp;phase=0;pending.length=0;}
   function globalPause(cause,seconds){const until=t+seconds/3600,added=Math.max(0,Math.min(T,until)-Math.min(T,Math.max(t,downUntil)));byCause[cause].downtime+=added;item(currentId).downtime+=added;downUntil=Math.max(downUntil,until);}
 
   const ledger={downtime:0,save:0,slowdown:0,rollback:0,terminalInvalid:0,localLoss:0};
+  if(extras.length)ledger.mechanismOverhead=0;
   const counts={hard:0,slow:0,sdc:0,manual:0,sdcRecoveries:0};
   const byCause=Object.fromEntries(['hard','slow','sdc'].map(k=>[k,{events:0,recoveries:0,downtime:0,rollback:0,slowdown:0,terminalInvalid:0,localLoss:0}]));
-  const recovery=()=>{const manual=random()>=p.recoverySuccess;if(manual)counts.manual++;return(p.recoveryAttemptSeconds+(manual?p.manualAdditionalSeconds:0))/3600;};
+  function stageRecovery(seconds){
+    const stages={startup:seconds/3,read:seconds/3,communication:seconds/3};
+    let startup=stages.startup,read=stages.read,communication=stages.communication,failed=0;
+    for(const m of extras){if(!eligible(m,currentId)||!['R-WARM-PROCESS','R-RUNTIME-SNAPSHOT','C-LOSSLESS','R-HCCL-ELASTIC','R-CANN-GRAPH'].includes(m.id))continue;
+      const a=m.parameters;if(tech()>=a.eligibleShare)continue;
+      if(tech()>=a.success){failed+=a.failureSeconds;continue;}
+      if(m.id==='R-WARM-PROCESS'||m.id==='R-RUNTIME-SNAPSHOT')startup=Math.min(startup,a.stageSeconds);
+      // Graph preparation is inside startup: overlapping savings use the best applicable path.
+      if(m.id==='R-CANN-GRAPH')startup=Math.min(startup,stages.startup/2+a.stageSeconds);
+      if(m.id==='C-LOSSLESS')read=stages.read/a.compressionRatio+a.decompressSeconds;
+      if(m.id==='R-HCCL-ELASTIC')communication=Math.min(communication,a.stageSeconds);
+    }
+    return startup+read+communication+failed;
+  }
+  const recovery=(apply=false)=>{
+    let success=p.recoverySuccess,failed=0;
+    const classify=apply?extras.find(m=>m.id==='D-RECOVERY-CLASSIFY'):null;
+    if(classify){const a=classify.parameters;if(tech()<a.eligibleShare){if(tech()<a.success)success=Math.max(success,1-a.manualProbability);else failed+=a.failureSeconds;}}
+    const manual=random()>=success;if(manual)counts.manual++;
+    return((apply?stageRecovery(p.recoveryAttemptSeconds):p.recoveryAttemptSeconds)+(manual?p.manualAdditionalSeconds:0)+failed)/3600;
+  };
   function pause(cause,delay=0,seconds=null){
     byCause[cause].recoveries++;item(currentId).recoveries++;
-    const manualBefore=counts.manual,fallback=recovery()*3600;
+    const manualBefore=counts.manual,fallback=recovery(seconds===null&&extras.length>0)*3600;
     if(seconds!==null)counts.manual=manualBefore;
     globalPause(cause,delay*3600+(seconds===null?fallback:seconds));
   }
 
-  function rollback(to,cause){const loss=Math.max(0,progress-to);ledger.rollback+=loss;byCause[cause].rollback+=loss;item(currentId).rollback+=loss;progress=to;phase=0;}
+  function rollback(to,cause){const loss=Math.max(0,progress-to);ledger.rollback+=loss;byCause[cause].rollback+=loss;item(currentId).rollback+=loss;progress=to;phase=0;pending.length=0;}
   function ordinaryRecovery(delay=0,event=null){
     if(event){
       let failed=0;
+      // Ordered conditional paths: only the first successful path receives the recovery credit.
+      for(const id of ['R-LINK-LOCAL','H-CONTROL-CONTINUITY','R-FABRIC-DEGRADE']){
+        const m=extras.find(x=>x.id===id&&eligible(x,event.id));if(!m)continue;
+        const a=m.parameters;if(tech()>=a.eligibleShare)continue;
+        if(tech()<a.success){
+          if(id==='R-FABRIC-DEGRADE')degrades.push({id:currentId,until:t+a.repairSeconds/3600,loss:1-1/(1-a.communicationFraction+a.communicationFraction/a.bandwidthRatio)});
+          pause('hard',0,failed+a.pauseSeconds);return;
+        }
+        failed+=a.failureSeconds;
+      }
       for(const node of (opts.recoveryOrder??['replay','elastic','process'])) {
       if(node==='replay'&&opts.replay&&event.replay){
         if(tech()<P['R-REPLAY'].success){pause('hard',delay,failed+P['R-REPLAY'].successSeconds);return;}
@@ -51,7 +95,7 @@ function simulate(cards,stage,seed,p=config,opts={}){
           // 容量等效近似：域间可继续训练，状态冗余保证无全局回滚。
           // 故障域不可用180秒，短全局协调暂停另计；同域重叠合并。
           byCause.hard.recoveries++;item(currentId).recoveries++;
-          const domain=Math.floor(tech()*P['R-ELASTIC'].domains),until=t+delay+(failed+P['R-ELASTIC'].recoverSeconds)/3600;
+          const domain=Math.floor(tech()*P['R-ELASTIC'].domains),until=t+delay+(failed+(extras.length?stageRecovery(P['R-ELASTIC'].recoverSeconds):P['R-ELASTIC'].recoverSeconds))/3600;
           const active=locals.find(x=>x.domain===domain);
           if(active){if(until>active.until)active.until=until;}else locals.push({domain,until,id:currentId});
           globalPause('hard',failed+(opts.elasticSyncSeconds??P['R-ELASTIC'].syncSeconds));return;
@@ -81,14 +125,16 @@ function simulate(cards,stage,seed,p=config,opts={}){
     if(t<downUntil-1e-9){ledger.downtime+=dt;return;}
     const end=phase+dt,commits=Math.floor((end+1e-10)/L);
     const train=x=>Math.floor(x/L)*tau+Math.min(x%L,tau);
-    const compute=Math.max(0,train(end)-train(phase)),slowFactor=Math.pow(1-p.slowLoss,slows.length),localFactor=1-locals.length/P['R-ELASTIC'].domains,factor=slowFactor*localFactor;
-    if(commits){cp=progress+(commits*tau-Math.min(phase,tau))*factor;cpDirty=!!dirty;if(!dirty)cleanCp=cp;}
+    const compute=Math.max(0,train(end)-train(phase)),slowFactor=Math.pow(1-p.slowLoss,slows.length),localFactor=1-locals.length/P['R-ELASTIC'].domains,degradeFactor=degrades.reduce((f,d)=>f*(1-d.loss),1),factor=slowFactor*localFactor*degradeFactor*(1-overhead);
+    if(commits){const saved=progress+(commits*tau-Math.min(phase,tau))*factor;if(lag>0)pending.push({due:t+dt+lag,progress:saved,dirty:!!dirty});else{cp=saved;cpDirty=!!dirty;if(!dirty)cleanCp=cp;}}
     progress+=compute*factor;
     ledger.save+=Math.max(0,dt-compute);
-    const slowLoss=compute*(1-slowFactor),localLoss=compute*slowFactor*(1-localFactor);
+    const effective=compute*(1-overhead),slowLoss=effective*(1-slowFactor),domainLoss=effective*slowFactor*(1-localFactor),degradeLoss=effective*slowFactor*localFactor*(1-degradeFactor),localLoss=domainLoss+degradeLoss;
+    if(extras.length)ledger.mechanismOverhead+=compute*overhead;
     ledger.slowdown+=slowLoss;ledger.localLoss+=localLoss;byCause.hard.localLoss+=localLoss;
     for(const s of slows)item(s.id).slowdown+=slowLoss/slows.length;
-    for(const l of locals)item(l.id).localLoss+=localLoss/locals.length;
+    for(const l of locals)item(l.id).localLoss+=domainLoss/locals.length;
+    for(const d of degrades)item(d.id).localLoss+=degradeLoss/degrades.length;
     phase=Math.max(0,end-commits*L);
     remaining=Math.max(0,remaining-dt);
   }
@@ -98,8 +144,12 @@ function simulate(cards,stage,seed,p=config,opts={}){
     let next=Math.min(T,nextFault,up?Infinity:downUntil,dirty?dirty.discover:Infinity);
     for(const s of slows)next=Math.min(next,s.until);
     for(const l of locals)next=Math.min(next,l.until);
+    for(const d of degrades)next=Math.min(next,d.until);
+    if(lag>0){if(up)next=Math.min(next,t+Math.max(1e-9,L-phase));for(const c of pending)next=Math.min(next,c.due);}
     advance(Math.max(0,next-t));t=next;
+    while(pending.length&&pending[0].due<=t+1e-9){const c=pending.shift();cp=c.progress;cpDirty=c.dirty;if(!c.dirty)cleanCp=cp;}
     if(t>=T-1e-9)break;
+    for(let i=degrades.length-1;i>=0;i--)if(degrades[i].until<=t+1e-9)degrades.splice(i,1);
     // 发现时间按墙钟计算，恢复请求若重叠则合并停机区间。
     if(dirty&&dirty.discover<=t+1e-9){
       currentId=dirty.id;rollback(cleanCp,'sdc');cp=cleanCp;cpDirty=false;dirty=null;counts.sdcRecoveries++;
@@ -115,7 +165,14 @@ function simulate(cards,stage,seed,p=config,opts={}){
       else if(r<rates[0]+rates[1]){const e=pick('slow',(r-rates[0])/rates[1]);currentId=e.id;item(e.id).events++;counts.slow++;const detected=random()<p.slowDetectProbability;slows.push({id:e.id,detected,until:t+(detected?p.slowDetectHours:p.slowLifetimeHours)});}
       else{
         const e=pick('sdc',(r-rates[0]-rates[1])/rates[2]);currentId=e.id;item(e.id).events++;counts.sdc++;
-        if(opts.sdcDetect&&tech()<(opts.sdcCoverage??P['D-SDC'].coverage)){
+        let coverage=opts.sdcDetect?(opts.sdcCoverage??P['D-SDC'].coverage):0;
+        let extraCoverage=0,extraDetect=0,failedDetect=0;
+        for(const m of extras.filter(m=>eligible(m,e.id)&&['D-SDC-FP8','D-SDC-FP4','D-NET-SDC'].includes(m.id))){const a=m.parameters;extraCoverage+=a.eligibleShare*a.success*a.coverage;extraDetect=Math.max(extraDetect,a.detectSeconds);failedDetect+=a.eligibleShare*(1-a.success)*a.failureSeconds;}
+        // FP8/FP4 risks are disjoint; no independence assumption with existing detection.
+        coverage=Math.max(coverage,Math.min(1,extraCoverage));
+        const abft=extras.find(m=>m.id==='D-ABFT'&&eligible(m,e.id));
+        if(abft){const a=abft.parameters;coverage+=(1-coverage)*a.eligibleShare*a.success*a.coverage;failedDetect+=a.eligibleShare*(1-a.success)*a.failureSeconds;}
+        if((opts.sdcDetect||coverage>0)&&tech()<coverage){
           if(!dirty){
             const target=opts.step?Math.max(cp,progress-(opts.stepSeconds??P['R-SDC'].stepSeconds)/3600):cp;
             const oldPhase=phase;
@@ -124,8 +181,8 @@ function simulate(cards,stage,seed,p=config,opts={}){
             // 易失step恢复不冒充新持久化检查点，也不推进最后干净CKPT。
           }
           // 已存在的漏检污染不能被新事件的即时检测错误地洗白。
-          pause('sdc',P['D-SDC'].detectSeconds/3600,opts.step?P['R-SDC'].recoverSeconds:null);
-        }else if(!dirty)dirty={discover:t+p.sdcDelayHours,id:e.id};
+          pause('sdc',(Math.max(P['D-SDC'].detectSeconds,extraDetect)+failedDetect)/3600,opts.step?P['R-SDC'].recoverSeconds:null);
+        }else {if(failedDetect>0)globalPause('sdc',failedDetect);if(!dirty)dirty={discover:t+p.sdcDelayHours,id:e.id};}
       }
       remaining=arrival();
     }

@@ -96,7 +96,11 @@ it("uses the current catalogue, including explicit updates, instead of redistrib
       catalog.filter((e) => e.type === type).reduce((s, e) => s + e.fit, 0) /
         total,
     ).toBeCloseTo(fraction, 12);
-  const defaults = getAuditDefaults();
+  const defaults = {
+    ...getAuditDefaults(),
+    cards: 10000,
+    target: getAuditDefaults().targets[10000],
+  };
   const submodelAllocation = {
     ...input(),
     items: auditHardwareItems(catalog, 10000),

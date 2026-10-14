@@ -18,6 +18,9 @@ async function setup(autoStartRuns = true, automaticStageDisplayMs = 0) {
     activeAssessment: "audit",
     auditDraft: draftFromAuditRequest({
       ...getAuditDefaults(),
+      cards: 10000,
+      target: 0.99,
+      optimization: undefined,
       scales: [10000],
       targets: undefined,
       hours: 2,
@@ -115,7 +118,7 @@ it("MCP/Agent launches actual audit, exposes sequential artifacts, generates rep
     ).toBe(true);
     const run = (await app.inject(base + "/runs/" + state.runId)).json();
     expect(run.status).toBe("succeeded");
-    expect(run.result.allocationPlan.lossBudgets[0].method).toBe("equal");
+    expect(run.result.allocationPlan.lossBudgets[0].method).toBe("none");
     expect(run.result.attribution[0].contributions).toHaveLength(2);
     const history = (await app.inject(base + "/workflow/history")).json();
     expect(

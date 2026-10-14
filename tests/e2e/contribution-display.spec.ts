@@ -12,6 +12,9 @@ for (const mode of ["disabled", "empty", "historical"])
     const mechanisms = ["sdcDetect", "step", "elastic", "fast"];
     const input = {
       ...defaults.audit,
+      cards: 10000,
+      target: 0.99,
+      optimization: undefined,
       scales: [10000],
       targets: undefined,
       hours: 24,
@@ -93,6 +96,9 @@ for (const width of [1440, 390])
     const defaults = await (await request.get("/api/defaults")).json();
     const input = {
       ...defaults.audit,
+      cards: 10000,
+      target: 0.99,
+      optimization: undefined,
       scales: [10000, 500000],
       targets: { "10000": 0.99, "500000": 0.8 },
       hours: 24,

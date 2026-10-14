@@ -52,8 +52,8 @@ export default function TaskHome({ onOpen }: { onOpen: (task: Task) => void }) {
       <h1>可靠性设计任务</h1>
       {runtime?.profile === "internal" && (
         <p className="note">
-          内网模式 · {runtime.provider?.name} ·
-          企业资产与运行记录保存到本机内网数据目录。
+          企业模式 · {runtime.provider?.name} ·
+          企业资产与运行记录保存到本机数据目录。
         </p>
       )}
       <p>
