@@ -84,6 +84,13 @@ export function validateOptimization(request: AuditRequest) {
   ] as const)
     if (input[key] !== undefined && typeof input[key] !== "boolean")
       throw new Error("第二轮 " + key + " 必须是布尔值");
+  if (
+    input.planningCards !== undefined &&
+    (!(request.scales ?? [request.cards]).includes(input.planningCards) ||
+      !Number.isSafeInteger(input.planningCards) ||
+      auditReferenceOnly(request, input.planningCards))
+  )
+    throw new Error("规划规模必须来自第一轮已评估规模");
   validateExtensions(input.extensions);
   for (const field of ["parameterTargets", "checkpointPeriods"] as const)
     if (

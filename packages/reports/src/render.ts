@@ -1,3 +1,4 @@
+import { experimentSections, experimentChart } from "./audit-experiments";
 import { runAssessmentModel } from "../../contracts/src/assessment-model";
 import { auditObjectDiagram } from "./audit-object-diagram";
 import type { Run } from "../../contracts/src/types";
@@ -101,7 +102,10 @@ const searchNames: Record<string, string> = {
   candidate_unconfirmed: "候选仍需更多验证",
 };
 const operations: Record<string, string> = {
-  audit: "故障事件与机制收益审核",
+  audit: "第一轮现状评估",
+  "audit-plan": "AGREE第二轮分配建议（未评估）",
+  "audit-experiment": "改进方案独立评估",
+  "audit-compare": "多次评估横向比较",
   training: "历史模型 V4 评估",
   allocate: "目标分配",
   compare: "方案比较",
@@ -284,6 +288,14 @@ function core(r: any, run: Run): Section[] {
         ],
       },
     ];
+  if (
+    [
+      "expert-audit-plan",
+      "expert-audit-experiment",
+      "expert-audit-comparison",
+    ].includes(r.kind)
+  )
+    return experimentSections(r);
   if (r.kind === "expert-review-audit") return auditSections(r);
   if (r.statistics && r.ledger)
     return training(r, r.request?.target ?? run.input.target);
@@ -899,35 +911,37 @@ export function report(run: Run, format = "md", options: ReportOptions = {}) {
           ? "<details><summary>" + escape(s.title) + "</summary>"
           : "<h2>" + escape(s.title) + "</h2>") +
         (s.paragraphs ?? []).map((p) => "<p>" + escape(p) + "</p>").join("") +
-        (s.visual === "optimization"
-          ? auditOptimizationChart(result)
-          : s.visual === "optimized-objects"
-            ? auditOptimizedObjectDiagram(result)
-            : s.visual === "objects"
-              ? '<div class="table-wrap" tabindex="0" aria-label="可靠性框图，可横向滚动"><div style="min-width:780px">' +
-                auditObjectDiagram(
-                  result.events,
-                  result.rows.find(
-                    (r: any) =>
-                      r.cards === result.request.cards && r.id === "base",
-                  ),
-                  result.rows.find(
-                    (r: any) =>
-                      r.cards === result.request.cards && r.id === "combined",
-                  ),
-                ) +
-                "</div></div>"
-              : s.visual === "overview"
-                ? auditScaleCurve(result) + auditGainCharts(result)
-                : s.visual === "sensitivity"
-                  ? auditSensitivityCurves(result)
-                  : s.visual === "method"
-                    ? auditMethodVisual(result)
-                    : s.visual === "contribution"
-                      ? auditContributionChart(result, s.contributionCards)
-                      : s.visual === "contribution-controls"
-                        ? auditContributionScaleControl(result)
-                        : "") +
+        (s.visual === "experiment-comparison"
+          ? experimentChart(result)
+          : s.visual === "optimization"
+            ? auditOptimizationChart(result)
+            : s.visual === "optimized-objects"
+              ? auditOptimizedObjectDiagram(result)
+              : s.visual === "objects"
+                ? '<div class="table-wrap" tabindex="0" aria-label="可靠性框图，可横向滚动"><div style="min-width:780px">' +
+                  auditObjectDiagram(
+                    result.events,
+                    result.rows.find(
+                      (r: any) =>
+                        r.cards === result.request.cards && r.id === "base",
+                    ),
+                    result.rows.find(
+                      (r: any) =>
+                        r.cards === result.request.cards && r.id === "combined",
+                    ),
+                  ) +
+                  "</div></div>"
+                : s.visual === "overview"
+                  ? auditScaleCurve(result) + auditGainCharts(result)
+                  : s.visual === "sensitivity"
+                    ? auditSensitivityCurves(result)
+                    : s.visual === "method"
+                      ? auditMethodVisual(result)
+                      : s.visual === "contribution"
+                        ? auditContributionChart(result, s.contributionCards)
+                        : s.visual === "contribution-controls"
+                          ? auditContributionScaleControl(result)
+                          : "") +
         (s.tables ?? []).map(htmlTable).join("") +
         (s.collapsed ? "</details>" : "") +
         "</section>",
@@ -936,7 +950,7 @@ export function report(run: Run, format = "md", options: ReportOptions = {}) {
   return (
     '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escape(title) +
-    "</title><style>body{max-width:1320px;margin:32px auto;padding:0 24px;font:15px/1.8 system-ui,sans-serif;color:#182d35;background:#f5f6f2}header{background:#163c37;color:white;padding:36px;border-radius:16px}header p{color:#c7dbd4}h1{font-size:32px;line-height:1.4}h2{margin:0 0 20px;color:#176451}section{background:white;border:1px solid #dce3df;border-radius:12px;margin:24px 0;padding:24px;scroll-margin-top:20px}nav{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}nav a{color:#176451;padding:6px 12px;background:#e7eee8;border-radius:8px;text-decoration:none}small{color:#526b63}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}th,td{padding:10px 12px;border-bottom:1px solid #dce3df;text-align:left;vertical-align:top}th{background:#eef3ef}tr:nth-child(even){background:#fafbf8}pre{white-space:pre-wrap;word-break:break-word;background:#eef3ef;padding:20px}summary{cursor:pointer;font-weight:650;padding:12px 0}.chart-row{display:flex;gap:12px;align-items:center;margin:12px 0}.chart-row span{width:210px}.track{flex:1;background:#edf1ea;height:14px;border-radius:8px;overflow:hidden}.bar{height:100%;background:#b78756}.combined{background:#258a75}.chart-row strong{width:90px}@media(max-width:640px){body{padding:0 10px}header,section{padding:18px}.chart-row span{width:115px;font-size:12px}}@media print{body{margin:0;background:white}nav{display:none}header{background:white;color:#182d35;border-bottom:3px solid #137968}section{border:0;padding:10px 0}.table-wrap{overflow:visible}details>*{display:block!important}section,table{break-inside:auto}tr{break-inside:avoid}}" +
+    "</title><style>body{max-width:1320px;margin:32px auto;padding:0 24px;font:15px/1.8 system-ui,sans-serif;color:#182d35;background:#f5f6f2}header{background:#163c37;color:white;padding:36px;border-radius:16px}header p{color:#c7dbd4}h1{font-size:32px;line-height:1.4}h2{margin:0 0 20px;color:#176451}section p{overflow-wrap:anywhere}section{background:white;border:1px solid #dce3df;border-radius:12px;margin:24px 0;padding:24px;scroll-margin-top:20px}nav{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}nav a{color:#176451;padding:6px 12px;background:#e7eee8;border-radius:8px;text-decoration:none}small{color:#526b63}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}th,td{padding:10px 12px;border-bottom:1px solid #dce3df;text-align:left;vertical-align:top}th{background:#eef3ef}tr:nth-child(even){background:#fafbf8}pre{white-space:pre-wrap;word-break:break-word;background:#eef3ef;padding:20px}summary{cursor:pointer;font-weight:650;padding:12px 0}.chart-row{display:flex;gap:12px;align-items:center;margin:12px 0}.chart-row span{width:210px}.track{flex:1;background:#edf1ea;height:14px;border-radius:8px;overflow:hidden}.bar{height:100%;background:#b78756}.combined{background:#258a75}.chart-row strong{width:90px}@media(max-width:640px){body{padding:0 10px}header,section{padding:18px}.chart-row span{width:115px;font-size:12px}}@media print{body{margin:0;background:white}nav{display:none}header{background:white;color:#182d35;border-bottom:3px solid #137968}section{border:0;padding:10px 0}.table-wrap{overflow:visible}details>*{display:block!important}section,table{break-inside:auto}tr{break-inside:avoid}}" +
     reportEnhancementCss +
     optimizationCss +
     auditChartCss +

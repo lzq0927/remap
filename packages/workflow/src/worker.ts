@@ -11,6 +11,25 @@ process.once("message", async (message: any) => {
     if (message.operation === "engineering") {
       const { executeEngineering } = await import("../../modeling/src/execute");
       result = await executeEngineering(input);
+    } else if (message.operation === "audit-plan") {
+      const { auditExperimentPlan } = await import(
+        "../../analysis/src/audit-experiment-plan"
+      );
+      result = auditExperimentPlan(input, (fraction) =>
+        process.send?.({ type: "progress", progress: fraction }),
+      );
+    } else if (message.operation === "audit-experiment") {
+      const { auditExperiment } = await import(
+        "../../analysis/src/audit-experiments"
+      );
+      result = auditExperiment(input, (fraction) =>
+        process.send?.({ type: "progress", progress: fraction }),
+      );
+    } else if (message.operation === "audit-compare") {
+      const { compareAuditExperiments } = await import(
+        "../../reports/src/audit-experiments"
+      );
+      result = compareAuditExperiments(input.snapshots);
     } else if (message.operation === "audit") {
       const { audit } = await import("../../analysis/src/audit");
       result = audit(input, (done: number, total: number) => {

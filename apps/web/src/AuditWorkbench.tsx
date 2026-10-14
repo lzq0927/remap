@@ -14,7 +14,6 @@ import AuditAllocationEditor from "./AuditAllocationEditor";
 import AuditBaselineEditor from "./AuditBaselineEditor";
 import AuditEventCatalog from "./AuditEventCatalog";
 import AuditReliabilityDiagram from "./AuditReliabilityDiagram";
-import AuditOptimizationEditor from "./AuditOptimizationEditor";
 import { auditDraftEvents } from "../../../packages/contracts/src/audit-objects";
 import {
   changeAuditCards,
@@ -42,7 +41,6 @@ export default function AuditWorkbench({
   busy,
   onRun,
   stage,
-  lastResult,
 }: {
   defaults: AuditRequest;
   draft?: AuditDraft;
@@ -56,7 +54,13 @@ export default function AuditWorkbench({
   lastResult?: any;
 }) {
   const [request, setRequest] = useState<AuditRequest>(() =>
-    structuredClone(draft?.request ?? defaults),
+    structuredClone({
+      ...(draft?.request ?? defaults),
+      optimization: {
+        ...(draft?.request ?? defaults).optimization,
+        enabled: false,
+      },
+    }),
   );
   const [overrides, setOverrides] = useState(draft?.overrides ?? "[]"),
     [hardware, setHardware] = useState(draft?.hardware ?? "[]");
@@ -363,13 +367,20 @@ export default function AuditWorkbench({
       <div className="audit-stage" hidden={stage !== undefined && stage !== 2}>
         <section id="audit-budget" aria-label="损失预算分配">
           <h3 className="audit-step-title">03 / 可用度分配</h3>
-          <AuditOptimizationEditor
-            request={request}
-            onChange={setRequest}
-            defaults={defaults}
-            mode="allocation"
-            lastResult={lastResult}
-          />
+          <div className="round-flow">
+            <div>
+              <b>第一轮 · 评估现状</b>
+              <span>原六项与现状参数固定，先看真实建模结果</span>
+            </div>
+            <span aria-hidden="true">→</span>
+            <div>
+              <b>第二轮 · 分配与改进</b>
+              <span>第一轮完成后，单独生成AGREE建议，再点击评估</span>
+            </div>
+          </div>
+          <p>
+            第一轮不预先分配指标，也不自动采用99.5%等改进目标。评估完成后，可在“分轮评估与横向比较”中调整或新增措施，逐次计算与导出报告。
+          </p>
           <details
             className="audit-help"
             open={
@@ -639,18 +650,68 @@ export default function AuditWorkbench({
             ]}
           />
         </details>
-        <AuditOptimizationEditor
-          request={request}
-          onChange={setRequest}
-          defaults={{
-            ...defaults,
-            model: parsedModel ?? defaults.model,
-            policy: parsedPolicy ?? defaults.policy,
-          }}
-          mode="mechanisms"
-          events={currentEvents}
-          lastResult={lastResult}
-        />
+        <details>
+          <summary>第一轮现状机制参数</summary>
+          <p>默认使用原六项参数。99.5%等目标在第一轮完成后的改进方案中填写。</p>
+          <div className="fields">
+            {[
+              {
+                code: "D-SDC",
+                key: "coverage",
+                label: "现状静默检出覆盖率（%）",
+                percent: true,
+              },
+              {
+                code: "D-SDC",
+                key: "detectSeconds",
+                label: "现状静默发现时延（秒）",
+              },
+              {
+                code: "C-FAST",
+                key: "saveSeconds",
+                label: "现状检查点保存阻塞（秒）",
+              },
+              {
+                code: "C-FAST",
+                key: "computeSeconds",
+                label: "现状检查点周期（秒）",
+              },
+            ].map((field) => (
+              <label key={field.label}>
+                {field.label}
+                <input
+                  aria-label={field.label}
+                  type="number"
+                  min="0"
+                  max={field.percent ? 100 : 31536000}
+                  step="any"
+                  value={
+                    (parsedPolicy?.[field.code]?.[field.key] ??
+                      defaults.policy?.[field.code]?.[field.key] ??
+                      0) * (field.percent ? 100 : 1)
+                  }
+                  onChange={(e) =>
+                    setPolicy(
+                      JSON.stringify(
+                        {
+                          ...parsedPolicy,
+                          [field.code]: {
+                            ...parsedPolicy?.[field.code],
+                            [field.key]:
+                              Number(e.target.value) /
+                              (field.percent ? 100 : 1),
+                          },
+                        },
+                        null,
+                        2,
+                      ),
+                    )
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        </details>
       </div>
       {error && (
         <p className="error" role="alert">
@@ -660,7 +721,7 @@ export default function AuditWorkbench({
       <div className="audit-stage" hidden={stage !== undefined && stage !== 4}>
         <div className="audit-run-summary" id="audit-run">
           <div>
-            <strong>05 / 计算与权衡</strong>
+            <strong>05 / 第一轮现状评估</strong>
             <p>
               {
                 (request.mechanisms ?? []).filter(
@@ -697,11 +758,11 @@ export default function AuditWorkbench({
               }
             }}
           >
-            {busy ? "正在计算…" : "运行可靠性评估"}
+            {busy ? "正在计算第一轮…" : "运行可靠性评估"}
           </button>
         </div>
         <p className="note">
-          前四步确认后，运行将关联正式流程；也可先独立试算。结果保留输入快照，
+          本次只计算第一轮现状；不会自动生成或评估第二轮。前四步确认后，运行将关联正式流程。结果保留输入快照，
           在“实验与报告”下载完整 HTML。正式交付仍需人工确认。
         </p>
       </div>

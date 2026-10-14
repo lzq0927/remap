@@ -1,3 +1,4 @@
+import AuditExperiments from "./AuditExperiments";
 import {
   assessmentModels,
   runAssessmentModel,
@@ -92,7 +93,10 @@ const navigation = [
 ] as const;
 const toolNames: Record<string, string> = {
   training: "历史模型 V4 评估",
-  audit: "专家口径评估",
+  audit: "第一轮现状评估",
+  "audit-plan": "AGREE分配建议",
+  "audit-experiment": "改进方案独立评估",
+  "audit-compare": "多次评估横向比较",
   allocate: "指标分配",
   rbd: "可靠性框图",
   fta: "故障树",
@@ -1722,6 +1726,12 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 onApplyCandidate={applyCandidate}
                 onApplyAudit={applyAuditCandidate}
               />
+              {scenario === "training" &&
+                designMode === "audit" &&
+                run?.operation === "audit" &&
+                run?.status === "succeeded" && (
+                  <AuditExperiments key={run.id} sourceRun={run} />
+                )}
               {run &&
                 ["cancelled", "failed"].includes(run.status) &&
                 lastComplete &&

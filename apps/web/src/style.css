@@ -2443,7 +2443,109 @@ main > header {
 .optimization-scale select {
   min-width: 140px;
 }
-.mechanism-targets { margin: 16px 0; padding: 16px; border: 1px solid var(--border, #dbe5e0); border-radius: 8px; }
-.mechanism-targets > summary { font-weight: 650; cursor: pointer; }
-.mechanism-targets .fields { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); align-items: start; }
-.mechanism-targets small { color: #536b62; font-size: 12px; line-height: 1.6; display: block; }
+.mechanism-targets {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border, #dbe5e0);
+  border-radius: 8px;
+}
+.mechanism-targets > summary {
+  font-weight: 650;
+  cursor: pointer;
+}
+.mechanism-targets .fields {
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  align-items: start;
+}
+.mechanism-targets small {
+  color: #536b62;
+  font-size: 12px;
+  line-height: 1.6;
+  display: block;
+}
+.audit-experiments .experiment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 16px 0;
+}
+.audit-experiments details {
+  padding: 12px 0;
+  border-top: 1px solid var(--border, #dce3df);
+}
+.audit-experiments .experiment-editor {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid #dce3df;
+  border-radius: 12px;
+}
+.audit-experiments .experiment-editor > label {
+  display: block;
+  max-width: 560px;
+}
+.audit-experiments .experiment-plan,
+.audit-experiments .experiment-latest {
+  margin: 20px 0;
+  padding: 18px;
+  background: #f5f8f5;
+  border-radius: 12px;
+}
+.experiment-run-id {
+  display: block;
+  color: #60766e;
+}
+.experiment-export {
+  display: inline-block;
+  margin: 16px;
+}
+.audit-experiments .round-flow {
+  flex-wrap: wrap;
+}
+.audit-experiments .table-wrap table {
+  min-width: 700px;
+}
+.audit-experiment-result .table-wrap table {
+  min-width: 680px;
+}
+@media (max-width: 640px) {
+  .audit-experiments .experiment-editor,
+  .audit-experiments .experiment-plan,
+  .audit-experiments .experiment-latest {
+    padding: 12px;
+  }
+  .audit-experiments .round-flow > div {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
+.audit-experiments,
+.audit-experiment-result,
+.audit-experiments fieldset,
+.audit-experiment-result details {
+  min-width: 0;
+  max-width: 100%;
+}
+.audit-experiment-result p,
+.audit-experiments .extension-card p {
+  overflow-wrap: anywhere;
+}
+.audit-experiments .fields > label {
+  min-width: 0;
+}
+.audit-experiments input,
+.audit-experiments select {
+  max-width: 100%;
+  min-width: 0;
+}
+.experiment-view-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+.experiment-view-tabs button[aria-current="page"] {
+  background: #e4f1ea;
+  border-color: #16816a;
+  color: #126552;
+}

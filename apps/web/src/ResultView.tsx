@@ -1,3 +1,4 @@
+import AuditExperimentResult from "./AuditExperimentResult";
 import { runAssessmentModel } from "../../../packages/contracts/src/assessment-model";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -731,6 +732,14 @@ function ResultBody({
   onApplyAudit?: ResultViewProps["onApplyAudit"];
   onApplyCandidate?: ResultViewProps["onApplyCandidate"];
 }) {
+  if (
+    [
+      "expert-audit-plan",
+      "expert-audit-experiment",
+      "expert-audit-comparison",
+    ].includes(result?.kind)
+  )
+    return <AuditExperimentResult result={result} />;
   if (result?.kind === "expert-review-audit")
     return <AuditResult result={result} onApply={onApplyAudit} />;
   if (result?.statistics && result?.ledger) return <Training result={result} />;

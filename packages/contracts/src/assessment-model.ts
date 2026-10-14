@@ -14,7 +14,17 @@ export const assessmentModels = {
 
 /** Interpret the frozen run, never the user's currently selected design model. */
 export function runAssessmentModel(run: { operation: string; result?: any }) {
-  if (run.operation === "audit" || run.result?.kind === "expert-review-audit")
+  if (
+    ["audit", "audit-plan", "audit-experiment", "audit-compare"].includes(
+      run.operation,
+    ) ||
+    [
+      "expert-review-audit",
+      "expert-audit-plan",
+      "expert-audit-experiment",
+      "expert-audit-comparison",
+    ].includes(run.result?.kind)
+  )
     return assessmentModels.audit;
   if (
     ["training", "compare", "search", "sensitivity", "attribute"].includes(

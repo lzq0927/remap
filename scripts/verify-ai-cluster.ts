@@ -12,7 +12,11 @@ import {
 import { enterProject } from "./runtime.mjs";
 
 enterProject();
-const output = resolve("artifacts/ai-cluster");
+const output = resolve(
+  process.argv.includes("--separate")
+    ? "artifacts/separate-rounds"
+    : "artifacts/ai-cluster",
+);
 await mkdir(output, { recursive: true });
 const app = await buildApp({ dataDir: ":memory:", seed: false });
 const evidence: any = {
@@ -97,27 +101,142 @@ try {
         0.1,
     ) < 1e-14,
   );
-  assert.equal(run.result.optimization.status, "evaluated");
-  assert.equal(run.result.optimization.scales.length, 4);
-  assert.equal(run.result.optimization.attribution.length, 4);
-  for (const row of run.result.optimization.scales) {
-    assert.equal(
-      row.status === "supported",
-      row.optimized.statistics.ciLow >= row.target,
-    );
-    assert(
-      Math.abs(
-        Object.values(row.optimized.ledger).reduce(
-          (s: number, x: any) => s + x,
-          0,
-        ) +
-          row.optimized.statistics.mean * request.hours -
-          request.hours,
-      ) < 1e-7,
-    );
+  assert.equal(run.result.optimization, null);
+  assert.equal(run.result.config.policy["D-SDC"].coverage, 0.95);
+  console.log("第一轮现状已完成，原六项与95%覆盖保持冻结");
+  const frozenFirst = JSON.stringify(run.result);
+  const waitRun = async (id: string) => {
+    let next;
+    const limit = Date.now() + 10 * 60_000;
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      next = await call("/runs/" + id);
+    } while (["queued", "running"].includes(next.status) && Date.now() < limit);
+    assert.equal(next.status, "succeeded", JSON.stringify(next.error));
+    return next;
+  };
+  const manual = await waitRun(
+    (
+      await call("/audit/evaluate", {
+        sourceRunId: run.id,
+        name: "仅提高静默检出率至99.5%",
+        configuration: {
+          enabled: true,
+          policy: { "D-SDC": { coverage: 0.995 } },
+        },
+      })
+    ).id,
+  );
+  assert.equal(manual.result.factors.length, 1);
+  assert.deepEqual(manual.result.factors[0].value, { coverage: 0.995 });
+  console.log("单项99.5%改进已独立完成");
+  const plan = await waitRun(
+    (
+      await call("/audit/plan", {
+        sourceRunId: run.id,
+        options: { screeningTrials: 128 },
+      })
+    ).id,
+  );
+  assert.equal(plan.result.scenarioEvaluated, false);
+  assert.equal(
+    (await call("/runs")).filter((r: any) => r.operation === "audit-experiment")
+      .length,
+    1,
+  );
+  console.log("AGREE分配建议已完成，第二轮尚未启动");
+  const improved = await waitRun(
+    (
+      await call("/audit/evaluate", {
+        sourceRunId: run.id,
+        name: "AGREE分配后的改进方案",
+        configuration: plan.result.configuration,
+        planRunId: plan.id,
+      })
+    ).id,
+  );
+  assert.deepEqual(improved.result.configuration, {
+    ...plan.result.configuration,
+    enabled: true,
+    autoTune: false,
+  });
+  for (const scenario of [manual, improved]) {
+    for (const row of scenario.result.rows) {
+      assert.equal(
+        row.status === "supported",
+        row.statistics.ciLow >= row.target,
+      );
+      assert(
+        Math.abs(
+          Object.values(row.ledger).reduce(
+            (sum: number, value: any) => sum + value,
+            0,
+          ) +
+            row.statistics.mean * request.hours -
+            request.hours,
+        ) < 1e-7,
+      );
+    }
+    for (const attribution of scenario.result.attribution)
+      assert(Math.abs(attribution.residual) < 1e-10);
   }
-  for (const row of run.result.optimization.attribution)
-    assert(Math.abs(row.residual) < 1e-10);
+  assert.equal(
+    JSON.stringify((await call("/runs/" + run.id)).result),
+    frozenFirst,
+  );
+  const comparison = await call("/audit/compare", {
+    runIds: [run.id, manual.id, improved.id],
+  });
+  assert.equal(comparison.result.entries.length, 3);
+  for (const [label, evaluated] of [
+    ["first", run],
+    ["manual", manual],
+    ["allocation", plan],
+    ["improved", improved],
+    ["comparison", comparison],
+  ] as const) {
+    const packageResponse = await app.inject(
+      base + `/runs/${evaluated.id}/report?format=zip`,
+    );
+    assert.equal(packageResponse.statusCode, 200);
+    await writeFile(
+      join(output, label + "-report.zip"),
+      packageResponse.rawPayload,
+    );
+    const packageZip = await JSZip.loadAsync(packageResponse.rawPayload);
+    for (const file of Object.values(packageZip.files)) {
+      if (file.dir || file.name.includes("/") || file.name.includes("\\"))
+        continue;
+      await writeFile(join(output, file.name), await file.async("nodebuffer"));
+      if (file.name.endsWith(".html"))
+        await writeFile(
+          join(output, label + "-report.html"),
+          await file.async("nodebuffer"),
+        );
+    }
+  }
+  Object.assign(evidence, {
+    firstRoundUnchanged: true,
+    separateExecution: true,
+    planRunId: plan.id,
+    manualRunId: manual.id,
+    improvedRunId: improved.id,
+    comparisonRunId: comparison.id,
+    roundComparison: comparison.result.entries.map((entry: any) => ({
+      name: entry.name,
+      id: entry.id,
+      rows: entry.rows.map((row: any) => ({
+        cards: row.cards,
+        mean: row.statistics.mean,
+        ciLow: row.statistics.ciLow,
+        ciHigh: row.statistics.ciHigh,
+        target: row.target,
+        status: row.status,
+      })),
+    })),
+    proposedConfiguration: plan.result.configuration,
+    planningPrediction: plan.result.prediction,
+  });
   assert(
     Math.abs(
       run.result.events.reduce((sum: number, e: any) => sum + e.share, 0) - 1,
@@ -179,8 +298,12 @@ try {
   assert(html.includes("独立故障事件库"));
   assert(html.includes("Shapley"));
   assert(!/正确有效产出|正确产出|内网|外网/.test(html));
-  assert(html.includes("两轮评估与设计决策"));
-  assert(html.includes("优化增量排名"));
+  assert(!html.includes("两轮评估与设计决策"));
+  const comparisonHtml = (
+    await app.inject(base + `/runs/${comparison.id}/report?format=html`)
+  ).body;
+  assert(comparisonHtml.includes("参数横向比较"));
+  assert(comparisonHtml.includes("独立结论"));
   Object.assign(evidence, {
     status: "passed",
     samplingProfile: request.samplingProfile,
@@ -195,7 +318,12 @@ try {
   });
   console.log(
     JSON.stringify(
-      { status: evidence.status, comparisons, reportDirectory: output },
+      {
+        status: evidence.status,
+        comparisons: evidence.roundComparison,
+        proposedConfiguration: evidence.proposedConfiguration,
+        reportDirectory: output,
+      },
       null,
       2,
     ),

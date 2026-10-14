@@ -1,6 +1,8 @@
 import type { AuditExtensionInput } from "./audit-extensions";
 export interface AuditOptimizationRequest {
   enabled: boolean;
+  /** Independent planning focus, without changing the frozen first-round target set. */
+  planningCards?: number;
   autoTune?: boolean;
   allowFitTargets?: boolean;
   /** Search explicit, sourced expert extension scenarios. */
@@ -26,7 +28,7 @@ export interface AuditOptimizationRequest {
   permutations?: number;
 }
 export const auditOptimizationDefaults: AuditOptimizationRequest = {
-  enabled: true,
+  enabled: false,
   autoTune: true,
   allowFitTargets: false,
   exploreExtensions: true,

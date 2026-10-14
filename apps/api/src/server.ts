@@ -1,3 +1,4 @@
+import { registerAuditExperimentRoutes } from "./audit-experiment-routes";
 import { designAssessment } from "./design-assessment";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -439,6 +440,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       confirmedHash: hash(data),
     });
   });
+  registerAuditExperimentRoutes(app, tasks);
   app.get("/api/tasks/:taskId/runs", async (req: any) =>
     tasks.authorize(req, req.params.taskId).store.runs(),
   );

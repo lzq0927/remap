@@ -64,6 +64,7 @@ export interface AuditSection {
   tables?: AuditTable[];
   collapsed?: boolean;
   visual?:
+    | "experiment-comparison"
     | "optimization"
     | "optimized-objects"
     | "overview"
