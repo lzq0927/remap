@@ -45,6 +45,22 @@ for (const width of [1440, 390]) {
     });
     await next(3);
     const library = page.getByRole("region", { name: "第二轮专家机制库" });
+    await expect(
+      library.getByLabel("第二轮目标 全系统 SDC 检出覆盖率", { exact: true }),
+    ).toHaveAttribute("placeholder", "0.995");
+    const saveTarget = library.getByLabel("第二轮目标 检查点保存阻塞 / 秒", {
+      exact: true,
+    });
+    await expect(saveTarget).toHaveAttribute("placeholder", "0.5");
+    await saveTarget.fill("0.4");
+    await saveTarget.blur();
+    await expect(stages.nth(3)).toHaveAttribute("aria-current", "step");
+    await saveTarget.fill("0.5");
+    await saveTarget.blur();
+    await library.locator(".mechanism-targets").scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: `artifacts/ai-cluster/mechanism-targets-${width}.png`,
+    });
     await library.getByLabel("查找专家机制").fill("C-ASYNC");
     await expect(library.locator(".extension-card")).toHaveCount(1);
     await library.getByRole("button", { name: /^加入/ }).click();
@@ -74,6 +90,9 @@ for (const width of [1440, 390]) {
     expect(result.attribution).toHaveLength(4);
     expect(result.optimization.scales).toHaveLength(4);
     expect(result.optimization.attribution).toHaveLength(4);
+    expect(result.optimization.factors.some((f: any) => f.kind === "fit")).toBe(
+      false,
+    );
     expect(
       result.events.find((e: any) => e.id === "CORE-hard").withinTypeShare,
     ).toBeCloseTo(0.06, 12);
@@ -131,6 +150,11 @@ for (const width of [1440, 390]) {
     const html = await report.text();
     expect(html).toContain("可靠性框图与对象改善");
     expect(html).toContain("AGREE 目标进一步分配");
+    expect(html).toContain("参数依据与参考初值");
+    expect(html).toContain("分配依据 → 机制选择 → 参数要求");
+    expect(html).toContain("专家机制采用依据");
+    expect(html).toContain("机制指标分解与剩余缺口");
+    expect(html).toContain("源 FIT 保持不变");
     expect(html).not.toMatch(/内网|外网/);
     await page.getByRole("tab", { name: "两轮决策", exact: true }).click();
     await page

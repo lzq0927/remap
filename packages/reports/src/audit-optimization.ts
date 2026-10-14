@@ -25,26 +25,46 @@ export const optimizationStatus: Record<string, string> = {
   uncertain: "区间跨目标，待复核",
 };
 
-export function optimizationParameterRows(r: any) {
-  return (r.optimization?.factors ?? []).flatMap((f: any) => {
-    if (f.kind === "fit")
-      return f.value.map((e: any) => [
-        f.name,
-        e.id + " FIT",
-        num(f.before.find((b: any) => b.id === e.id)?.fit),
-        num(e.fit),
-        "工程目标，非实测",
-      ]);
+function parameterEntries(r: any) {
+  const entries: Array<{ cells: any[]; source: string }> = [];
+  for (const f of r.optimization?.factors ?? []) {
+    if (f.kind === "fit") {
+      for (const e of f.value)
+        entries.push({
+          cells: [
+            f.name,
+            e.id + " FIT",
+            num(f.before.find((b: any) => b.id === e.id)?.fit),
+            num(e.fit),
+          ],
+          source: e.source + "；" + (e.note ?? "工程目标，非实测"),
+        });
+      continue;
+    }
     const values = f.kind === "extension" ? f.value.parameters : f.value;
     const definition = auditExtensionCatalog.find((m) => m.id === f.id);
-    return Object.entries(values).map(([key, value]) => [
-      f.name,
-      definition?.parameters[key]?.label ?? parameterLabels[key] ?? key,
-      f.kind === "extension" ? "现状未部署" : num(f.before[key]),
-      num(Number(value)),
-      f.kind === "extension" ? f.value.evidence : "工程目标，待确认",
-    ]);
-  });
+    for (const [key, value] of Object.entries(values))
+      entries.push({
+        cells: [
+          f.name,
+          f.kind === "checkpoint-schedule"
+            ? num(Number(key), 0) + "卡周期 / 秒"
+            : (definition?.parameters[key]?.label ??
+              parameterLabels[key] ??
+              key),
+          f.kind === "extension" ? "现状未部署" : num(f.before?.[key]),
+          num(Number(value)),
+        ],
+        source: f.parameterSources?.[key] ?? f.source ?? "工程目标，待确认",
+      });
+  }
+  return entries;
+}
+export function optimizationParameterRows(r: any) {
+  return parameterEntries(r).map((e, i) => [
+    ...e.cells,
+    `P${i + 1} · 工程目标，非实测`,
+  ]);
 }
 function firstRankingRows(r: any, cards: number) {
   return [
@@ -70,7 +90,20 @@ function improvedRankingRows(o: any, cards: number) {
 }
 export function optimizationFitRequirement(r: any) {
   const f = r.optimization?.factors?.find((item: any) => item.kind === "fit");
-  if (!f) return "";
+  if (!f) {
+    const screen = r.optimization?.factors?.find(
+      (item: any) => item.id === "H-SDC-SCREEN",
+    );
+    if (!screen)
+      return "源 FIT 保持不变；本方案仅通过检测、恢复、保存与回滚等机制参数改善可用度。";
+    const a = screen.value.parameters;
+    const before = r.events.reduce((sum: number, e: any) => sum + e.fit, 0);
+    const after = (r.optimization.optimizedEvents ?? r.events).reduce(
+      (sum: number, e: any) => sum + e.fit,
+      0,
+    );
+    return `源 FIT 保持不变；仅 H-SDC-SCREEN 对适用 SDC 风险降低 ${pct(a.reduction)}，适用比例 ${pct(a.eligibleShare)} × 执行成功率 ${pct(a.success)}。总残余 FIT ${num(before)} → ${num(after)}，全库下降 ${num((1 - after / before) * 100, 4)}%。出处：专家单点量化交付包 H-SDC-SCREEN；25% 为目标情景，非已测得的全硬件降幅。`;
+  }
   const before = r.events.reduce((sum: number, e: any) => sum + e.fit, 0);
   const after = r.events.reduce(
     (sum: number, e: any) =>
@@ -90,7 +123,11 @@ export function auditOptimizationSections(r: any): AuditSection[] {
         o.firstRound,
         o.reason,
         "初始目标由 50 万卡 98.5% 与参考 MTBF 0.6h 推导共同恢复预算，再用其他规模的参考 MTBF 得出需求目标；此推导不修改仿真的恢复时间。历史或自定义目标以本次冻结输入为准。",
-        "第一轮评估现有措施，不先分配固定指标。第二轮先根据各规模贡献和缺口提出工程重要度与预算，再修改参数、提出硬件目标或新增措施，最终用同一故障模型复评。",
+        o.planningVersion === "agree-mechanism-design-v3"
+          ? "第一轮评估现有措施，不先分配固定指标。第二轮以各规模贡献建议 AGREE 工程重要度，先冻结损失路径预算，再筛选专家机制、反解参数，并用同一故障模型独立复评。源 FIT 不因目标缺口自动降低。"
+          : o.planningVersion === "mechanism-bounds-v2"
+            ? "历史V2口径：AGREE辅助有限参数候选评分；尚未由预算反解参数。保留当时结果，重新计算采用分配先行方法。"
+            : "历史第二轮口径：可能包含由预算换算并收紧的硬件 FIT 目标；按原结果保留数值与来源。当前版本已转为机制优先，重新计算后才适用新方法，历史达标结论仍依赖原有 FIT 要求。",
       ],
     },
   ];
@@ -123,12 +160,136 @@ export function auditOptimizationSections(r: any): AuditSection[] {
       ]),
     },
   ];
+  if (o.design) {
+    const requirements = (cards: number) =>
+      (
+        o.design.perScale.find((s: any) => s.cards === cards)?.requirements ??
+        []
+      ).filter(
+        (r: any) =>
+          !r.code.startsWith("ext:") ||
+          o.factors.some((f: any) => f.id === r.code.slice(4)),
+      );
+    const requirementName = (p: any) => {
+      const extension = auditExtensionCatalog.find((m) => m.id === p.mechanism);
+      const name =
+        extension?.name ??
+        (
+          {
+            model: "基础检测/恢复",
+            "D-SDC": "静默检测",
+            "D-HARD": "中断检测",
+            "D-SLOW": "亚健康检测",
+            "R-REPLAY": "重执行",
+            "R-PROCESS": "进程恢复",
+            "R-ELASTIC": "弹性恢复",
+            "R-SDC": "干净step恢复",
+            "C-FAST": "检查点",
+          } as Record<string, string>
+        )[p.mechanism] ??
+        p.mechanism;
+      return (
+        name +
+        " / " +
+        (p.code === "schedule"
+          ? "周期（秒）"
+          : (extension?.parameters[p.key]?.label ??
+            parameterLabels[p.key] ??
+            p.key))
+      );
+    };
+    const demanding = o.design.envelope.filter((p: any) =>
+      p.direction === "up"
+        ? p.reference < 1 && 1 - p.adopted < (1 - p.reference) / 10
+        : p.reference > 0 && p.adopted < p.reference / 10,
+    );
+    const requirementRows = (cards: number) =>
+      requirements(cards).map((p: any, i: number) => [
+        requirementName(p),
+        num(p.reference, 7),
+        num(p.allowedHours, 7),
+        (p.direction === "up" ? "≥ " : "≤ ") + num(p.required, 7),
+        num(
+          p.code === "schedule"
+            ? p.adopted
+            : o.design.envelope.find((e: any) => e.id === p.id)?.adopted,
+          7,
+        ),
+        `D${cards}-${i + 1}${p.locked ? " · 显式锁定" : ""}`,
+      ]);
+    sections.push({
+      title: "两轮 / 分配依据 → 机制选择 → 参数要求",
+      paragraphs: [
+        "第一轮各规模Shapley正贡献转换为工程重要度 → AGREE冻结互斥损失路径预算 → 按预算缺口逐项比较专家库 → 按路径到达率与时间损失关系反解参数 → 独立复评 → 新的增量Shapley排名。",
+        `本方案保留${pct(o.design.reserveFraction)}分配预算作为建模余量。它是显式规划假设，不是置信水平；独立复评的95%区间另行计算。`,
+        "AGREE负责分配预算，物理关系负责反解参数，二者不能混同。到达率考虑事件范围、恢复先后与前序成功概率。时间损失采用保守期望近似；周期按均匀相位近似，必须正向验证。参考值可被预算要求收紧，完整恢复要求不冒充专家某个子阶段的成果。",
+        ...(demanding.length
+          ? [
+              "需优先论证的较大改进要求：" +
+                demanding
+                  .map(
+                    (p: any) =>
+                      `${requirementName(p)} ${num(p.reference, 7)} → ${num(p.adopted, 7)}`,
+                  )
+                  .join("；") +
+                "。这些是预算反解要求，当前没有产品可达证据；评估达标以这些能力与成本同时实现为条件。",
+            ]
+          : []),
+        "下面分别列出每个规模的分配要求；共同参数取各规模最严格要求，检查点周期分别配置。只在显式输入锁定时保留用户值，超预算仍显示；不把预算不足换算成大幅降低FIT。",
+      ],
+      tables: [
+        {
+          heads: [
+            "机制 / 参数",
+            "参考初值",
+            "对应子预算 / h",
+            "该规模要求",
+            "共同采用值 / 周期",
+            "推导索引",
+          ],
+          rows: requirementRows(o.primaryCards),
+          scaleRows: o.scales.map((s: any) => ({
+            cards: s.cards,
+            rows: requirementRows(s.cards),
+          })),
+          scaleLabel: "参数分配规模",
+        },
+      ],
+    });
+    sections.push({
+      title: "两轮 / 专家机制采用依据",
+      collapsed: true,
+      paragraphs: [
+        "全部16项机制按预算缺口与适用范围核对；单点参考、执行假设和新增成本分别保留。筛选用同批种子作组合比较，后续仍需独立复评。未采用不等于机制无价值；参数反解后还会检查是否冗余。",
+      ],
+      tables: [
+        {
+          heads: ["专家机制", "结果", "分配与采用理由"],
+          rows: (o.libraryDecisions ?? []).map((d: any) => [
+            d.name + " · " + d.id,
+            d.selected ? "采用" : "未自动采用",
+            d.reason,
+          ]),
+        },
+      ],
+    });
+    sections.push({
+      title: "两轮 / 参数反解公式与验收条件",
+      collapsed: true,
+      paragraphs: o.scales.flatMap((s: any) =>
+        requirements(s.cards).map(
+          (p: any, i: number) =>
+            `D${s.cards}-${i + 1} · ${s.cards}卡 / ${p.mechanism} / ${parameterLabels[p.key] ?? p.key}：子预算${num(p.allowedHours, 8)}h，到达率${num(p.exposurePerHour, 8)}/h。${p.formula}。${p.source}。${p.locked ? "显式输入锁定，需检查预算缺口。" : "分配推导的工程要求，需用产品实测与故障注入验收。"}`,
+        ),
+      ),
+    });
+  }
   sections.push({
     title: "两轮 / 各规模措施贡献排名",
     paragraphs: [
       "现状排名分摊第一轮所选措施相对确认基线的收益；优化排名分摊第二轮参数、FIT目标和新增措施相对第一轮现状的增量。两者基准不同，不直接相加排名。",
       "第二轮采用固定随机排列的 Shapley 近似；每条轨迹满足贡献和等于组合增量，保留负贡献。置信区间反映轨迹抽样，排列数有限也有近似误差。",
-      "负贡献不能直接解释为应删除该措施，删减后须重新验证。检查点周期延长可能在原故障率下增加回滚，但与降低 FIT 组合后能减少保存开销；这种组合依赖正是贡献分摊需要解释的取舍。",
+      "负贡献不能直接解释为应删除该措施，删减后须重新验证。检查点周期延长会减少保存开销但增加回滚；新增检测也有正常态成本。这些组合依赖由贡献分摊解释，预算不是单项独立收益承诺。",
     ],
     tables: [
       {
@@ -203,7 +364,13 @@ export function auditOptimizationSections(r: any): AuditSection[] {
       num(i.complexity),
       num(i.importance),
       num(i.currentFit),
-      num(i.targetFit),
+      num(
+        ["mechanism-bounds-v2", "agree-mechanism-design-v3"].includes(
+          o.planningVersion,
+        )
+          ? i.allowedEquivalentSeconds
+          : i.targetFit,
+      ),
       num(i.allowedHours),
       num(i.actualHours),
     ]);
@@ -231,16 +398,16 @@ export function auditOptimizationSections(r: any): AuditSection[] {
       selected.formula,
       selected.interpretation,
       selected.source,
-      "先从总允许损失中扣除候选检查点保存和正常态机制开销，再分配对象事件预算。对象重要度取适用措施重要度平均；复杂度默认取非零FIT故障类型数。硬件目标采用各规模最严格值，并通过有限收紧候选复评。",
-      "FIT 换算使用筛选均值区间下限对应的损失加量作为规划余量；这是减少低采样乐观估计的设计约束，不是未观测事件的保证上界，也不替代独立复评。",
-      "下表是初始 AGREE 预算，最终采用的 FIT 目标见参数变化表。改善优先量只是缺口的工程排序，不是承诺各项可独立贡献该收益。",
+      "新分配口径先冻结保存与正常态开销的AGREE预算，将剩余额度分配到对象；对象表为交叉核对，不反向要求降低FIT。对象重要度取适用措施重要度平均，复杂度取非零FIT故障类型数。当前口径保持源 FIT，以预算 / 期望事件次数折算每次事件允许的全系统等效损失。",
+      "等效损失包括停机、回滚、污染、降速与局部容量损失，不等同于设备维修 MTTR。区间余量提示抽样不确定性，不生成 FIT 收紧系数。历史结果保留当时口径。",
+      "机制设计责任账、物理损失路径账和对象账是不同分配视角，不能彼此相加。预算用于定位需要改进的路径，实际达标仍以独立正向复评为准。",
     ],
     tables: [
       {
         heads: [
           "规模 / 卡",
           "总允许损失 / h",
-          "保存与开销 / h",
+          o.design ? "保存与开销预算 / h" : "保存与开销 / h",
           "事件分配预算 / h",
           "筛选规划余量 / h",
           "固定项超预算 / h",
@@ -293,7 +460,11 @@ export function auditOptimizationSections(r: any): AuditSection[] {
           "复杂度",
           "重要度",
           "当前 FIT",
-          "初始目标 FIT",
+          ["mechanism-bounds-v2", "agree-mechanism-design-v3"].includes(
+            o.planningVersion,
+          )
+            ? "每事件允许等效损失 / 秒"
+            : "初始目标 FIT",
           "允许损失 / h",
           "候选观测损失 / h",
         ],
@@ -306,6 +477,59 @@ export function auditOptimizationSections(r: any): AuditSection[] {
       },
     ],
   });
+  if (o.scales.some((s: any) => s.diagnostics)) {
+    const pathRows = (scale: any) =>
+      (scale.diagnostics?.paths ?? []).map((p: any) => [
+        p.name,
+        num(p.allowedHours),
+        num(p.actualHours),
+        num(Math.max(0, p.excessHours)),
+        p.action,
+      ]);
+    sections.push({
+      title: "两轮 / 机制指标分解与剩余缺口",
+      paragraphs: [
+        "AGREE 将总允许损失分到互不重叠的物理时间账，重要度参考第一轮 Shapley；各项预算之和等于总预算。路径超预算是讨论优先级，不代表总目标一定未达标，最终仍按总账判断。",
+        "保存约束 s/(τ+s)≤B保存/T；在当前周期 τ 下反解阻塞上限。停机预算除以复评中恢复次数得到每次允许的等效停机秒数。它们用于检查分配要求与复评实绩，不保证物理参数可以唯一反解或产品已经实现。",
+        "若0.5秒保存仍超预算，需要更低阻塞、更少全局回滚或更低机制开销等额外能力，并与产品专家论证。缩短即时发现时延不能消除未检出SDC的长期污染。",
+      ],
+      tables: [
+        {
+          heads: [
+            "规模 / 卡",
+            "复评总超额损失 / h",
+            "采用周期 / 秒",
+            "保存阻塞 / 秒",
+            "按保存预算反解上限 / 秒",
+            "每次恢复允许停机 / 秒",
+          ],
+          rows: o.scales.map((s: any) => [
+            num(s.cards, 0),
+            num(s.diagnostics.totalExcessHours),
+            num(s.diagnostics.checkpoint.periodSeconds),
+            num(s.diagnostics.checkpoint.saveSeconds),
+            num(s.diagnostics.checkpoint.allocatedSaveSeconds, 6),
+            num(s.diagnostics.downtimeSecondsPerObservedRecovery),
+          ]),
+        },
+        {
+          heads: [
+            "损失路径",
+            "AGREE预算 / h",
+            "独立复评损失 / h",
+            "超预算 / h",
+            "进一步改进方向",
+          ],
+          rows: pathRows(primaryScale),
+          scaleRows: o.scales.map((s: any) => ({
+            cards: s.cards,
+            rows: pathRows(s),
+          })),
+          scaleLabel: "机制损失预算规模",
+        },
+      ],
+    });
+  }
   sections.push({
     title: "两轮 / 推荐参数与实施要求",
     paragraphs: [
@@ -314,9 +538,22 @@ export function auditOptimizationSections(r: any): AuditSection[] {
     ],
     tables: [
       {
-        heads: ["改进措施", "参数", "现状", "建议目标", "证据口径"],
+        heads: ["改进措施", "参数", "现状", "采用目标", "来源索引"],
         rows: optimizationParameterRows(r),
       },
+    ],
+  });
+  sections.push({
+    title: "两轮 / 参数依据与参考初值",
+    collapsed: true,
+    paragraphs: [
+      "参数表以 P 编号对应以下完整来源，长说明单独排版。用户目标、专家单点目标与平台探索假设分别保留；没有来源的硬件降率不进入自动候选。",
+      ...parameterEntries(r).map(
+        (e, i) => `P${i + 1} · ${e.cells[0]} / ${e.cells[1]}：${e.source}`,
+      ),
+      ...(o.parameterBounds ?? []).map(
+        (p: any) => `参考初值 · ${p.label} = ${num(p.target, 6)}：${p.source}`,
+      ),
     ],
   });
   sections.push({
@@ -420,7 +657,7 @@ export function auditOptimizationBrief(r: any) {
   if (o.status !== "evaluated")
     return `<section class="optimization-brief"><h2>两轮评估</h2><p>${esc(o.reason)}</p></section>`;
   const primary = o.scales.find((s: any) => s.cards === o.primaryCards);
-  return `<section class="optimization-brief" aria-label="两轮决策摘要"><span class="kicker">目标 → 现状 → 分配 → 改进 → 复评</span><h2>${num(o.primaryCards / 10000, 0)}万卡为主的可靠性决策</h2><p>${esc(o.reason)} ${o.allScalesSupported ? "所有需求规模在本次工程假设下获得采样支持。" : "仍有规模未取得充分达标证据，需继续迭代。"}</p><div class="round-summary-cards"><div><span>主规模目标</span><b>${pct(primary.target)}</b></div><div><span>第一轮现状 · 独立复核</span><b>${pct(primary.current.statistics.mean)}</b></div><div><span>第二轮优化预期</span><b>${pct(primary.optimized.statistics.mean)}</b></div><div><span>独立复评结论</span><b class="verdict-text">${esc(optimizationStatus[primary.status])}</b></div></div><p class="evidence-note">${esc(optimizationFitRequirement(r))}</p><p class="evidence-note">推荐 ${esc(o.chosenName)}。参数和 FIT 是待确认的工程目标；先与产品专家确认，再以实测数据复评。各规模结论、分配及贡献排名见下方。</p></section>`;
+  return `<section class="optimization-brief" aria-label="两轮决策摘要"><span class="kicker">目标 → 现状 → 分配 → 改进 → 复评</span><h2>${num(o.primaryCards / 10000, 0)}万卡为主的可靠性决策</h2><p>${esc(o.reason)} ${o.allScalesSupported ? "所有需求规模在本次工程假设下获得采样支持。" : "仍有规模未取得充分达标证据，需继续迭代。"}</p><div class="round-summary-cards"><div><span>主规模目标</span><b>${pct(primary.target)}</b></div><div><span>第一轮现状 · 独立复核</span><b>${pct(primary.current.statistics.mean)}</b></div><div><span>第二轮优化预期</span><b>${pct(primary.optimized.statistics.mean)}</b></div><div><span>独立复评结论</span><b class="verdict-text">${esc(optimizationStatus[primary.status])}</b></div></div><p class="evidence-note">${esc(optimizationFitRequirement(r))}</p><p class="evidence-note">推荐 ${esc(o.chosenName)}。${["mechanism-bounds-v2", "agree-mechanism-design-v3"].includes(o.planningVersion) ? "参数是待确认的工程目标；源 FIT 不自动降低，专家筛查效果单独注明。" : "历史结果按当时的参数及 FIT 要求成立，未自动套用当前机制优先方法。"}先与产品专家确认，再以实测数据复评。各规模结论、分配及贡献排名见下方。</p></section>`;
 }
 export const optimizationCss = `
 .optimization-brief{padding:22px;background:#f0f7f4;border:1px solid #cddfd8;border-radius:12px;margin:20px 0}.optimization-brief h2{margin:8px 0 12px}.round-summary-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}.round-summary-cards>div{background:white;border:1px solid #dce6e1;border-radius:8px;padding:14px;min-width:0}.round-summary-cards span{font-size:12px;color:#526c61}.round-summary-cards b{display:block;color:#156b56;font-size:25px;margin-top:8px}.round-summary-cards .verdict-text{font-size:17px;line-height:1.5}.optimization-report-details{margin:18px 0;padding:16px;border:1px solid #dbe5e0;border-radius:8px}.optimization-report-details>summary{font-weight:600}.optimization-report-details p{line-height:1.7}.optimization-report-details table{width:100%;font-size:13px;border-collapse:collapse}.optimization-report-details td,.optimization-report-details th{padding:10px;text-align:left;border-bottom:1px solid #e1e7e3;white-space:normal;min-width:100px;overflow-wrap:anywhere}.optimization-report-details td:first-child{min-width:150px}.optimization-report-details .table-wrap{overflow:auto;max-width:100%}

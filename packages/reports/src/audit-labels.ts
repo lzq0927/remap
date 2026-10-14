@@ -12,6 +12,7 @@ export const parameterLabels: Record<string, string> = {
   slowLifetimeHours: "漏检亚健康持续（小时）",
   slowLoss: "亚健康吞吐损失（0–1）",
   sdcDelayHours: "静默漏检兜底（小时）",
+  validationOverhead: "新增检测与复核开销（0–1）",
   coverage: "检出覆盖率（0–1）",
   stepSeconds: "step 回滚上限（秒）",
   recoverSeconds: "恢复耗时（秒）",

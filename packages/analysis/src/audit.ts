@@ -127,6 +127,7 @@ const modelKeys = [
   "slowLifetimeHours",
   "slowLoss",
   "sdcDelayHours",
+  "validationOverhead",
 ];
 function numberIn(
   value: unknown,
@@ -166,7 +167,7 @@ export function getAuditDefaults() {
     candidateFitOverrides: [],
     recoveryOrder: ["replay", "elastic", "process"],
     model: Object.fromEntries(
-      modelKeys.map((k) => [k, (sourceConfig as any)[k]]),
+      modelKeys.map((k) => [k, (sourceConfig as any)[k] ?? 0]),
     ),
     policy: structuredClone(sourcePolicy),
     metricId: AUDIT_METRIC,
@@ -351,6 +352,7 @@ export function resolveAudit(request: AuditRequest) {
   );
   const model: Record<string, any> = {
     ...sourceConfig,
+    validationOverhead: 0,
     horizonHours: request.hours,
   };
   if (
@@ -361,7 +363,7 @@ export function resolveAudit(request: AuditRequest) {
   for (const [key, value] of Object.entries(request.model ?? {})) {
     if (!modelKeys.includes(key))
       throw new Error("Unsupported audit model field: " + key);
-    const probability = /Probability|Success|Loss/.test(key);
+    const probability = /Probability|Success|Loss|Overhead/.test(key);
     numberIn(
       value,
       key === "checkpointComputeSeconds" ||

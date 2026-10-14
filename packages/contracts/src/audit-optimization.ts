@@ -3,6 +3,10 @@ export interface AuditOptimizationRequest {
   enabled: boolean;
   autoTune?: boolean;
   allowFitTargets?: boolean;
+  /** Search explicit, sourced expert extension scenarios. */
+  exploreExtensions?: boolean;
+  parameterTargets?: Record<string, number>;
+  checkpointPeriods?: Record<string, number>;
   extensions?: AuditExtensionInput[];
   model?: Record<string, number>;
   policy?: Record<string, Record<string, number>>;
@@ -24,7 +28,8 @@ export interface AuditOptimizationRequest {
 export const auditOptimizationDefaults: AuditOptimizationRequest = {
   enabled: true,
   autoTune: true,
-  allowFitTargets: true,
+  allowFitTargets: false,
+  exploreExtensions: true,
   extensions: [],
 };
 export function optimizationSampling(request: {
@@ -40,7 +45,7 @@ export function optimizationSampling(request: {
       Math.min(request.trials, full ? 64 : 32),
     attributionTrials:
       request.optimization?.attributionTrials ??
-      Math.min(request.attributionTrials ?? 64, 128),
-    permutations: request.optimization?.permutations ?? (full ? 16 : 8),
+      Math.min(request.attributionTrials ?? 64, full ? 64 : 32),
+    permutations: request.optimization?.permutations ?? 8,
   };
 }

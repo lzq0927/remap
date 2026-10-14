@@ -86,7 +86,10 @@ export function auditReferenceComparison(
   );
   check(
     Object.entries(request.model ?? {}).every(
-      ([k, v]) => v === (sourceConfig as any)[k],
+      ([k, v]) =>
+        v ===
+        ((sourceConfig as any)[k] ??
+          (k === "validationOverhead" ? 0 : undefined)),
     ),
     "基线参数已修改",
   );

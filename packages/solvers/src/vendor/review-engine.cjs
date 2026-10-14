@@ -28,7 +28,7 @@ function simulate(cards,stage,seed,p=config,opts={}){
   let remaining=arrival(),t=0,progress=0,cp=0,cleanCp=0,cpDirty=false,phase=0,dirty=null,downUntil=0;
   const slows=[],locals=[];
   const extras=p.extensions??[],degrades=[],pending=[];
-  const overhead=1-extras.reduce((product,m)=>product*(1-m.parameters.overhead),1);
+  const overhead=1-(1-(p.validationOverhead??0))*extras.reduce((product,m)=>product*(1-m.parameters.overhead),1);
   const lag=(p.checkpointDurableLagSeconds??0)/3600;
   const eligible=(m,id)=>!m.eventIds.length||m.eventIds.includes(id);
   const perEvent={};
@@ -40,13 +40,14 @@ function simulate(cards,stage,seed,p=config,opts={}){
   function globalPause(cause,seconds){const until=t+seconds/3600,added=Math.max(0,Math.min(T,until)-Math.min(T,Math.max(t,downUntil)));byCause[cause].downtime+=added;item(currentId).downtime+=added;downUntil=Math.max(downUntil,until);}
 
   const ledger={downtime:0,save:0,slowdown:0,rollback:0,terminalInvalid:0,localLoss:0};
-  if(extras.length)ledger.mechanismOverhead=0;
+  if(extras.length||overhead)ledger.mechanismOverhead=0;
   const counts={hard:0,slow:0,sdc:0,manual:0,sdcRecoveries:0};
   const byCause=Object.fromEntries(['hard','slow','sdc'].map(k=>[k,{events:0,recoveries:0,downtime:0,rollback:0,slowdown:0,terminalInvalid:0,localLoss:0}]));
-  function stageRecovery(seconds){
+  function stageRecovery(seconds,local=false){
     const stages={startup:seconds/3,read:seconds/3,communication:seconds/3};
     let startup=stages.startup,read=stages.read,communication=stages.communication,failed=0;
     for(const m of extras){if(!eligible(m,currentId)||!['R-WARM-PROCESS','R-RUNTIME-SNAPSHOT','C-LOSSLESS','R-HCCL-ELASTIC','R-CANN-GRAPH'].includes(m.id))continue;
+      if(m.id==='R-HCCL-ELASTIC'&&!local)continue;
       const a=m.parameters;if(tech()>=a.eligibleShare)continue;
       if(tech()>=a.success){failed+=a.failureSeconds;continue;}
       if(m.id==='R-WARM-PROCESS'||m.id==='R-RUNTIME-SNAPSHOT')startup=Math.min(startup,a.stageSeconds);
@@ -95,7 +96,7 @@ function simulate(cards,stage,seed,p=config,opts={}){
           // 容量等效近似：域间可继续训练，状态冗余保证无全局回滚。
           // 故障域不可用180秒，短全局协调暂停另计；同域重叠合并。
           byCause.hard.recoveries++;item(currentId).recoveries++;
-          const domain=Math.floor(tech()*P['R-ELASTIC'].domains),until=t+delay+(failed+(extras.length?stageRecovery(P['R-ELASTIC'].recoverSeconds):P['R-ELASTIC'].recoverSeconds))/3600;
+          const domain=Math.floor(tech()*P['R-ELASTIC'].domains),until=t+delay+(failed+(extras.length?stageRecovery(P['R-ELASTIC'].recoverSeconds,true):P['R-ELASTIC'].recoverSeconds))/3600;
           const active=locals.find(x=>x.domain===domain);
           if(active){if(until>active.until)active.until=until;}else locals.push({domain,until,id:currentId});
           globalPause('hard',failed+(opts.elasticSyncSeconds??P['R-ELASTIC'].syncSeconds));return;
@@ -130,7 +131,7 @@ function simulate(cards,stage,seed,p=config,opts={}){
     progress+=compute*factor;
     ledger.save+=Math.max(0,dt-compute);
     const effective=compute*(1-overhead),slowLoss=effective*(1-slowFactor),domainLoss=effective*slowFactor*(1-localFactor),degradeLoss=effective*slowFactor*localFactor*(1-degradeFactor),localLoss=domainLoss+degradeLoss;
-    if(extras.length)ledger.mechanismOverhead+=compute*overhead;
+    if(extras.length||overhead)ledger.mechanismOverhead+=compute*overhead;
     ledger.slowdown+=slowLoss;ledger.localLoss+=localLoss;byCause.hard.localLoss+=localLoss;
     for(const s of slows)item(s.id).slowdown+=slowLoss/slows.length;
     for(const l of locals)item(l.id).localLoss+=domainLoss/locals.length;

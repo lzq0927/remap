@@ -77,6 +77,7 @@ export function changedAuditStage(previous: any, current: any): number {
           enabled: optimization.enabled,
           autoTune: optimization.autoTune,
           allowFitTargets: optimization.allowFitTargets,
+          exploreExtensions: optimization.exploreExtensions,
           importance: optimization.importance,
           complexity: optimization.complexity,
         },
@@ -94,6 +95,8 @@ export function changedAuditStage(previous: any, current: any): number {
           model: optimization.model,
           policy: optimization.policy,
           fitTargets: optimization.fitTargets,
+          parameterTargets: optimization.parameterTargets,
+          checkpointPeriods: optimization.checkpointPeriods,
         },
       },
       {

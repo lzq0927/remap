@@ -1,4 +1,8 @@
 import { shapleyImportance } from "../../packages/analysis/src/audit-optimization";
+import {
+  mechanismLossBudget,
+  mechanismGapDiagnostics,
+} from "../../packages/analysis/src/audit-mechanism-budget";
 import { expect, it } from "vitest";
 import {
   audit,
@@ -144,14 +148,38 @@ it("keeps first-round evidence immutable, independently verifies proposals and c
     expect(allocation.samplingMarginHours).toBeGreaterThanOrEqual(0);
     expect(allocation.residual).toBeCloseTo(0, 12);
     expect(
-      allocation.items.every((i: any) => i.targetFit <= i.currentFit),
+      allocation.items.every(
+        (i: any) =>
+          i.targetFit === undefined && i.allowedEquivalentSeconds >= 0,
+      ),
     ).toBe(true);
+    expect(
+      allocation.lossPathPlan.items.reduce(
+        (s: number, i: any) => s + i.allowedHours,
+        0,
+      ),
+    ).toBeCloseTo(allocation.totalAllowedHours, 12);
   }
   expect(result.optimization.scales.map((s: any) => s.cards)).toEqual([
     500000, 200000, 100000, 10000,
   ]);
   const seeds = Object.values(result.optimization.seeds).flat() as number[];
   expect(new Set(seeds).size).toBe(seeds.length);
+  const seedSet = new Set(seeds);
+  expect(
+    seeds.some((seed) =>
+      seedSet.has((Math.imul(seed, 1664525) + 1013904223) >>> 0),
+    ),
+  ).toBe(false);
+  expect(result.optimization.legacyFitSearchIgnored).toBe(true);
+  expect(result.optimization.factors.some((f: any) => f.kind === "fit")).toBe(
+    false,
+  );
+  for (const event of result.optimization.optimizedEvents) {
+    const original = result.events.find((e: any) => e.id === event.id)!;
+    if (event.type !== "sdc") expect(event.fit).toBe(original.fit);
+    else expect(event.fit).toBeGreaterThanOrEqual(original.fit * 0.75);
+  }
   const firstSeeds = [input.seed, input.attributionSeed].flatMap((base) =>
     Array.from(
       { length: input.trials },
@@ -194,8 +222,108 @@ it("keeps first-round evidence immutable, independently verifies proposals and c
     "优化增量排名",
     "工程目标，非实测",
     "第一轮现状",
+    "参数依据与参考初值",
+    "机制指标分解与剩余缺口",
+    "来源索引",
   ])
     expect(html).toContain(content);
+});
+
+it("turns loss budgets into recovery and saving requirements without inventing FIT reductions", () => {
+  const plan = mechanismLossBudget(100, 1, { save: 2, downtime: 3 }, []);
+  expect(plan.items.reduce((s, i) => s + i.allowedHours, 0)).toBeCloseTo(1, 12);
+  const d = mechanismGapDiagnostics(
+    100,
+    0.99,
+    { save: 2, downtime: 3 },
+    { a: { recoveries: 10 } },
+    plan,
+    60,
+    0.5,
+  );
+  const s = d.checkpoint.allocatedSaveSeconds!;
+  expect(s / (60 + s)).toBeCloseTo(
+    plan.items.find((p) => p.id === "save")!.allowedHours / 100,
+    12,
+  );
+  expect(d.totalExcessHours).toBeCloseTo(4, 12);
+  expect(d.downtimeSecondsPerObservedRecovery).toBeCloseTo(
+    (plan.items.find((p) => p.id === "downtime")!.allowedHours * 3600) / 10,
+    12,
+  );
+});
+
+it("charges new detector overhead, keeps instantaneous detection separate from missed-SDC discovery, and rejects invalid boundaries", () => {
+  const r = resolveAudit(small());
+  const zero = r.events.map((e) => ({ ...e, fit: 0 }));
+  const e = createEnhancedAuditEngine(zero, r.policy, {
+    ...r.model,
+    checkpointSaveSeconds: 0,
+    validationOverhead: 0.001,
+  });
+  const v = e.simulate(10000, 2, 17, e.parameters({}), {});
+  expect(v.usefulThroughput).toBeCloseTo(0.999, 12);
+  expect(v.ledger.mechanismOverhead).toBeCloseTo(
+    r.model.horizonHours * 0.001,
+    12,
+  );
+  for (const parameterTargets of [
+    { sdcCoverage: 1.1 },
+    { detectSeconds: -1 },
+    { latentHours: 0 },
+    { unknown: 1 },
+  ] as Array<Record<string, number>>)
+    expect(() =>
+      resolveAudit({
+        ...small(),
+        optimization: { enabled: true, parameterTargets },
+      }),
+    ).toThrow();
+  expect(() =>
+    resolveAudit({
+      ...small(),
+      optimization: { enabled: true, checkpointPeriods: { "123": 60 } },
+    }),
+  ).toThrow();
+  const input = {
+    ...small(),
+    optimization: {
+      enabled: true,
+      autoTune: false,
+      policy: { "D-SDC": { detectSeconds: 0.5 } },
+    },
+  };
+  expect(resolveAudit(input).model.sdcDelayHours).toBe(120);
+});
+
+it("replays a frozen per-scale mechanism recommendation with the same physics and without mutating the first round", () => {
+  const input = {
+    ...small(),
+    optimization: {
+      ...small().optimization,
+      exploreExtensions: false,
+      parameterTargets: { saveSeconds: 0.01 },
+      checkpointPeriods: { "500000": 60, "10000": 300 },
+    },
+  };
+  const result = audit(input),
+    recommendation = result.optimization.recommendedRequest;
+  expect(result.optimization.factors.some((f: any) => f.kind === "fit")).toBe(
+    false,
+  );
+  expect(recommendation.optimization.checkpointPeriods["500000"]).toBe(60);
+  expect(recommendation.optimization.checkpointPeriods["10000"]).toBe(300);
+  const replay = audit(recommendation);
+  expect(replay.rows).toEqual(result.rows);
+  expect(replay.optimization.scales.map((s: any) => s.optimized)).toEqual(
+    result.optimization.scales.map((s: any) => s.optimized),
+  );
+  for (const f of result.optimization.factors.filter(
+    (f: any) => f.kind === "policy" || f.kind === "model",
+  ))
+    expect(
+      Object.keys(f.value).every((key) => Boolean(f.parameterSources[key])),
+    ).toBe(true);
 });
 
 it("keeps unmet goals visible when no improving levers are authorized and preserves historical single-round requests", () => {
@@ -341,6 +469,32 @@ it("conserves time with all 16 extensions including asynchronous durability and 
         Object.values(v.ledger).reduce((s: number, x: any) => s + x, 0),
     ).toBeCloseTo(24, 8);
     expect(v.correctHours).toBeGreaterThanOrEqual(0);
+  }
+});
+
+it("credits HCCL communication rebuild only on local elastic recovery, not global recovery", () => {
+  const r = resolveAudit(small());
+  const events = r.events.map((e) => ({
+    ...e,
+    fit: e.id === "CORE-hard" ? 3000 : 0,
+  }));
+  const hccl = extensionScenario("R-HCCL-ELASTIC");
+  Object.assign(hccl.parameters, { eligibleShare: 1, success: 1 });
+  const base = createEnhancedAuditEngine(events, r.policy, r.model);
+  const improved = createEnhancedAuditEngine(events, r.policy, r.model, [hccl]);
+  for (const seed of [1, 17, 253]) {
+    const global = base.simulate(500000, 2, seed, base.parameters({}), {});
+    const globalWith = improved.simulate(
+      500000,
+      2,
+      seed,
+      improved.parameters({}),
+      {},
+    );
+    expect(globalWith.usefulThroughput).toBeCloseTo(
+      global.usefulThroughput,
+      12,
+    );
   }
 });
 

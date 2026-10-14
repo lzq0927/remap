@@ -36,11 +36,14 @@ export default function AuditOptimizationResult({
           载入已复评的第二轮参数
         </button>
       )}
-      {sections.map((section, i) => (
+      {sections.map((section) => (
         <details
           className="optimization-report-details"
           key={section.title}
-          open={i === 0 || i === 1}
+          open={
+            section.title.startsWith("00 /") ||
+            section.title === "两轮 / 各规模措施贡献排名"
+          }
         >
           <summary>{section.title}</summary>
           {section.paragraphs?.map((p) => (

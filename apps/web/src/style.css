@@ -2443,3 +2443,7 @@ main > header {
 .optimization-scale select {
   min-width: 140px;
 }
+.mechanism-targets { margin: 16px 0; padding: 16px; border: 1px solid var(--border, #dbe5e0); border-radius: 8px; }
+.mechanism-targets > summary { font-weight: 650; cursor: pointer; }
+.mechanism-targets .fields { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); align-items: start; }
+.mechanism-targets small { color: #536b62; font-size: 12px; line-height: 1.6; display: block; }

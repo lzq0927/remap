@@ -5,8 +5,11 @@ import {
   auditExtensionCatalog,
   extensionScenario,
   mechanismStages,
-  existingMechanismClasses,
 } from "../../../packages/contracts/src/audit-extensions";
+import {
+  mechanismTargetCatalog,
+  automaticExtensionIds,
+} from "../../../packages/contracts/src/audit-mechanism-targets";
 import { auditScalePresets } from "../../../packages/contracts/src/audit-presets";
 import { EventEditor, NumericParameters } from "./AuditEditors";
 
@@ -55,7 +58,7 @@ export default function AuditOptimizationEditor({
           <span aria-hidden="true">→</span>
           <div>
             <b>第二轮 · 分配与改进</b>
-            <span>主规模缺口 → AGREE → 改进候选 → 独立复评</span>
+            <span>AGREE预算 → 专家机制选择 → 参数反解 → 复评与新排名</span>
           </div>
         </div>
         <p>
@@ -80,28 +83,34 @@ export default function AuditOptimizationEditor({
                   onChange={(e) => update({ autoTune: e.target.checked })}
                 />
                 <span>
-                  探索现有措施的参数改进
+                  依据 AGREE 预算推导机制参数
                   <small>
-                    比较检出率、恢复成功率、耗时及检查点周期；建议值需产品专家确认。
+                    先分配损失预算，再反解覆盖率、发现/恢复耗时与保存要求；超出参考值的要求需产品论证。
                   </small>
                 </span>
               </label>
               <label className="inline-check">
                 <input
                   type="checkbox"
-                  checked={input.allowFitTargets ?? true}
+                  checked={input.exploreExtensions ?? true}
                   onChange={(e) =>
-                    update({ allowFitTargets: e.target.checked })
+                    update({ exploreExtensions: e.target.checked })
                   }
                 />
                 <span>
-                  允许提出硬件 FIT 设计目标
+                  按分配缺口逐项筛选专家机制库
                   <small>
-                    AGREE 按对象分配剩余损失，再正向复评；不会改写第一轮故障库。
+                    核对全部16项方案的范围、前提、成本与重叠；报告说明每项为何采用或未采用。
                   </small>
                 </span>
               </label>
             </div>
+            <p className="note">
+              源 FIT 默认保持不变，不再把可用度缺口自动折算为降 FIT
+              要求。专家筛查仅作用于适用 SDC 风险，25%
+              为待验证单点目标。历史自动 FIT 收紧设置不再执行；显式 FIT
+              输入仍需逐项注明来源。
+            </p>
             <details className="audit-help">
               <summary>AGREE 如何使用 Shapley，能否修改重要度？</summary>
               <p>
@@ -110,7 +119,7 @@ export default function AuditOptimizationEditor({
               </p>
               <p>
                 <code>Rᵢ = 1 − (1 − R*^(nᵢ/Σn))/Eᵢ</code>，再将 −ln Rᵢ
-                归一到允许损失预算。先扣保存和正常态开销，再按硬件对象分配；仿真才判断最终达标。
+                归一到允许损失预算。先冻结各规模物理路径预算，再结合路径故障到达率推导参数；对象预算用于交叉核对。重要度会改变预算及实际参数要求。
               </p>
               <label>
                 调整重要度的规模
@@ -194,6 +203,27 @@ export default function AuditOptimizationEditor({
           .toLowerCase()
           .includes(query.toLowerCase())),
   );
+  const targetField = (p: (typeof mechanismTargetCatalog)[number]) => (
+    <label key={p.id}>
+      {p.label}
+      <input
+        aria-label={"第二轮目标 " + p.label}
+        type="number"
+        min={p.min}
+        max={p.max}
+        step="any"
+        placeholder={String(p.target)}
+        value={input.parameterTargets?.[p.id] ?? ""}
+        onChange={(e) => {
+          const parameterTargets = { ...input.parameterTargets };
+          if (e.target.value === "") delete parameterTargets[p.id];
+          else parameterTargets[p.id] = Number(e.target.value);
+          update({ parameterTargets });
+        }}
+      />
+      <small>{p.source}</small>
+    </label>
+  );
   const selected = input.extensions ?? [];
   return (
     <section
@@ -217,6 +247,64 @@ export default function AuditOptimizationEditor({
           第二轮当前关闭，可浏览机制库；在“可用度分配”中启用后再计算改进候选。
         </p>
       )}
+      <details className="mechanism-targets" open>
+        <summary>第二轮参数参考初值（AGREE 将推导实际要求）</summary>
+        <p>
+          专家机制库和现状参数为参考；99.5%覆盖、0.5秒发现与保存是补充起点。AGREE先分配预算，再反解具体要求，可以严于参考值。最终共同参数采用各规模最严格要求，并独立复评。高级显式参数可锁定，锁定后不足仍显示缺口。
+        </p>
+        <div className="fields">
+          {mechanismTargetCatalog
+            .filter((p) =>
+              [
+                "sdcCoverage",
+                "detectSeconds",
+                "saveSeconds",
+                "elasticSeconds",
+              ].includes(p.id),
+            )
+            .map(targetField)}
+        </div>
+        <details>
+          <summary>补充参考值与检测成本</summary>
+          <div className="fields">
+            {mechanismTargetCatalog
+              .filter(
+                (p) =>
+                  ![
+                    "sdcCoverage",
+                    "detectSeconds",
+                    "saveSeconds",
+                    "elasticSeconds",
+                  ].includes(p.id),
+              )
+              .map(targetField)}
+          </div>
+        </details>
+        <p className="note">
+          99.5% 是全系统工程要求，专家 ABFT
+          只在指定算子子集成立；不会自动重复叠加一次 ABFT。0.5秒发现时延与漏检
+          SDC
+          的兜底发现时间分别建模。检查点周期按不同规模比较，保存、回滚与正常态校验开销同时计入。
+        </p>
+        {(input.exploreExtensions ?? true) && (
+          <details>
+            <summary>自动比较的专家扩展及假设</summary>
+            <p>
+              全部机制逐项核对分配缺口，并非全部启用。探索情景：适用比例通常100%（FP8/FP4各50%）、成功率95%、失败额外耗时0，未知正常态开销暂按0、ABFT按0.1%，均需验收。显式选入的机制参数会锁定。
+            </p>
+            <ul>
+              {automaticExtensionIds.map((id) => {
+                const m = auditExtensionCatalog.find((m) => m.id === id)!;
+                return (
+                  <li key={id}>
+                    {m.name}（{id}）：{m.change} {m.evidence}
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        )}
+      </details>
       <div className="fields library-filters">
         <label>
           处理阶段
@@ -397,6 +485,32 @@ export default function AuditOptimizationEditor({
             onChange={(value) => update({ model: value })}
           />
         </details>
+        {Object.keys(input.checkpointPeriods ?? {}).length > 0 && (
+          <div className="fields">
+            {Object.entries(input.checkpointPeriods ?? {}).map(
+              ([cards, period]) => (
+                <label key={cards}>
+                  {Number(cards).toLocaleString()}卡检查点周期（秒）
+                  <input
+                    aria-label={cards + "卡第二轮检查点周期"}
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={period}
+                    onChange={(e) =>
+                      update({
+                        checkpointPeriods: {
+                          ...input.checkpointPeriods,
+                          [cards]: Number(e.target.value),
+                        },
+                      })
+                    }
+                  />
+                </label>
+              ),
+            )}
+          </div>
+        )}
         {input.fitTargets?.length ? (
           <p>
             已载入 {input.fitTargets.length} 项第二轮 FIT
@@ -422,6 +536,8 @@ export default function AuditOptimizationEditor({
               policy: undefined,
               model: undefined,
               fitTargets: undefined,
+              checkpointPeriods: undefined,
+              parameterTargets: undefined,
             })
           }
         >
@@ -430,7 +546,7 @@ export default function AuditOptimizationEditor({
       </details>
       <p className="note">
         机制组合按事件分支执行，失败回退另计；启动与图准备等同一阶段不叠加节省。
-        {existingMechanismClasses.fast.effect}需与硬件降率共同权衡。
+        保存、回滚、检测与恢复共同权衡；未找到达标方案时保留缺口。
       </p>
     </section>
   );
