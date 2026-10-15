@@ -441,9 +441,35 @@ export async function buildApp(options: BuildAppOptions = {}) {
     });
   });
   registerAuditExperimentRoutes(app, tasks);
-  app.get("/api/tasks/:taskId/runs", async (req: any) =>
-    tasks.authorize(req, req.params.taskId).store.runs(),
-  );
+  app.get("/api/tasks/:taskId/runs", async (req: any) => {
+    const { store } = tasks.authorize(req, req.params.taskId);
+    if (req.query?.view !== "summary") return store.runs();
+    const limit = Number(req.query.limit ?? 20),
+      offset = Number(req.query.offset ?? 0);
+    for (const field of ["operation", "sourceRunId"])
+      if (
+        req.query[field] !== undefined &&
+        typeof req.query[field] !== "string"
+      )
+        throw new DomainError("SCHEMA_INVALID", "运行摘要筛选条件必须是字符串");
+    if (
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 100 ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0
+    )
+      throw new DomainError(
+        "SCHEMA_INVALID",
+        "运行摘要 limit 为1–100的整数，offset为非负整数",
+      );
+    return store.runSummaries({
+      limit,
+      offset,
+      operation: req.query.operation,
+      sourceRunId: req.query.sourceRunId,
+    });
+  });
   app.post("/api/tasks/:taskId/allocations/compare", async (req: any) => {
     const metric = req.body.metricId ?? "task-reliability";
     if (!["task-reliability", "steady-state-availability"].includes(metric))

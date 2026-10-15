@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, open, unlink } from "node:fs/promises";
 import { delimiter, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,7 +49,24 @@ export function findOpenCode() {
     "bin",
     process.platform === "win32" ? "opencode.exe" : "opencode",
   );
-  return existsSync(bundled) ? bundled : commandOnPath("opencode");
+  if (existsSync(bundled)) return bundled;
+  // Recent official packages declare bin/opencode.exe on Linux as well.
+  // Read the installed package entry instead of assuming its filename.
+  try {
+    const packageDirectory = join(projectRoot, "node_modules", "opencode-ai");
+    const manifest = JSON.parse(
+      readFileSync(join(packageDirectory, "package.json"), "utf8"),
+    );
+    const entry =
+      typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.opencode;
+    if (entry) {
+      const executable = resolve(packageDirectory, entry);
+      if (existsSync(executable)) return executable;
+    }
+  } catch {
+    /* absent optional Agent; preserve PATH discovery */
+  }
+  return commandOnPath("opencode");
 }
 export function runCommand(command, args, options = {}) {
   // Windows .cmd entry points need cmd.exe; restrict arguments to non-shell text.

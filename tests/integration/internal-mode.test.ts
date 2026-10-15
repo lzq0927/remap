@@ -56,6 +56,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  vi.doUnmock("../../scripts/skill-install.mjs");
   await rm(directory, { recursive: true, force: true });
 });
 
@@ -76,6 +77,9 @@ test("internal bootstrap forwards the offline store, suppresses lifecycle script
     "--store-dir",
     store,
   ];
+  vi.doMock("../../scripts/skill-install.mjs", () => ({
+    installProjectSkill: vi.fn(async () => ({ updated: 0 })),
+  }));
   vi.doMock("../../scripts/runtime.mjs", () => ({
     enterProject: vi.fn(),
     projectRoot: directory,
@@ -108,6 +112,7 @@ test("internal bootstrap forwards the offline store, suppresses lifecycle script
     process.argv = originalArgv;
     log.mockRestore();
     vi.doUnmock("../../scripts/runtime.mjs");
+    vi.doUnmock("../../scripts/skill-install.mjs");
     vi.doUnmock("node:fs");
     vi.doUnmock("node:fs/promises");
     vi.resetModules();
@@ -154,6 +159,9 @@ test.each([false, true])(
         process.listeners(signal),
       ]),
     );
+    vi.doMock("../../scripts/skill-install.mjs", () => ({
+      installProjectSkill: vi.fn(async () => ({ updated: 0 })),
+    }));
     vi.doMock("../../scripts/runtime.mjs", () => ({
       enterProject: vi.fn(),
       findOpenCode: () => "synthetic-opencode",
@@ -209,6 +217,7 @@ test.each([false, true])(
           if (!listeners.includes(listener))
             process.removeListener(signal, listener);
       vi.doUnmock("../../scripts/runtime.mjs");
+      vi.doUnmock("../../scripts/skill-install.mjs");
       vi.doUnmock("node:child_process");
       vi.doUnmock("node:fs");
       vi.resetModules();

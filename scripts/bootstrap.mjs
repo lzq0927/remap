@@ -1,4 +1,5 @@
-import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { installProjectSkill } from "./skill-install.mjs";
+import { readFile, writeFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { readRuntimePolicy } from "../packages/runtime-policy/src/index.mjs";
@@ -67,15 +68,10 @@ if (!process.env.RELIABILITY_ENV_FILE)
     console.log("已有 .env，保留现有配置。");
   }
 else console.log("使用指定的 RELIABILITY_ENV_FILE，保留其配置。");
-const skill = join(projectRoot, ".opencode/skills/sd-dfr-remap");
-if (!existsSync(skill)) {
-  await mkdir(skill, { recursive: true });
-  await cp(join(projectRoot, "skills/sd-dfr-remap"), skill, {
-    recursive: true,
-  });
-  console.log("已安装本地 Skill。");
-} else
-  console.log("已有本地 Skill，保留；显式运行 pnpm skill:install 可更新。");
+const skill = await installProjectSkill();
+console.log(
+  skill.updated ? "已同步最新本地 Skill。" : "本地 Skill 已是最新版本。",
+);
 console.log(
   findOpenCode()
     ? "已发现本地 OpenCode。运行 pnpm agent 或配置 OPENCODE_URL 连接已有服务。"

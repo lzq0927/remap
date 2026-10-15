@@ -15,3 +15,5 @@ companyIntegration 实现 global、forTask(directory)、prepareTask(tasks, taskI
 现有工作台原生面板仍针对 OpenCode。只需要企业 Agent 使用求解器和流程时，直接安装 `skills/sd-dfr-remap` 并连接 `packages/mcp-runtime`，无需适配聊天 UI。MCP 网关需要运行可靠性 API。Skill 指令和 MCP 工具描述与模型无关；各平台的 Skill 发现与模型配置使用各自官方机制。
 
 测试 `tests/integration/agent-integration.test.ts` 使用独立合成 Agent 验证替换、任务隔离、主会话复用及人工授权，不请求模型。
+
+任务准备从`skills/sd-dfr-remap`递归同步Skill、manifest和references；内容改变会刷新当前任务原生实例，普通重连不重复刷新。开发启动、Agent启动、bootstrap及`pnpm skill:install`共用同一安装函数更新项目根目录发现副本，不作为另一份手工维护来源。MCP 0.3补齐audit_plan/audit_evaluate/audit_compare/run_list；同步当前设计包含最近各轮ID摘要，完整参数从run_status读取，不将分配建议当已完成改进。

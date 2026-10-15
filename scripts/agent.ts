@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
-import { cp, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { installProjectSkill } from "./skill-install.mjs";
 import { enterProject, findOpenCode } from "./runtime.mjs";
 import {
   readRuntimePolicy,
@@ -18,6 +17,7 @@ if (
   throw new Error(
     "pnpm agent 只启动本机 HTTP 服务；远程 OpenCode 请直接配置 OPENCODE_URL 并运行工作台。",
   );
+await installProjectSkill();
 const headers: Record<string, string> = {};
 if (process.env.OPENCODE_SERVER_PASSWORD)
   headers.Authorization =
@@ -58,12 +58,6 @@ if (/\.(cmd|bat)$/i.test(binary))
   throw new Error(
     "请把 OPENCODE_BIN 指向原生 OpenCode 可执行文件，而非 shell 包装脚本。",
   );
-if (!existsSync(".opencode/skills/sd-dfr-remap")) {
-  await mkdir(".opencode/skills", { recursive: true });
-  await cp("skills/sd-dfr-remap", ".opencode/skills/sd-dfr-remap", {
-    recursive: true,
-  });
-}
 const child = spawn(
   binary,
   ["serve", "--port", endpoint.port || "4096", "--hostname", "127.0.0.1"],

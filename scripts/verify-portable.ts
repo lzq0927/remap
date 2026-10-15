@@ -342,7 +342,10 @@ try {
     invocation("bootstrap", ["--task", task.id]),
     { cwd: projectRoot, env, encoding: "utf8", timeout: 30000 },
   );
-  assert(prepared.status === 0, "离线任务 MCP 配置生成失败");
+  assert(
+    prepared.status === 0,
+    "离线任务 MCP 配置生成失败：" + prepared.stderr?.toString(),
+  );
   const diagnostics = runCommand(
     process.execPath,
     invocation("doctor", ["--task", task.id]),

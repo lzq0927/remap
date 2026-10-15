@@ -22,7 +22,21 @@ test("official MCP client negotiates tools, creates assets, invokes solver, canc
   try {
     await client.connect(transport);
     const list = await client.listTools();
-    expect(list.tools.some((t) => t.name === "analysis_solve")).toBe(true);
+    for (const name of [
+      "analysis_solve",
+      "audit_plan",
+      "audit_evaluate",
+      "audit_compare",
+      "run_list",
+    ])
+      expect(list.tools.some((t) => t.name === name)).toBe(true);
+    const evaluateSchema = list.tools.find(
+      (t) => t.name === "audit_evaluate",
+    )!.inputSchema;
+    expect(evaluateSchema.required).toContain("body");
+    expect((evaluateSchema.properties!.body as any).required).toEqual(
+      expect.arrayContaining(["sourceRunId", "name", "configuration"]),
+    );
     expect(list.tools.some((t) => t.name === "workflow_automatic")).toBe(true);
     expect(new Set(list.tools.map((t) => t.name)).size).toBe(list.tools.length);
     const engineering = (

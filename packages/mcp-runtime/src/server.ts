@@ -68,7 +68,7 @@ export const registry = [
   ["design_get", "读取任务当前设计；写入阶段前核对输入版本", "GET", "/design"],
   [
     "design_update",
-    "更新任务设计，必须提供 expectedRevision；变更后重新确认流程",
+    "保存完整任务草稿，先design_get并保留request及未知字段，body.expectedRevision必填；默认专家参数写auditDraft，正式输入由assessment归一化。变更只复核受影响阶段；独立改进用audit_evaluate不写草稿",
     "POST",
     "/design",
   ],
@@ -94,7 +94,7 @@ export const registry = [
   ["workflow_state", "读取当前阶段和过程资产", "GET", "/workflow"],
   [
     "workflow_automatic",
-    "用户选择自动执行后，按当前有效设计版本运行目标、结构、分配、参数、真实仿真和报告流水线。自动完成不表示人工确认，报告停在待审核。body.inputRevision 必填；用 workflow_state / run_status 查询进展",
+    "用户明确选择自动执行后，按已保存版本完成六阶段第一轮现状评估，报告停在待审核。不会自动启动独立AGREE分配或改进轮。body.inputRevision 必填；用 workflow_state / run_status 查询进展",
     "POST",
     "/workflow/automatic",
   ],
@@ -133,8 +133,32 @@ export const registry = [
   ["model_defaults", "读取场景指标和参考模型参数", "GET", "/defaults"],
   [
     "analysis_solve",
-    "执行专业求解。operation=audit 使用 model_defaults.audit 的事件/机制审核口径，支持有来源的事件 FIT 更新、物理恢复顺序、组合 Shapley 和报告。返回运行 ID，用 run_status 查询结果；不要自行心算替代结果",
+    "执行专业求解。operation=audit 使用 design_get.assessment.input 做第一轮现状评估，新默认原六项/静默检出95%、optimization.enabled=false；历史输入遵从保存口径。独立改进使用 audit_plan / audit_evaluate。正式六阶段需 executionId,inputRevision；返回runId，用run_status读取结果",
     "POST",
+    "/runs",
+  ],
+  [
+    "audit_plan",
+    "依据已完成第一轮Shapley生成AGREE工程责任分配与参数建议。body={sourceRunId,options?}，options支持planningCards、importance（规模→机制→重要度）、parameterTargets、exploreExtensions、screeningTrials。默认以50万卡98.5%为目标，实际遵从冻结输入。只做规划，不执行第二轮、不修改设计；返回runId后用run_status读取configuration、prediction和来源",
+    "POST",
+    "/audit/plan",
+  ],
+  [
+    "audit_evaluate",
+    "在用户要求评估时独立执行改进轮。body={sourceRunId,name,configuration,planRunId?}。configuration为相对第一轮的完整改动集合（不是上次改进的补丁）；支持policy/model/extensions/checkpointPeriods/有来源fitTargets。仅改静默99.5%用policy:{'D-SDC':{coverage:0.995}}。采用分配建议时传计划configuration及planRunId；先展示要求，再按用户意图执行。结果、输入和增量Shapley独立保存，不改变第一轮或六阶段确认",
+    "POST",
+    "/audit/evaluate",
+  ],
+  [
+    "audit_compare",
+    "保存同一第一轮下2–12次已完成评估的横向比较，body={runIds:[第一轮ID,改进ID,...]}；分配建议不能参与比较。每轮结论、实际参数、各规模曲线和贡献排名分别保留。返回runId，用report_export导出HTML或离线包",
+    "POST",
+    "/audit/compare",
+  ],
+  [
+    "run_list",
+    "读取当前任务运行摘要，发现第一轮、分配建议、独立改进与比较ID；不返回大体积输入/结果。query支持operation、sourceRunId、limit（默认20，最多100）、offset。按时间倒序；用run_status读取选中完整快照。不要把最新分配建议当作已完成改进结果",
+    "GET",
     "/runs",
   ],
   ["run_status", "查询实验状态、结果、参数快照和诊断", "GET", "/runs/:id"],
@@ -161,6 +185,47 @@ export const registry = [
     "/catalogs/:id/:revision/submit",
   ],
 ] as const;
+const roundBodies: Record<string, z.ZodTypeAny> = {
+  audit_plan: z
+    .object({
+      sourceRunId: z
+        .string()
+        .min(1)
+        .describe("已完成第一轮ID，从run_list/run_status读取"),
+      options: z
+        .record(z.any())
+        .optional()
+        .describe(
+          "可选planningCards/importance/parameterTargets等；不改变冻结目标",
+        ),
+    })
+    .strict(),
+  audit_evaluate: z
+    .object({
+      sourceRunId: z.string().min(1),
+      name: z.string().trim().min(1).max(100).describe("本次独立改进方案名称"),
+      configuration: z
+        .record(z.any())
+        .describe(
+          "相对第一轮的完整改动集合，或计划返回的configuration；不是上轮补丁",
+        ),
+      planRunId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("采用的同源已完成AGREE计划ID；仅手动对照时省略"),
+    })
+    .strict(),
+  audit_compare: z
+    .object({
+      runIds: z
+        .array(z.string().min(1))
+        .min(2)
+        .max(12)
+        .describe("同一第一轮下已完成评估ID，建议包含第一轮；不能含规划运行"),
+    })
+    .strict(),
+};
 export function createMcpServer(
   baseUrl = process.env.RELIABILITY_API_URL ?? "http://127.0.0.1:4178",
   binding = {
@@ -168,7 +233,7 @@ export function createMcpServer(
     token: process.env.RELIABILITY_TASK_TOKEN ?? "",
   },
 ) {
-  const server = new McpServer({ name: "sd-dfr-remap", version: "0.2.0" });
+  const server = new McpServer({ name: "sd-dfr-remap", version: "0.3.0" });
   for (const [name, description, method, route] of registry) {
     server.registerTool(
       name,
@@ -178,7 +243,7 @@ export function createMcpServer(
           id: z.string().optional(),
           revision: z.number().int().positive().optional(),
           query: z.record(z.string()).optional(),
-          body: z.record(z.any()).optional(),
+          body: roundBodies[name] ?? z.record(z.any()).optional(),
         },
       },
       async (args) => {
@@ -195,6 +260,7 @@ export function createMcpServer(
             }
           }
           const query = { ...args.query };
+          if (name === "run_list") query.view = "summary";
           if (
             name === "report_export" &&
             (query.format === "zip" ||
@@ -242,7 +308,13 @@ export function createMcpServer(
             value = { text: raw };
           }
           if (
-            ["analysis_solve", "engineering_run"].includes(name) &&
+            [
+              "analysis_solve",
+              "engineering_run",
+              "audit_plan",
+              "audit_evaluate",
+              "audit_compare",
+            ].includes(name) &&
             response.ok
           )
             value = {

@@ -1,11 +1,35 @@
 {
   "name": "sd-dfr-remap",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "entry": "SKILL.md",
-  "references": ["references/workflow.md"],
+  "references": [
+    "references/workflow.md",
+    "references/assessment-rounds.md"
+  ],
   "protocol": "MCP",
-  "requires": { "server": "sd-dfr-remap", "version": "0.2.0", "taskBinding": true },
-  "agentAdapters": { "opencode": "../../.opencode/commands/sd-dfr-remap.md" },
+  "requires": {
+    "server": "sd-dfr-remap",
+    "version": "0.3.0",
+    "taskBinding": true
+  },
+  "agentAdapters": {
+    "opencode": {
+      "command": "sd-dfr-remap",
+      "pathFromWorkspace": ".opencode/commands/sd-dfr-remap.md"
+    }
+  },
   "confirmation": "human-in-workbench",
-  "primaryScenario": "training.correct-delivery"
+  "primaryScenario": "training.retained-clean-progress",
+  "tools": [
+    "task_current",
+    "design_get",
+    "workflow_state",
+    "analysis_solve",
+    "run_list",
+    "run_status",
+    "audit_plan",
+    "audit_evaluate",
+    "audit_compare",
+    "report_export"
+  ]
 }

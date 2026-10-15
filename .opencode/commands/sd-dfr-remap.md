@@ -1,5 +1,5 @@
 ---
-description: 加载统一可靠性建模、指标分解、机制权衡与验证流程
+description: 读取当前任务，完成现状评估、AGREE改进分配、独立复评与报告比较
 ---
-使用 skill 工具加载 sd-dfr-remap。先调用 task_current、design_get、workflow_state 核对当前任务和版本，根据本次需求解释推荐方式。首次没有明确选择时，必须调用原生 question 工具，在 Agent 对话框显示可点击的“全自动设计与评估”和“辅助设计与评估”，每项包含 Skill 中的解释，不用普通文字菜单替代。未回答前不求解。全自动按保存的完整设计执行 workflow_automatic；关键资料缺失先澄清；辅助模式根据用户输入决定下一步，逐阶段保存产物、等待工作台确认。继续既有执行时不重复询问或启动。先做目标分配，再做措施评估与 Shapley。只使用当前目录绑定的可靠性 MCP；无绑定时返回工作台创建任务主会话。不要把自动完成伪造成人工 confirmed。
+使用 skill 工具加载 sd-dfr-remap。先读取 task_current、design_get、workflow_state，必要时 run_list / run_status 查找已有结果。按本次明确需求执行，不重复询问方式或重启流程；仅意图缺失时用原生 question 简短澄清。明确全自动只运行第一轮至报告待审核；交互保留六阶段人工确认。默认先评估原六项现状（静默检出95%），再按用户请求 audit_plan 生成基于第一轮Shapley的AGREE分配；生成建议不自动执行第二轮。用户明确要求后 audit_evaluate 单独复评，手动仅改99.5%时保留其他第一轮参数。audit_compare 比较同一第一轮下多次已完成结果，report_export 分别导出。说明各规模目标、实际区间、参数来源和待验证条件。只使用当前任务绑定MCP，不伪造人工确认、不覆盖历史证据。
 用户当前需求：$ARGUMENTS

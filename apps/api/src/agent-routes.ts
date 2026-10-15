@@ -196,8 +196,9 @@ export function registerAgentRoutes(
       target: input.target,
       targets: input.targets,
       hours: input.hours,
+      assessments: store.runSummaries({ limit: 12 }).items,
       instruction:
-        "调用 task_current 与 design_get 读取完整设计及流程；审核使用 assessment.input，valid=false 时先修复草稿，禁止退回旧 V4 参数或使用其他任务数据",
+        "调用 task_current、design_get、workflow_state 读取完整设计及流程；评估使用 assessment.input，valid=false 先修复。用 run_list/run_status 核对已有各轮证据；audit_plan 只生成建议，用户明确要求后 audit_evaluate 独立复评，audit_compare 比较同一第一轮结果。生成建议不自动执行改进轮，不修改第一轮或重置确认。禁止退回旧 V4 参数或使用其他任务数据",
     };
     await agent(task.id).addContext(req.params.id, summary);
     store.putDocument("agent-context", {

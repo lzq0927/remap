@@ -244,20 +244,20 @@ export class Store {
         "INSERT INTO documents VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
       )
       .run(id, kind, JSON.stringify(payload));
-    return { ...payload,id };
+    return { ...payload, id };
   }
   getDocument(id: string): any {
     const row = this.db
       .prepare("SELECT * FROM documents WHERE id=?")
       .get(id) as any;
     if (!row) throw new DomainError("REFERENCE_MISSING", "文档不存在", 404);
-    return { ...JSON.parse(row.payload),id };
+    return { ...JSON.parse(row.payload), id };
   }
   documents(kind: string) {
     return this.db
       .prepare("SELECT * FROM documents WHERE kind=?")
       .all(kind)
-      .map((r: any) => ({ ...JSON.parse(r.payload),id:r.id }));
+      .map((r: any) => ({ ...JSON.parse(r.payload), id: r.id }));
   }
   saveRun(run: Run, key?: string) {
     this.db
@@ -285,7 +285,66 @@ export class Store {
       .all()
       .map((r: any) => JSON.parse(r.payload));
   }
-  activeRuns():Run[]{return this.db.prepare("SELECT payload FROM runs WHERE json_extract(payload,'$.status') IN ('queued','running') ORDER BY rowid").all().map((r:any)=>JSON.parse(r.payload));}
+  runSummaries(
+    query: {
+      operation?: string;
+      sourceRunId?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) {
+    const conditions: string[] = [],
+      bindings: string[] = [];
+    if (query.operation) {
+      conditions.push("json_extract(payload, '$.operation') = ?");
+      bindings.push(query.operation);
+    }
+    if (query.sourceRunId) {
+      conditions.push(
+        "(id = ? OR COALESCE(json_extract(payload, '$.result.sourceRunId'), json_extract(payload, '$.input.source.id')) = ?)",
+      );
+      bindings.push(query.sourceRunId, query.sourceRunId);
+    }
+    const where = conditions.length ? " WHERE " + conditions.join(" AND ") : "";
+    const limit = query.limit ?? 20,
+      offset = query.offset ?? 0;
+    const total = (
+      this.db
+        .prepare("SELECT COUNT(*) AS total FROM runs" + where)
+        .get(...bindings) as any
+    ).total;
+    const items = this.db
+      .prepare(
+        `SELECT id,
+      json_extract(payload, '$.operation') AS operation,
+      json_extract(payload, '$.status') AS status,
+      json_extract(payload, '$.createdAt') AS createdAt,
+      json_extract(payload, '$.inputHash') AS inputHash,
+      json_extract(payload, '$.result.kind') AS kind,
+      COALESCE(json_extract(payload, '$.result.name'), json_extract(payload, '$.input.name')) AS name,
+      COALESCE(json_extract(payload, '$.result.sourceRunId'), json_extract(payload, '$.input.source.id')) AS sourceRunId,
+      COALESCE(json_extract(payload, '$.result.planningRunId'), json_extract(payload, '$.input.plan.id')) AS planningRunId,
+      json_extract(payload, '$.result.scenarioEvaluated') AS scenarioEvaluated
+      FROM runs${where} ORDER BY rowid DESC LIMIT ? OFFSET ?`,
+      )
+      .all(...bindings, limit, offset)
+      .map((row: any) => ({
+        ...row,
+        scenarioEvaluated:
+          row.scenarioEvaluated === null
+            ? undefined
+            : Boolean(row.scenarioEvaluated),
+      }));
+    return { items, total, limit, offset };
+  }
+  activeRuns(): Run[] {
+    return this.db
+      .prepare(
+        "SELECT payload FROM runs WHERE json_extract(payload,'$.status') IN ('queued','running') ORDER BY rowid",
+      )
+      .all()
+      .map((r: any) => JSON.parse(r.payload));
+  }
   audit(action: string, asset: string, payload: any) {
     this.db
       .prepare(

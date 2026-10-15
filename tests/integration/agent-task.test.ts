@@ -159,6 +159,27 @@ test("native OpenCode sessions are named and scoped to task directories", async 
       app.taskServices.getAgentCredential(a.id),
     );
     expect(config.permission.external_directory).toBe("deny");
+    const skillDirectory = join(
+      a.workspacePath,
+      ".opencode/skills/sd-dfr-remap",
+    );
+    const skill = await readFile(join(skillDirectory, "SKILL.md"), "utf8");
+    expect(skill).toBe(await readFile("skills/sd-dfr-remap/SKILL.md", "utf8"));
+    const manifest = JSON.parse(
+      await readFile(join(skillDirectory, "manifest.json"), "utf8"),
+    );
+    expect(manifest.version).toBe("0.3.0");
+    expect(manifest.primaryScenario).toBe("training.retained-clean-progress");
+    for (const reference of manifest.references)
+      expect(await readFile(join(skillDirectory, reference), "utf8")).toBe(
+        await readFile(join("skills/sd-dfr-remap", reference), "utf8"),
+      );
+    expect(contexts[1].parts[0].text).toContain("audit_evaluate");
+    expect(contexts[1].parts[0].text).toContain("生成建议不自动执行改进轮");
+    expect(
+      JSON.parse(contexts[1].parts[0].text.split("\n").slice(1).join("\n"))
+        .assessments,
+    ).toEqual([]);
     expect((await app.inject(prefix + "/agent/providers")).body).not.toContain(
       "do-not-return",
     );
@@ -245,7 +266,8 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
         sessionId,
       );
       // The UI probes Web metadata before it prepares the task's Agent configuration.
-      expect((await app.inject(prefix + "/agent/web")).statusCode).toBe(200);
+      const nativeProbe = await app.inject(prefix + "/agent/web");
+      expect(nativeProbe.statusCode, nativeProbe.body).toBe(200);
       const created = await app.inject({
         method: "POST",
         url: prefix + "/agent/session",
@@ -268,7 +290,10 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
         return response.json();
       };
       const skills = await nativeGet("/skill");
-      expect(skills.some((s: any) => s.name === "sd-dfr-remap")).toBe(true);
+      const loadedSkill = skills.find((s: any) => s.name === "sd-dfr-remap");
+      expect(loadedSkill).toBeDefined();
+      expect(loadedSkill.content).toContain("audit_evaluate");
+      expect(loadedSkill.content).toContain("99.39455%");
       const messages = await nativeGet("/session/" + sessionId + "/message");
       expect(JSON.stringify(messages)).toContain("synthetic preserved history");
       const other = app.taskServices.create("Task B isolated · synthetic");
@@ -326,3 +351,40 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
   },
   90000,
 );
+
+test("prepares the task Skill and scoped MCP while the native Agent is unavailable", async () => {
+  vi.stubEnv("OPENCODE_BIN", "/missing/synthetic-opencode");
+  const app = await buildApp({ dataDir: ":memory:", seed: false });
+  try {
+    const task = app.taskServices.create("Offline preparation");
+    app.taskServices.resolve(task.id).store.putDocument("agent-binding", {
+      sessionId: "synthetic-unavailable-history",
+      purpose: "primary",
+      taskId: task.id,
+    });
+    const prepared = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${task.id}/agent/prepare`,
+      payload: {},
+    });
+    expect(prepared.statusCode, prepared.body).toBe(200);
+    const configuration = JSON.parse(
+      await readFile(join(task.workspacePath, "opencode.json"), "utf8"),
+    );
+    expect(configuration.mcp.reliability.enabled).toBe(true);
+    const manifest = JSON.parse(
+      await readFile(
+        join(task.workspacePath, ".opencode/skills/sd-dfr-remap/manifest.json"),
+        "utf8",
+      ),
+    );
+    expect(manifest.tools).toContain("audit_evaluate");
+    expect(
+      app.taskServices.resolve(task.id).store.documents("agent-binding")[0]
+        .sessionId,
+    ).toBe("synthetic-unavailable-history");
+  } finally {
+    await app.close();
+    vi.unstubAllEnvs();
+  }
+});

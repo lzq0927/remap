@@ -52,7 +52,14 @@ export function openCodeIntegration(
         apiUrl,
         forTask(directory),
       );
-      if (options.isolate !== false) {
+      const bindings = tasks.resolve(taskId).store.documents("agent-binding");
+      // Configuration and Skill preparation work without an installed/running Agent.
+      // Only existing native session history requires migration and a live service.
+      if (
+        options.isolate !== false &&
+        bindings.length &&
+        (await prepared.agent.health()).ready
+      ) {
         if (!migration.has(directory))
           migration.set(
             directory,

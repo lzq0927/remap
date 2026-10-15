@@ -1,4 +1,4 @@
-# Reliability MCP 0.2
+# Reliability MCP 0.3
 
 独立 MCP 网关，标准 stdio 协议，不依赖 React 或 OpenCode。
 计算和数据持久化仍由可靠性 API 服务负责；此包不是离线数值引擎。
@@ -19,3 +19,5 @@ Agent 可读取、准备草稿、运行实验、写阶段产物及提交公共�
 `INPUT_UNCONFIRMED`。内网管理员适配预览可包含 `adapter`（标识、固定版本、
 入口模块 SHA-256）和任务私有 `previewId`，资产草稿保留适配来源。工具不会
 自动应用补丁、创建资产、冻结版本或确认流程；不得从 Agent 请求注册模块。
+
+分轮工具：`audit_plan`只生成AGREE改进建议，`audit_evaluate`在用户请求后单独执行改进，`audit_compare`比较同一第一轮的已完成结果；`run_list`返回有界摘要，`run_status`读取完整快照。三个启动工具返回runId，不改变正式设计及人工确认。第一轮默认原六项/静默95%，99.5%属于独立改进。使用说明见[分轮评估与Agent协作指南](../../docs/分轮评估与Agent协作指南.md)。

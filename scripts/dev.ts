@@ -1,18 +1,12 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import { enterProject, findOpenCode } from "./runtime.mjs";
-import { cp, mkdir } from "node:fs/promises";
+import { installProjectSkill } from "./skill-install.mjs";
 enterProject();
 if (process.env.START_AGENT === "1" && !findOpenCode())
   throw new Error(
     "OpenCode 未安装：运行 pnpm agent 检查，或设置 OPENCODE_BIN。",
   );
-if (!existsSync(".opencode/skills/sd-dfr-remap")) {
-  await mkdir(".opencode/skills", { recursive: true });
-  await cp("skills/sd-dfr-remap", ".opencode/skills/sd-dfr-remap", {
-    recursive: true,
-  });
-}
+await installProjectSkill();
 const children = [
   spawn(process.execPath, ["--import", "tsx", "apps/api/src/main.ts"], {
     stdio: "inherit",
