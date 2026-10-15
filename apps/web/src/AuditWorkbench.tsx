@@ -370,7 +370,7 @@ export default function AuditWorkbench({
           <div className="round-flow">
             <div>
               <b>第一轮 · 评估现状</b>
-              <span>原六项与现状参数固定，先看真实建模结果</span>
+              <span>按当前故障数据、所选措施和能力参数评估</span>
             </div>
             <span aria-hidden="true">→</span>
             <div>
@@ -379,7 +379,7 @@ export default function AuditWorkbench({
             </div>
           </div>
           <p>
-            第一轮不预先分配指标，也不自动采用99.5%等改进目标。评估完成后，可在“分轮评估与横向比较”中调整或新增措施，逐次计算与导出报告。
+            现状评估按当前配置计算，改进要求在后续方案中独立设置。评估完成后，可在“分轮评估与横向比较”中调整或新增措施，逐次计算与导出报告。
           </p>
           <details
             className="audit-help"
@@ -561,7 +561,7 @@ export default function AuditWorkbench({
           </button>
           <p className="note">
             勾选措施用于组合评估；每个单项也会独立计算，避免把单项收益直接相加。
-            默认采用专家六项对照方案；中断检测与亚健康检测增强为额外候选，常规CKPT和人工兜底已包含于基线。
+            样例预选可调整，评估范围以本次勾选和固定部署措施为准；常规保存与人工兜底按基础模型计算。
           </p>
           <button
             type="button"
@@ -591,7 +591,7 @@ export default function AuditWorkbench({
               );
             }}
           >
-            载入专家六项及参数
+            载入样例默认措施与参数
           </button>
           <div className="mechanism-grid">
             {mechanisms.map((m) => (
@@ -652,7 +652,9 @@ export default function AuditWorkbench({
         </details>
         <details>
           <summary>第一轮现状机制参数</summary>
-          <p>默认使用原六项参数。99.5%等目标在第一轮完成后的改进方案中填写。</p>
+          <p>
+            请填写当前已具备的能力参数；改进要求可在现状评估完成后另建方案。
+          </p>
           <div className="fields">
             {[
               {
@@ -676,40 +678,49 @@ export default function AuditWorkbench({
                 key: "computeSeconds",
                 label: "现状检查点周期（秒）",
               },
-            ].map((field) => (
-              <label key={field.label}>
-                {field.label}
-                <input
-                  aria-label={field.label}
-                  type="number"
-                  min="0"
-                  max={field.percent ? 100 : 31536000}
-                  step="any"
-                  value={
-                    (parsedPolicy?.[field.code]?.[field.key] ??
-                      defaults.policy?.[field.code]?.[field.key] ??
-                      0) * (field.percent ? 100 : 1)
-                  }
-                  onChange={(e) =>
-                    setPolicy(
-                      JSON.stringify(
-                        {
-                          ...parsedPolicy,
-                          [field.code]: {
-                            ...parsedPolicy?.[field.code],
-                            [field.key]:
-                              Number(e.target.value) /
-                              (field.percent ? 100 : 1),
+            ]
+              .filter((field) =>
+                mechanisms.some(
+                  (m) =>
+                    m.code === field.code &&
+                    ((request.mechanisms ?? []).includes(m.id) ||
+                      (request.baseline?.mechanisms ?? []).includes(m.id)),
+                ),
+              )
+              .map((field) => (
+                <label key={field.label}>
+                  {field.label}
+                  <input
+                    aria-label={field.label}
+                    type="number"
+                    min="0"
+                    max={field.percent ? 100 : 31536000}
+                    step="any"
+                    value={
+                      (parsedPolicy?.[field.code]?.[field.key] ??
+                        defaults.policy?.[field.code]?.[field.key] ??
+                        0) * (field.percent ? 100 : 1)
+                    }
+                    onChange={(e) =>
+                      setPolicy(
+                        JSON.stringify(
+                          {
+                            ...parsedPolicy,
+                            [field.code]: {
+                              ...parsedPolicy?.[field.code],
+                              [field.key]:
+                                Number(e.target.value) /
+                                (field.percent ? 100 : 1),
+                            },
                           },
-                        },
-                        null,
-                        2,
-                      ),
-                    )
-                  }
-                />
-              </label>
-            ))}
+                          null,
+                          2,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+              ))}
           </div>
         </details>
       </div>

@@ -1,3 +1,4 @@
+import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
 import { auditSummary } from "./audit-summary";
 import { auditOptimizationSections } from "./audit-optimization";
 import { auditObjectComparison } from "./audit-object-diagram";
@@ -172,6 +173,7 @@ export function auditSections(r: any): AuditSection[] {
             ]
           : []),
         auditSamplingDescription(r),
+        `${auditMechanismSummary(r.request, r.selection).title}；${auditMechanismSummary(r.request, r.selection).roles}。`,
         `${num(selected, 0)} 卡：${brief.statusLabel}。基线 ${pct(brief.base.statistics.mean)} → 组合 ${pct(brief.combined.statistics.mean)}；新增正确计算 ${num(brief.additionalHours)} 小时。`,
         brief.next,
         `最大基线损失为${brief.losses[0].name}（${num(brief.losses[0].base)} 小时）；优先核对 ${brief.drivers
@@ -179,7 +181,7 @@ export function auditSections(r: any): AuditSection[] {
           .map((d: any) => d.id)
           .join("、")} 的数据来源与机制覆盖。`,
         `${r.events.length} 条事件中 ${brief.internal} 条标记为观测数据；其余为参考数据或方案假设。`,
-        "下表是本次实际评估组合；后文推荐的是候选子集，不会自动替换本次组合。常规CKPT与人工恢复已包含在基线；硬件降FIT须单独提供目标。专家六项是对照方案，不表示每个规模的最优部署。",
+        "下表是本次实际评估组合；后文推荐的是候选子集，不会自动替换本次组合。常规CKPT与人工恢复已包含在基线；硬件降FIT须单独提供目标。预置样例可调整，具体措施及参数以本次冻结配置为准，未证明每个规模的最优部署。",
       ],
       tables: [
         {

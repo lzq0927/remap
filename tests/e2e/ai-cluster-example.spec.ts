@@ -29,7 +29,7 @@ for (const width of [1440, 390]) {
     ).toContainText("18 类 · 54 个模式");
     await next(2);
     await expect(
-      page.getByText("第一轮不预先分配指标", { exact: false }),
+      page.getByText("现状评估按当前配置计算", { exact: false }),
     ).toBeVisible();
     await next(3);
     await page.getByText("第一轮现状机制参数", { exact: true }).click();
@@ -67,11 +67,26 @@ for (const width of [1440, 390]) {
       path: `artifacts/separate-rounds/first-${width}.png`,
     });
     await experiments
-      .getByRole("button", { name: "仅提高静默检出率至99.5%", exact: true })
+      .getByRole("button", { name: "新建参数方案", exact: true })
       .click();
-    await expect(
-      experiments.getByLabel("第二轮静默检出覆盖率（%）", { exact: true }),
-    ).toHaveValue("99.5");
+    await experiments
+      .getByLabel("改进方案名称", { exact: true })
+      .fill("覆盖率参数对照");
+    await experiments
+      .getByLabel("调整对象", { exact: true })
+      .selectOption("policy:D-SDC");
+    await experiments
+      .getByLabel("调整参数", { exact: true })
+      .selectOption("coverage");
+    await experiments
+      .getByRole("button", { name: "加入参数调整", exact: true })
+      .click();
+    const coverage = experiments.getByLabel(
+      "改进值 静默检测 · 检出覆盖率（%）",
+      { exact: true },
+    );
+    await expect(coverage).toHaveValue("95");
+    await coverage.fill("99.5");
     await experiments
       .getByRole("button", { name: "评估本次改进方案", exact: true })
       .click();
@@ -92,14 +107,12 @@ for (const width of [1440, 390]) {
       (await (await request.get(base + "/runs/" + first.id)).json()).result,
     ).toEqual(first.result);
     await expect(
-      experiments.getByText("刚完成：仅提高静默检出率至99.5%", { exact: true }),
+      experiments.getByText("刚完成：覆盖率参数对照", { exact: true }),
     ).toBeVisible();
     const customReport = await request.get(
       base + `/runs/${custom.id}/report?format=html`,
     );
-    expect(await customReport.text()).toContain(
-      "第二轮 / 仅提高静默检出率至99.5%",
-    );
+    expect(await customReport.text()).toContain("改进评估 / 覆盖率参数对照");
     await experiments
       .getByRole("button", { name: "生成AGREE改进分配", exact: true })
       .click();
@@ -115,7 +128,7 @@ for (const width of [1440, 390]) {
     expect(plan.result.prediction.target).toBe(0.985);
     expect((await completed()).length).toBe(1);
     await expect(
-      experiments.getByText("尚未运行第二轮。载入后仍可修改参数", {
+      experiments.getByText("尚未评估此建议方案。载入后仍可修改参数", {
         exact: false,
       }),
     ).toBeVisible();
@@ -146,14 +159,14 @@ for (const width of [1440, 390]) {
       experiments.getByText("刚完成：AGREE分配后的改进方案", { exact: true }),
     ).toBeVisible();
     await experiments
-      .getByRole("button", { name: "仅提高静默检出率至99.5%", exact: true })
+      .getByRole("button", { name: "新建参数方案", exact: true })
       .click();
     await expect(
-      experiments.getByLabel("第二轮静默检出覆盖率（%）", { exact: true }),
+      experiments.getByRole("region", { name: "参数调整编辑器" }),
     ).toBeVisible();
     await expect(
-      experiments.getByLabel("第二轮静默检出覆盖率（%）", { exact: true }),
-    ).toHaveValue("99.5");
+      experiments.getByRole("region", { name: "参数调整编辑器" }),
+    ).toContainText("尚未添加参数调整");
     await experiments
       .getByRole("button", { name: "横向比较", exact: true })
       .click();
@@ -177,7 +190,7 @@ for (const width of [1440, 390]) {
     ).text();
     for (const text of [
       "第一轮现状",
-      "仅提高静默检出率至99.5%",
+      "覆盖率参数对照",
       "AGREE分配后的改进方案",
       "参数横向比较",
       "独立结论",

@@ -7,6 +7,9 @@ import {
 } from "../../../packages/contracts/src/audit-extensions";
 import { NumericParameters, EventEditor } from "./AuditEditors";
 import AuditExperimentResult from "./AuditExperimentResult";
+import AuditParameterEditor from "./AuditParameterEditor";
+import { auditMechanismSummary } from "../../../packages/contracts/src/audit-mechanism-view";
+import { auditReferenceOnly } from "../../../packages/contracts/src/audit-presets";
 import { experimentStatus } from "../../../packages/reports/src/audit-experiments";
 const pct = (value: number) => (value * 100).toFixed(4) + "%";
 const blank = (): AuditOptimizationRequest => ({
@@ -35,10 +38,16 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
     sourceRun.result.request.cards,
   );
   const [scale, setScale] = useState(sourceRun.result.request.cards);
-  const [extensionId, setExtensionId] = useState("R-LINK-LOCAL");
+  const [extensionId, setExtensionId] = useState(
+    auditExtensionCatalog[0]?.id ?? "",
+  );
   const [importance, setImportance] = useState<Record<string, number>>({});
   const mounted = useRef(true);
   const source = sourceRun.result;
+  const mechanismSummary = auditMechanismSummary(
+    source.request,
+    source.selection,
+  );
   const refresh = async () => {
     const runs = await api("/runs");
     if (!mounted.current) return;
@@ -140,36 +149,11 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
     }
   };
   const busy = loading || !!pending;
-  const updatePolicy = (code: string, key: string, value: number) =>
-    setConfiguration((c) => ({
-      ...c,
-      policy: { ...c.policy, [code]: { ...c.policy?.[code], [key]: value } },
-    }));
-  const updateModel = (key: string, value: number) =>
-    setConfiguration((c) => ({ ...c, model: { ...c.model, [key]: value } }));
-  const fields = [
-    {
-      label: "第二轮静默检出覆盖率（%）",
-      code: "D-SDC",
-      key: "coverage",
-      percent: true,
-    },
-    { label: "第二轮静默发现时延（秒）", code: "D-SDC", key: "detectSeconds" },
-    { label: "第二轮检查点保存阻塞（秒）", code: "C-FAST", key: "saveSeconds" },
-    { label: "第二轮检查点周期（秒）", code: "C-FAST", key: "computeSeconds" },
-    {
-      label: "第二轮弹性完整恢复（秒）",
-      code: "R-ELASTIC",
-      key: "recoverSeconds",
-    },
-    {
-      label: "第二轮全局恢复耗时（秒）",
-      code: "model",
-      key: "recoveryAttemptSeconds",
-    },
-  ];
+  const canPlan = source.attribution?.some(
+    (row: any) => row.contributions?.length,
+  );
   const rows = [
-    { id: sourceRun.id, name: "第一轮现状 · 原六项", result: source },
+    { id: sourceRun.id, name: "第一轮现状", result: source },
     ...history,
   ];
   const rowFor = (run: any) =>
@@ -198,7 +182,8 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
         <div>
           <b>① 第一轮现状已完成</b>
           <span>
-            原六项 · 静默检出率 {pct(source.config.policy["D-SDC"].coverage)}
+            {mechanismSummary.title}
+            <small>{mechanismSummary.roles}</small>
           </span>
         </div>
         <span aria-hidden="true">→</span>
@@ -212,8 +197,20 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
           <span>独立结果 · 可反复修改和对比</span>
         </div>
       </div>
+      <details>
+        <summary>现状措施与能力范围</summary>
+        <p>
+          {mechanismSummary.names.length
+            ? mechanismSummary.names.join("、")
+            : "使用基础模型，未选择附加措施。"}
+        </p>
+        <p>
+          {mechanismSummary.roles}
+          ；基础模型包含的检测、保存和兜底路径按当前输入计算。
+        </p>
+      </details>
       <p>
-        第一轮结果和95%等现状参数已冻结。生成建议只给出待评估方案；你载入或自行修改参数，再点击评估，才会产生新的结果。
+        现状方案的措施选择、参数和结果已冻结。生成建议只给出待评估方案；你载入或自行修改参数，再点击评估，才会产生新的结果。
       </p>
       <div className="experiment-actions">
         <a href={url(`/runs/${sourceRun.id}/report?format=html`)}>
@@ -233,8 +230,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
               .filter(
                 (row: any) =>
                   row.id === "combined" &&
-                  (row.cards !== 1000 ||
-                    source.request.targets?.["1000"] !== undefined),
+                  !auditReferenceOnly(source.request, row.cards),
               )
               .map((row: any) => (
                 <option key={row.cards} value={row.cards}>
@@ -249,22 +245,19 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
               ))}
           </select>
         </label>
-        <button disabled={busy} onClick={() => void start("plan")}>
+        <button disabled={busy || !canPlan} onClick={() => void start("plan")}>
           生成AGREE改进分配
         </button>
         <button
           disabled={busy}
           onClick={() => {
-            setConfiguration({
-              ...blank(),
-              policy: { "D-SDC": { coverage: 0.995 } },
-            });
-            setName("仅提高静默检出率至99.5%");
+            setConfiguration(blank());
+            setName("自定义改进方案");
             setView("configuration");
             setAdoptedPlanId(undefined);
           }}
         >
-          仅提高静默检出率至99.5%
+          新建参数方案
         </button>
         <button
           disabled={busy}
@@ -278,6 +271,11 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
           恢复第一轮参数
         </button>
       </div>
+      {!canPlan && (
+        <p className="note">
+          现状尚无可分配的候选贡献，可先补充Shapley分析，或直接新建参数方案。
+        </p>
+      )}
       <nav className="experiment-view-tabs" aria-label="分轮操作">
         <button
           onClick={() =>
@@ -363,7 +361,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
             载入AGREE分配建议
           </button>
           <p className="note">
-            尚未运行第二轮。载入后仍可修改参数；规划试算值不作正式达标结论。
+            尚未评估此建议方案。载入后仍可修改参数；规划试算值不作正式达标结论。
           </p>
         </div>
       )}
@@ -378,88 +376,11 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
             onChange={(e) => setName(e.target.value)}
           />
         </label>
-        <div className="fields">
-          {fields.map((f) => {
-            const baseline =
-              f.code === "model"
-                ? source.config.model[f.key]
-                : source.config.policy[f.code][f.key];
-            const value =
-              f.code === "model"
-                ? (configuration.model?.[f.key] ?? baseline)
-                : (configuration.policy?.[f.code]?.[f.key] ?? baseline);
-            return (
-              <label key={f.label}>
-                {f.label}
-                <input
-                  aria-label={f.label}
-                  type="number"
-                  min={f.key === "computeSeconds" ? 1 : 0}
-                  max={f.percent ? 100 : 31536000}
-                  step="any"
-                  value={f.percent ? Number((value * 100).toFixed(6)) : value}
-                  onChange={(e) => {
-                    const next = Number(e.target.value) / (f.percent ? 100 : 1);
-                    if (f.code === "model") updateModel(f.key, next);
-                    else updatePolicy(f.code, f.key, next);
-                  }}
-                />
-                <small>
-                  第一轮：{f.percent ? pct(baseline) : baseline}；只修改本次方案
-                </small>
-              </label>
-            );
-          })}
-        </div>
-        <details>
-          <summary>其他机制参数与正常态成本</summary>
-          <NumericParameters
-            prefix="第二轮基础能力"
-            value={{ ...source.request.model, ...configuration.model }}
-            onChange={(value) =>
-              setConfiguration((c) => ({ ...c, model: value }))
-            }
-          />
-          {[
-            ...new Set<string>(
-              (source.request.mechanisms ?? [])
-                .map(
-                  (id: string) =>
-                    (
-                      ({
-                        sdcDetect: "D-SDC",
-                        step: "R-SDC",
-                        replay: "R-REPLAY",
-                        process: "R-PROCESS",
-                        elastic: "R-ELASTIC",
-                        fast: "C-FAST",
-                        hardDetect: "D-HARD",
-                        slowDetect: "D-SLOW",
-                      }) as Record<string, string>
-                    )[id],
-                )
-                .filter(Boolean),
-            ),
-          ].map((code) => (
-            <NumericParameters
-              key={code}
-              prefix={"第二轮 " + code}
-              value={{
-                ...source.config.policy[code],
-                ...configuration.policy?.[code],
-              }}
-              onChange={(value) =>
-                setConfiguration((c) => ({
-                  ...c,
-                  policy: { ...c.policy, [code]: value },
-                }))
-              }
-            />
-          ))}
-          <p className="note">
-            默认保留第一轮成本假设。提高覆盖率若增加校验开销，请在上方填写“新增检测与复核开销”后再次评估。
-          </p>
-        </details>
+        <AuditParameterEditor
+          source={source}
+          configuration={configuration}
+          onChange={setConfiguration}
+        />
         <details>
           <summary>高级：故障模式FIT方案（需明确来源）</summary>
           <p>
@@ -478,11 +399,13 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
           />
         </details>
         <details>
-          <summary>新增专家机制（16项，按范围与成本评估）</summary>
+          <summary>
+            新增机制（{auditExtensionCatalog.length}项可选，按范围与成本评估）
+          </summary>
           <label>
             新增机制
             <select
-              aria-label="新增专家机制"
+              aria-label="新增可靠性机制"
               value={extensionId}
               onChange={(e) => setExtensionId(e.target.value)}
             >
@@ -637,12 +560,12 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
                       {pct(row.statistics.ciHigh)}
                     </td>
                     <td>
-                      {scale === 1000 && !source.request.targets?.["1000"]
+                      {auditReferenceOnly(source.request, scale)
                         ? "参考点"
                         : pct(target)}
                     </td>
                     <td>
-                      {scale === 1000 && !source.request.targets?.["1000"]
+                      {auditReferenceOnly(source.request, scale)
                         ? "参考点"
                         : experimentStatus[state]}
                     </td>

@@ -32,7 +32,7 @@ for (const width of [1440, 390]) {
       "expert-reproduction",
     );
     await expect(
-      panel.getByText("载入专家六项及参数", { exact: true }),
+      panel.getByText("载入样例默认措施与参数", { exact: true }),
     ).toBeVisible();
     await panel.getByLabel("采样配置", { exact: true }).selectOption("quick");
     await cards.fill("500000");

@@ -137,7 +137,7 @@ export function registerAutomaticWorkflow(
               optimization: input.optimization,
               lossBudgetWeights: input.lossBudgetWeights,
             },
-            note: "先冻结现状并评估六项措施；未达标时根据各规模 Shapley 贡献进行第二轮 AGREE 分配，再验证具体改进方案。",
+            note: "先冻结并评估当前所选措施和能力参数；未达标时根据各规模 Shapley 贡献进行第二轮 AGREE 分配，再验证具体改进方案。",
           },
           {
             id: "prepare",

@@ -1,3 +1,7 @@
+import {
+  auditMechanismCodes,
+  auditMechanismSummary,
+} from "../../contracts/src/audit-mechanism-view";
 import { agreeLossAllocation } from "./audit-allocation";
 import { shapleyImportance } from "./audit-optimization";
 import {
@@ -34,8 +38,13 @@ export function auditExperimentPlan(
   const request = source.input,
     primary = options.planningCards ?? request.cards;
   const attribution = source.result.attribution;
-  if (!attribution?.length)
-    throw new Error("请先开启并完成第一轮Shapley，再生成AGREE改进分配");
+  if (
+    !attribution?.length ||
+    !attribution.some((row: any) => row.contributions?.length)
+  )
+    throw new Error(
+      "现状缺少可分配的候选措施贡献；请先选择候选措施并计算Shapley，或直接新建参数方案",
+    );
   const allocations = source.result.rows
     .filter(
       (r: any) => r.id === "combined" && !auditReferenceOnly(request, r.cards),
@@ -110,7 +119,17 @@ export function auditExperimentPlan(
     parents: string[],
     patch: any,
     reference: string,
-  ) =>
+  ) => {
+    const activeCodes = auditMechanismSummary(
+      request,
+      source.result.selection,
+    ).ids.map((id) => auditMechanismCodes[id]);
+    if (
+      patch.policy &&
+      !patch.model &&
+      !Object.keys(patch.policy).some((code) => activeCodes.includes(code))
+    )
+      return;
     groups.push({
       id,
       name,
@@ -119,6 +138,7 @@ export function auditExperimentPlan(
       source: reference,
       importance: inherited(parents),
     });
+  };
   add(
     "sdc",
     mechanismNames.sdcDetect,
@@ -131,14 +151,14 @@ export function auditExperimentPlan(
         },
       },
     },
-    "用户提出99.5%覆盖与0.5秒发现参考；是第二轮改进要求，不修改第一轮95%",
+    "当前模型的检测能力规划参考；可用本次参数约束覆盖，并按实际现状与总目标反解，不预先改写现状能力",
   );
   add(
     "fast",
     mechanismNames.fast,
     ["fast"],
     { policy: { "C-FAST": { saveSeconds: targetValue("saveSeconds", 0.5) } } },
-    "用户提出0.5秒保存参考；保存与回滚一起正向权衡",
+    "当前模型的保存能力规划参考；保存开销与回滚损失共同参与正向权衡，具体要求可配置",
   );
   add(
     "global",
@@ -435,7 +455,7 @@ export function auditExperimentPlan(
       [
         "sdc-stricter",
         { policy: { "D-SDC": { coverage: 0.99995 } } },
-        "99.5%参考仍不足时，进一步检出要求；以总目标正向求解，不用120小时暴露上界强迫所有路径独立达标",
+        "检测参考能力仍不足时，进一步探索检出要求；以总目标正向求解，不用120小时暴露上界强迫所有路径独立达标",
       ],
       [
         "save-stricter",
@@ -582,6 +602,7 @@ export function auditExperimentPlan(
   onProgress?.(1);
   return {
     kind: "expert-audit-plan",
+    selection: source.result.selection,
     name: "AGREE第二轮改进分配",
     modelVersion: "agree-total-target.v4",
     sourceRunId: source.id,
@@ -621,7 +642,7 @@ export function auditExperimentPlan(
     candidates: candidates.map(({ configuration: _configuration, ...c }) => c),
     scenarioEvaluated: false,
     assumptions: [
-      "第一轮六项与95%覆盖固定；改进参数仅存入第二轮方案。",
+      "现状的实际措施集合、能力参数与证据保持冻结；新增要求仅存入本次改进方案。",
       "AGREE责任子预算用于改进优先级，总可用度是正向求解约束；不要求每项独立达标。",
       "以主规模目标附近为停止点；其他规模分别报告，不合并最严共同要求。",
       `预留${(planningMargin * 100).toFixed(5)}个百分点规划余量（允许损失的2%，上限0.03pp）；不是置信水平或全局最优。`,

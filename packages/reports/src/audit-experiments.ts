@@ -1,3 +1,4 @@
+import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
 import { auditReferenceOnly } from "../../contracts/src/audit-presets";
 import type { Run } from "../../contracts/src/types";
 import type { AuditSection } from "./audit";
@@ -39,7 +40,7 @@ export function compareAuditExperiments(runs: Run[]) {
     id: run.id,
     name:
       run.result.kind === "expert-review-audit"
-        ? "第一轮现状 · 原六项"
+        ? "第一轮现状"
         : run.result.name,
     round: run.result.kind === "expert-review-audit" ? "current" : "scenario",
     inputHash: run.inputHash,
@@ -89,8 +90,9 @@ export function compareAuditExperiments(runs: Run[]) {
     sourceRunId: [...sourceIds][0],
     entries,
     assumptions: [
+      `现状配置：${auditMechanismSummary(request, (base ?? first).result.selection).title}；${auditMechanismSummary(request, (base ?? first).result.selection).roles}。`,
       "只比较同一冻结第一轮、目标、故障模式与计算口径；每次参数独立保存，不重新计算或替换旧结果。",
-      "第一轮排名是六项现有措施相对基线的总贡献；改进排名是相对第一轮的增量，基准不同，不直接相加排名。",
+      "第一轮排名是所选候选措施相对固定基线的组合贡献；改进排名是相对第一轮的增量，基准不同，不直接相加排名。",
       "第一轮真实现状指使用确认的现状参数评估，不等同于现场可用度实测。",
       "分配建议未执行第二轮；只有用户单独点击并完成的评估进入横向比较。",
     ],
@@ -157,10 +159,11 @@ export function experimentSections(result: any): AuditSection[] {
   if (result.kind === "expert-audit-plan") {
     return [
       {
-        title: "第二轮 / AGREE分配建议（尚未评估）",
+        title: "改进分配 / AGREE建议（尚未评估）",
         paragraphs: [
+          `现状配置：${auditMechanismSummary(result.request, result.selection).title}；${auditMechanismSummary(result.request, result.selection).roles}。`,
           `第一轮运行 ${result.sourceRunId}；规划规模${number(result.prediction.cards, 0)}卡，目标${percent(result.prediction.target)}，规划试算${percent(result.prediction.mean)}。${result.prediction.note}`,
-          "第一轮静默检出率95%等原始参数保持在其运行快照中。改进方案的99.5%或进一步覆盖属于第二轮要求。",
+          "现状措施、参数与故障证据保持在原运行快照中；本次分配生成独立的改进要求，具体数值以方案参数表为准。",
           ...result.assumptions,
         ],
         tables: [
@@ -241,7 +244,7 @@ export function experimentSections(result: any): AuditSection[] {
   if (result.kind === "expert-audit-experiment") {
     return [
       {
-        title: `第二轮 / ${result.name}（独立执行）`,
+        title: `改进评估 / ${result.name}（独立执行）`,
         paragraphs: [
           `基于第一轮 ${result.sourceRunId}，本次只执行已确认的方案参数。源输入哈希：${result.sourceInputHash}。`,
           ...(result.planningRunId
@@ -298,7 +301,7 @@ export function experimentSections(result: any): AuditSection[] {
       {
         title: "本次增量Shapley排名",
         paragraphs: [
-          "仅分摊本次改进相对冻结第一轮的增量；第一轮现有六项的总贡献请查看第一轮报告。每次评估的排名独立保存。",
+          "仅分摊本次改进相对冻结第一轮的增量；现状候选措施相对固定基线的贡献请查看第一轮报告。每次评估的排名独立保存。",
           `本次归因每子集${result.attribution[0]?.trials ?? 0}条轨迹、${result.attribution[0]?.permutations ?? 0}个排列；区间反映轨迹抽样，有限排列还有近似误差。`,
         ],
         tables: [
@@ -457,7 +460,7 @@ export function experimentSections(result: any): AuditSection[] {
       title: `独立结论 / ${entry.name}`,
       collapsed: true,
       paragraphs: [
-        `运行${entry.id}，输入哈希${entry.inputHash}，时间${entry.createdAt}。${entry.round === "current" ? "第一轮现状六项措施贡献。" : "本次改进相对第一轮的增量贡献。"}`,
+        `运行${entry.id}，输入哈希${entry.inputHash}，时间${entry.createdAt}。${entry.round === "current" ? "现状所选候选措施相对固定基线的贡献。" : "本次改进相对第一轮的增量贡献。"}`,
       ],
       tables: [
         {

@@ -20,7 +20,7 @@ export function auditMethodVisual(r: any) {
 export function auditVisuals(r: any) {
   const scales = [...new Set<number>(r.rows.map((x: any) => x.cards))];
   const overview = auditScaleSummary(r);
-  const context = `<p class="evidence-note">${esc(auditSamplingDescription(r))}</p><details class="actual-combination" open><summary>本次实际启用组合 · ${auditSelectedMechanisms(r).length}项</summary><p class="chart-note">这是冻结输入中的实际组合；推荐子集不会自动替换它。常规CKPT与人工兜底已在基线中，六项对照方案不等于最优部署。</p><div class="table-wrap"><table><thead><tr><th>措施</th><th>名称</th><th>本次参数</th></tr></thead><tbody>${auditSelectedMechanisms(
+  const context = `<p class="evidence-note">${esc(auditSamplingDescription(r))}</p><details class="actual-combination" open><summary>本次实际启用组合 · ${auditSelectedMechanisms(r).length}项</summary><p class="chart-note">这是冻结输入中的实际组合；推荐子集不会自动替换它。常规CKPT与人工兜底已在基线中，预置样例不限定措施数量，也不代表最优部署。</p><div class="table-wrap"><table><thead><tr><th>措施</th><th>名称</th><th>本次参数</th></tr></thead><tbody>${auditSelectedMechanisms(
     r,
   )
     .map(

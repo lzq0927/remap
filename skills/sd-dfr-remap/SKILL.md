@@ -11,7 +11,7 @@ description: Help users set reliability goals, assess current mechanisms, alloca
 
 加载后读取 `task_current`、`design_get`、`workflow_state`，必要时通过 `run_list` 找到已有运行，再用 `run_status` 读取选中快照。只使用当前目录绑定的可靠性 MCP，不凭聊天重建参数，不切换其他任务，不创建全局写连接。当前输入来自 `design_get.assessment.input`，operation 和 metricId 来自 assessment；valid=false 时先修正草稿。`design_get.request` 只供明确选择的历史 V4 求解使用。保存正式草稿用design_update，保留design_get返回的request及未知字段，提供expectedRevision并修改auditDraft；不要用旧request替代专家评估输入。新任务尚无设计时用expectedRevision=0、request={}及来自model_defaults.audit的auditDraft初始化；不要为兼容字段编造V4参数。
 
-用户明确说“评估现状”“生成第二轮分配”“仅将检出率改到99.5%再评估”“导出这些方案的比较”等时，直接执行已授权步骤，复用已有资料，不重复询问执行方式。收到局部问题先解释/读取，不启动整条流程。只有执行方式确实不明确、影响下一步时，用原生 `question` 工具简短询问，可选“评估现状至报告待审核”“逐步辅助设计”；选项中说明自动范围只到第一轮。用户可自由输入。没有问题工具时用简短文字提问。不能把加载 skill、同步设计或生成分配建议当作同意运行改进轮。
+用户明确说“评估现状”“生成第二轮分配”“调整某项参数再评估”“导出这些方案的比较”等时，直接执行已授权步骤，复用已有资料，不重复询问执行方式。收到局部问题先解释/读取，不启动整条流程。只有执行方式确实不明确、影响下一步时，用原生 `question` 工具简短询问，可选“评估现状至报告待审核”“逐步辅助设计”；选项中说明自动范围只到第一轮。用户可自由输入。没有问题工具时用简短文字提问。不能把加载 skill、同步设计或生成分配建议当作同意运行改进轮。
 
 明确授权全自动第一轮、scenario=training、assessment.operation=audit、assessment.valid=true 时，使用 `workflow_automatic({body:{inputRevision:<design.revision>}})`。服务保存六阶段产物并运行已保存输入；轮询 `workflow_state` / `run_status`，完成后导出第一轮报告、解释结果与下一步。不要重复调用 analysis_solve。已有执行则继续；冲突、失败或过期时读取诊断，不盲目覆盖。不会暗中降低采样量，也不自动接着分配或评估第二轮。历史输入包含旧 optimization.enabled=true 时，明确这是旧自动双轮设置；需要新分轮行为时先说明并保存用户要求的新草稿，重放仍保留原输入。
 
@@ -23,28 +23,19 @@ description: Help users set reliability goals, assess current mechanisms, alloca
 
 新任务默认专家评估口径 `operation:'audit'`、`metricId:'training.retained-clean-progress'`：可用度=期末保留的正确进度/理想产出，仍污染时保留最后干净检查点。所有界面与解释统一称“可用度”，计算语义保持。稳态运行可用度、无故障任务可靠度与此指标分别记录。历史模型 V4 在“高级设置 → 历史模型”，沿用原终态污染整任务清零口径，历史查看/导出/重放不改变当前设计。
 
-参数一律读取 `model_defaults.audit` 和已保存输入；下表用于理解新默认，不覆盖已有编辑：
+参数与机制选项从场景默认模型、已保存输入和当前运行读取。默认配置只是可载入的起点，不限定措施数量、类别、规模或具体能力值。描述现状时区分基础模型、固定部署措施和待评估候选；按真实集合去重，报告实际数量、检测/恢复/检查点等能力类别及名称。未选附加措施时说明使用基础模型，不自动补选某项。固定部署措施不重复领取候选收益。
 
-| 需求规模（优先50万卡） | 可用度目标（约） | 中断MTBF |
-| --- | ---: | ---: |
-| 500000 | 98.5% | 0.6h |
-| 200000 | 99.39455% | 1.5h |
-| 100000 | 99.69636% | 3h |
-| 10000 | 99.96955% | 30h |
+参数试验用“新建参数方案”，按调整对象、参数、单位、现状值和用户要求配置，可单参数或组合修改；不得预填固定改进数值或自动带上未启用机制的参数。新建任务默认关闭旧自动双轮optimization，现状结果及输入冻结后，改进值只进入独立方案。候选措施改变时，相应参数可调整范围和说明随之变化。
 
-目标使用50万卡98.5%锚点与各规模MTBF通过 A=MTBF/(MTBF+参考恢复时间)推导；参考时间只用于推导目标，实际仿真使用故障模式FIT、检测、检查点和恢复参数。不能把约33秒硬写成所有故障的MTTR。1000卡仅为参考曲线点，未单设目标时不参与需求达标判断。
-
-新默认原六项机制ID为 `sdcDetect,step,replay,process,elastic,fast`；第一轮静默检出率 `policy['D-SDC'].coverage=0.95`。99.5%是改进措施，不能提前写入第一轮。新默认 `optimization.enabled=false`；第一轮结果 optimization 为 null。用户有明确的真实现状时遵从确认值，并标明与样例的区别。
-
-故障库按对象与 hard/slow/sdc 分类，保留FIT、类内占比、总占比、单位和证据。新基线中断/亚健康/静默参考96.6%/2%/1.4%，CORE-hard类内6%、SRAM-hard类内10%，相应slow折算、sdc保持；取实际版本而非手工重造。总占比在所有模式中合计1，类内占比在对应故障类型内合计1。业务影响FIT基于十亿NPU等效运行小时，器件物理FIT须换算。
+AI训练集群默认数据与目标见[references/ai-cluster-example.md](references/ai-cluster-example.md)，仅在当前场景匹配时使用。不能把该样例的措施数量、检出率或主规模当作通用平台规则。任何场景都以当前参数和证据为准；缺数据时说明需要补充的项。
 
 ## 分轮评估：现状 → 分配建议 → 用户决定的改进 → 比较
 
 详细工具调用、结果读取与恢复见 [references/assessment-rounds.md](references/assessment-rounds.md)。默认每轮单独给结论，先让用户看到第一轮真实输入下的结果，再做后续。这里的“真实现状评估”表示按确认的现状参数计算，不等于现场实测。
 
-1. **第一轮**：读取正式运行，展示各需求规模均值、95%区间、损失账本和原六项Shapley；导出本轮报告。若未达标，解释差距；不要提前宣布第二轮结论。
+1. **第一轮**：读取正式运行，展示各需求规模均值、95%区间、损失账本和所选候选措施Shapley；导出本轮报告。若未达标，解释差距；不要提前宣布第二轮结论。
 2. **分配建议**：用户请求后调用 `audit_plan`，body={sourceRunId,options?}。服务从已完成第一轮冻结证据，正Shapley形成初始重要度，AGREE分配工程责任与允许损失，按责任差额反推现有/新增机制参数。默认规划主规模；可用options.planningCards对其他需求规模独立规划。`prediction`仅为规划试算，`scenarioEvaluated=false`。展示来源、假设、开销、目标参数和取舍，等待用户决定评估；不要调用 audit_evaluate 自动接续。
-3. **独立改进轮**：用户明确要求评估或点击后，调用 `audit_evaluate`，body={sourceRunId,name,configuration,planRunId?}。载入建议时使用计划返回的完整configuration并传planRunId；后续编辑保留关联，解释差异。仅SDC改进用 configuration={policy:{'D-SDC':{coverage:0.995}}}。每次configuration是相对冻结第一轮的完整改动集合，不叠加上次试验。可反复手改、评估、导出，不回写第一轮，不重走其确认流程。
+3. **独立改进轮**：用户明确要求评估或点击后，调用 `audit_evaluate`，body={sourceRunId,name,configuration,planRunId?}。载入建议时使用计划返回的完整configuration并传planRunId；后续编辑保留关联，解释差异。单参数对照仅提供该参数的改动；参数名称、单位和当前值从运行快照读取。每次configuration是相对冻结第一轮的完整改动集合，不叠加上次试验。可反复手改、评估、导出，不回写第一轮，不重走其确认流程。
 4. **横向比较**：用户选定同一第一轮下的2–12次已完成评估，用 `audit_compare({body:{runIds:[firstId,scenarioId,...]}})`。分配计划不能作为评估参与比较。`report_export`导出各轮和比较报告；分别展示各规模曲线、参数差异、结论、排名、区间和未满足项。
 
 **分配的解释**：AGREE设计责任是工程分配模型，不是各机制独立的物理损失，也不要求每条损失路径硬达预算。参数反推通过组合正向仿真检查总可用度目标，先验证专家机制参考，再按分配需求调整；不把多规模最严参数合并成所有规模通用要求，不为了98.5%自动追求100%。平均值仅略高于目标但区间跨过时标为待复核。有限搜索未达标不证明不可行；接近目标的方案也不等于唯一/全局最优。
@@ -75,7 +66,7 @@ RBD/FTA/CTMC辅助结果保留任务可靠度或运行可用度语义，不能�
 
 ## 证据、采样与交付
 
-新默认主采样4000/Shapley2000/敏感性2000，quick为128/64/128仅用于探索；读实际输入与输出，不能靠samplingProfile名称宣称复现。原专家数据与当前校准基线有差异，用referenceComparison.differences解释。第一轮主种子20261009、attributionSeed77334411、sensitivitySeed988133；默认敏感性expert-reproduction为50万卡13点对照，expert-reference扩展16点，selected-combination保持已选组合。改进轮有独立主采样与增量Shapley种子，报告实际采样数，不能照搬第一轮2000条。固定种子可重放不等于真实产品验证。
+采样量、种子、敏感性情景和方法跟随当前模型与已保存配置，读取实际输入/输出，不能靠samplingProfile名称宣称复现。默认样例的具体采样设置见场景参考。与原参考存在差异时用referenceComparison.differences解释；改进运行报告其独立主采样和增量Shapley采样数，不照搬现状数值。固定种子可重放不等于产品实测。
 
 eventOverrides只改明确事件并保留source/evidence/rateBasis。缺少的数据保留原证据与不确定性，不从某类比例自动重造其他类。不在面向用户的报告中用网络环境区分数据，使用具体来源、版本、证据等级。candidateFitOverrides为旧第一轮硬件候选接口；独立改进用有来源的configuration.fitTargets，不混淆基线校准与改造目标。
 

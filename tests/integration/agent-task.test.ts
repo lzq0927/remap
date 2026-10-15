@@ -168,7 +168,7 @@ test("native OpenCode sessions are named and scoped to task directories", async 
     const manifest = JSON.parse(
       await readFile(join(skillDirectory, "manifest.json"), "utf8"),
     );
-    expect(manifest.version).toBe("0.3.0");
+    expect(manifest.version).toBe("0.3.1");
     expect(manifest.primaryScenario).toBe("training.retained-clean-progress");
     for (const reference of manifest.references)
       expect(await readFile(join(skillDirectory, reference), "utf8")).toBe(
@@ -293,7 +293,7 @@ test.skipIf(!process.env.TEST_OPENCODE_URL)(
       const loadedSkill = skills.find((s: any) => s.name === "sd-dfr-remap");
       expect(loadedSkill).toBeDefined();
       expect(loadedSkill.content).toContain("audit_evaluate");
-      expect(loadedSkill.content).toContain("99.39455%");
+      expect(loadedSkill.content).toContain("默认配置只是可载入的起点");
       const messages = await nativeGet("/session/" + sessionId + "/message");
       expect(JSON.stringify(messages)).toContain("synthetic preserved history");
       const other = app.taskServices.create("Task B isolated · synthetic");

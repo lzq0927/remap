@@ -23,8 +23,8 @@ const request = () => ({
   scales: [500000, 200000, 100000, 10000],
   samplingProfile: "quick" as const,
 });
-function source() {
-  const input = request(),
+function source(patch: Partial<ReturnType<typeof request>> = {}) {
+  const input = { ...request(), ...patch },
     result = audit(input);
   return {
     id: "first-frozen",
@@ -34,7 +34,7 @@ function source() {
     result,
   };
 }
-it("defaults to a single first round with the original six mechanisms and 95% SDC coverage", () => {
+it("uses the AI sample preset for a new study without automatically applying improvement parameters", () => {
   const s = source();
   expect(s.input.optimization.enabled).toBe(false);
   expect(s.input.mechanisms).toEqual([
@@ -210,12 +210,95 @@ it("plans another scale independently from the same frozen first round", () => {
   });
   expect(plan.prediction.cards).toBe(200000);
   expect(plan.prediction.target).toBe(s.input.targets["200000"]);
-  expect(plan.allocations.find((row: any) => row.cards === 200000)?.target).toBe(
-    s.input.targets["200000"],
-  );
-  expect(plan.allocations.find((row: any) => row.cards === 500000)?.target).toBe(
-    s.input.target,
-  );
+  expect(
+    plan.allocations.find((row: any) => row.cards === 200000)?.target,
+  ).toBe(s.input.targets["200000"]);
+  expect(
+    plan.allocations.find((row: any) => row.cards === 500000)?.target,
+  ).toBe(s.input.target);
   expect(plan.prediction.planningMargin).toBeLessThan(0.0003);
+  expect(JSON.stringify(s)).toBe(before);
+});
+
+it("reports the actual nondefault mechanism set and plans only active policy capabilities", () => {
+  const s = source({
+    mechanisms: ["process", "fast"],
+    cards: 20000,
+    scales: [20000],
+    target: 0.97,
+    targets: { "20000": 0.97 },
+  });
+  const plan = auditExperimentPlan({
+    source: s,
+    options: { enabled: true, screeningTrials: 8, exploreExtensions: false },
+  });
+  const html = report(
+    {
+      ...s,
+      status: "succeeded",
+      operation: "audit-plan",
+      result: plan,
+      progress: 1,
+      events: [],
+    } as any,
+    "html",
+  );
+  expect(html).toContain("已选2项措施");
+  expect(html).toContain("恢复、检查点");
+  expect(html).not.toMatch(/原六项|第一轮六项|第一轮静默检出率95%/);
+  expect(
+    Object.keys(plan.configuration.policy ?? {}).every((code) =>
+      ["R-PROCESS", "C-FAST"].includes(code),
+    ),
+  ).toBe(true);
+  const scenario = auditExperiment({
+    source: s,
+    name: "恢复时间对照",
+    configuration: {
+      enabled: true,
+      policy: { "R-PROCESS": { successSeconds: 12.5 } },
+      attributionTrials: 4,
+      permutations: 2,
+    },
+  });
+  expect(scenario.factors).toHaveLength(1);
+  expect(scenario.factors[0].value).toEqual({ successSeconds: 12.5 });
+  const compared = compareAuditExperiments([
+    { ...s, status: "succeeded", operation: "audit" },
+    {
+      id: "custom",
+      result: scenario,
+      status: "succeeded",
+      operation: "audit-experiment",
+    },
+  ] as any);
+  expect(compared.assumptions.join(" ")).toContain("已选2项措施");
+  expect(compared.entries[0].name).toBe("第一轮现状");
+});
+it("allows base-model parameter experiments without imposing the sample mechanism set", () => {
+  const s = source({
+    mechanisms: [],
+    cards: 20000,
+    scales: [20000],
+    target: 0.94,
+    targets: { "20000": 0.94 },
+  });
+  expect(() => auditExperimentPlan({ source: s })).toThrow(
+    "缺少可分配的候选措施贡献",
+  );
+  const before = JSON.stringify(s);
+  const scenario = auditExperiment({
+    source: s,
+    name: "基础恢复能力对照",
+    configuration: {
+      enabled: true,
+      model: { recoveryAttemptSeconds: 45.75 },
+      attributionTrials: 4,
+      permutations: 2,
+    },
+  });
+  expect(scenario.factors).toHaveLength(1);
+  expect(scenario.factors[0].kind).toBe("model");
+  expect(scenario.request.mechanisms).toEqual([]);
   expect(JSON.stringify(s)).toBe(before);
 });

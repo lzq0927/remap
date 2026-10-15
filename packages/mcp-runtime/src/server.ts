@@ -133,19 +133,19 @@ export const registry = [
   ["model_defaults", "读取场景指标和参考模型参数", "GET", "/defaults"],
   [
     "analysis_solve",
-    "执行专业求解。operation=audit 使用 design_get.assessment.input 做第一轮现状评估，新默认原六项/静默检出95%、optimization.enabled=false；历史输入遵从保存口径。独立改进使用 audit_plan / audit_evaluate。正式六阶段需 executionId,inputRevision；返回runId，用run_status读取结果",
+    "执行专业求解。operation=audit 使用 design_get.assessment.input 评估当前配置的故障数据、措施集合及参数；新建任务optimization.enabled=false；历史输入遵从保存口径。独立改进使用 audit_plan / audit_evaluate。正式六阶段需 executionId,inputRevision；返回runId，用run_status读取结果",
     "POST",
     "/runs",
   ],
   [
     "audit_plan",
-    "依据已完成第一轮Shapley生成AGREE工程责任分配与参数建议。body={sourceRunId,options?}，options支持planningCards、importance（规模→机制→重要度）、parameterTargets、exploreExtensions、screeningTrials。默认以50万卡98.5%为目标，实际遵从冻结输入。只做规划，不执行第二轮、不修改设计；返回runId后用run_status读取configuration、prediction和来源",
+    "依据已完成第一轮Shapley生成AGREE工程责任分配与参数建议。body={sourceRunId,options?}，options支持planningCards、importance（规模→机制→重要度）、parameterTargets、exploreExtensions、screeningTrials。规划规模和目标遵从冻结输入及本次options，不固定卡数或目标值。只做规划，不执行第二轮、不修改设计；返回runId后用run_status读取configuration、prediction和来源",
     "POST",
     "/audit/plan",
   ],
   [
     "audit_evaluate",
-    "在用户要求评估时独立执行改进轮。body={sourceRunId,name,configuration,planRunId?}。configuration为相对第一轮的完整改动集合（不是上次改进的补丁）；支持policy/model/extensions/checkpointPeriods/有来源fitTargets。仅改静默99.5%用policy:{'D-SDC':{coverage:0.995}}。采用分配建议时传计划configuration及planRunId；先展示要求，再按用户意图执行。结果、输入和增量Shapley独立保存，不改变第一轮或六阶段确认",
+    "在用户要求评估时独立执行改进轮。body={sourceRunId,name,configuration,planRunId?}。configuration为相对第一轮的完整改动集合（不是上次改进的补丁）；支持policy/model/extensions/checkpointPeriods/有来源fitTargets。参数名、单位和当前值先从run_status读取，按用户明确的目标设置。采用分配建议时传计划configuration及planRunId；先展示要求，再按用户意图执行。结果、输入和增量Shapley独立保存，不改变第一轮或六阶段确认",
     "POST",
     "/audit/evaluate",
   ],

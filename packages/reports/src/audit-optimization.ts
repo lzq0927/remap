@@ -260,7 +260,7 @@ export function auditOptimizationSections(r: any): AuditSection[] {
       title: "两轮 / 专家机制采用依据",
       collapsed: true,
       paragraphs: [
-        "全部16项机制按预算缺口与适用范围核对；单点参考、执行假设和新增成本分别保留。筛选用同批种子作组合比较，后续仍需独立复评。未采用不等于机制无价值；参数反解后还会检查是否冗余。",
+        `机制库中的${auditExtensionCatalog.length}项方案按预算缺口与适用范围核对；单点参考、执行假设和新增成本分别保留。筛选用同批种子作组合比较，后续仍需独立复评。未采用不等于机制无价值；参数反解后还会检查是否冗余。`,
       ],
       tables: [
         {

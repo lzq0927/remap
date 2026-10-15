@@ -14,7 +14,7 @@ export default function AuditExperimentResult({ result }: { result: any }) {
       className="audit-experiment-result"
       aria-label={
         result.kind === "expert-audit-plan"
-          ? "第二轮分配建议"
+          ? "改进分配建议"
           : result.kind === "expert-audit-comparison"
             ? "多次评估对比结果"
             : "本次独立方案结果"

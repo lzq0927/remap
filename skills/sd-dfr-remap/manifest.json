@@ -1,10 +1,11 @@
 {
   "name": "sd-dfr-remap",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "entry": "SKILL.md",
   "references": [
     "references/workflow.md",
-    "references/assessment-rounds.md"
+    "references/assessment-rounds.md",
+    "references/ai-cluster-example.md"
   ],
   "protocol": "MCP",
   "requires": {

@@ -683,11 +683,7 @@ function auditOneRound(
     },
     {
       id: "combined",
-      name:
-        mechanisms.length === auditReferenceMechanisms.length &&
-        auditReferenceMechanisms.every((id) => mechanisms.includes(id))
-          ? "六机制组合"
-          : "所选机制组合",
+      name: "当前措施组合",
       opts: Object.fromEntries(mechanisms.map((id) => [id, true])),
     },
   ];
@@ -994,6 +990,7 @@ function auditOneRound(
     metricId: AUDIT_METRIC,
     modelVersion: AUDIT_VERSION,
     request: structuredClone(request),
+    selection: { candidates: [...mechanisms], deployed: [...baseline.mechanisms] },
     referenceComparison: auditReferenceComparison(request, resolved),
     rows,
     baseline: {

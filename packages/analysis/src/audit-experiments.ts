@@ -420,12 +420,14 @@ export function auditExperiment(
         residual: ranked.reduce((s, c) => s + c.statistics.mean, 0) - totalGain,
         permutations,
         trials: attributionTrials,
-        basis: "相对冻结第一轮的改进增量；与第一轮六项机制总贡献的基准不同",
+        basis:
+          "相对冻结第一轮的改进增量；与现状候选措施相对固定基线的贡献基准不同",
       };
     });
   onProgress?.(1);
   return {
     kind: "expert-audit-experiment",
+    selection: source.result.selection,
     round: "scenario",
     name,
     metricId: "training.retained-clean-progress",

@@ -36,6 +36,7 @@ export function registerAuditExperimentRoutes(
         metricId: run.result.metricId,
         modelVersion: run.result.modelVersion,
         config: run.result.config,
+        selection: run.result.selection,
         events: run.result.events,
         baseline: run.result.baseline,
         rows: run.result.rows
@@ -63,7 +64,7 @@ export function registerAuditExperimentRoutes(
     const source = sourceFor(req);
     const input = {
       source,
-      name: req.body?.name ?? "第二轮改进方案",
+      name: req.body?.name ?? "自定义改进方案",
       configuration: {
         ...req.body?.configuration,
         enabled: true,

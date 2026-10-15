@@ -5,7 +5,7 @@
 | clarify（可用度目标） | 用户任务 | model_defaults,design_get | 产品、指标口径、规模目标、窗口与验收条件 |
 | describe（故障模式） | 目标已核对 | input_import,input_mapping,catalog_search | 对象/类型/FIT、证据、架构、依赖与故障域 |
 | select（可用度分配） | 故障证据确认 | model_defaults；需要时analysis_solve(allocate) | 第一轮固定现状时确认无需改造分配；新设计可用子模型约束及互斥损失预算 |
-| prepare（可靠性措施） | 评估范围已核对 | catalog_search,catalog_validate | 第一轮原六项及95%默认；真实现状变更须明确来源；恢复顺序与成本 |
+| prepare（可靠性措施） | 评估范围已核对 | catalog_search,catalog_validate | 当前措施集合、能力参数与适用范围；样例仅提供默认值，变更须明确来源；恢复顺序与成本 |
 | evaluate（计算与权衡） | 前四阶段满足确认条件 | analysis_solve,run_status；后续audit_plan/audit_evaluate/audit_compare | 第一轮独立结论、参数核对、损失/贡献；按用户节奏做后续分配与复评 |
 | validate-deliver（验证与交付） | 计算完成 | run_replay,report_export,feedback_record | 各轮独立报告、参数/曲线比较、证据/区间/未达标项、采纳理由 |
 

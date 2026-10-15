@@ -53,7 +53,7 @@ export default function AuditOptimizationEditor({
         <div className="round-flow">
           <div>
             <b>第一轮 · 评估现状</b>
-            <span>固定 FIT 与现有六项措施 → 各规模 Shapley</span>
+            <span>当前故障数据与所选措施 → 各规模 Shapley</span>
           </div>
           <span aria-hidden="true">→</span>
           <div>
@@ -62,8 +62,7 @@ export default function AuditOptimizationEditor({
           </div>
         </div>
         <p>
-          第一轮不要求重新分配既定失效率或措施指标。第二轮以 50
-          万卡为主，同时检查其他需求规模；已有任务可保留单轮方式。
+          第一轮不要求重新分配既定失效率或措施指标。改进分配沿用当前主规模目标，同时检查其他需求规模；已有任务可保留单轮方式。
         </p>
         <label className="inline-check">
           <input
@@ -100,7 +99,7 @@ export default function AuditOptimizationEditor({
                 <span>
                   按分配缺口逐项筛选专家机制库
                   <small>
-                    核对全部16项方案的范围、前提、成本与重叠；报告说明每项为何采用或未采用。
+                    核对机制库中各方案的范围、前提、成本与重叠；报告说明每项为何采用或未采用。
                   </small>
                 </span>
               </label>
@@ -238,7 +237,7 @@ export default function AuditOptimizationEditor({
         <span className="badge">已选 {selected.length} 项</span>
       </div>
       <p>
-        原有六项主要减少检测、恢复和进度损失，不降低源
+        检测、恢复与检查点措施主要减少发现、恢复和进度损失，不降低源
         FIT。新增筛查类机制降低适用残余 FIT、提高
         MTBF；其余方案按发生时机与影响分类。
       </p>
@@ -250,7 +249,7 @@ export default function AuditOptimizationEditor({
       <details className="mechanism-targets" open>
         <summary>第二轮参数参考初值（AGREE 将推导实际要求）</summary>
         <p>
-          专家机制库和现状参数为参考；99.5%覆盖、0.5秒发现与保存是补充起点。AGREE先分配预算，再反解具体要求，可以严于参考值。最终共同参数采用各规模最严格要求，并独立复评。高级显式参数可锁定，锁定后不足仍显示缺口。
+          此配置用于历史自动优化模型；参数参考来自机制库及当前模型，具体要求可编辑。AGREE先分配预算，再反解具体要求，可以严于参考值。最终共同参数采用各规模最严格要求，并独立复评。高级显式参数可锁定，锁定后不足仍显示缺口。
         </p>
         <div className="fields">
           {mechanismTargetCatalog
@@ -281,8 +280,8 @@ export default function AuditOptimizationEditor({
           </div>
         </details>
         <p className="note">
-          99.5% 是全系统工程要求，专家 ABFT
-          只在指定算子子集成立；不会自动重复叠加一次 ABFT。0.5秒发现时延与漏检
+          全系统覆盖要求与局部检测能力分别设置，ABFT
+          只在指定算子子集成立；不会自动重复叠加一次 ABFT。即时发现时延与漏检
           SDC
           的兜底发现时间分别建模。检查点周期按不同规模比较，保存、回滚与正常态校验开销同时计入。
         </p>

@@ -1056,7 +1056,7 @@ export function auditOptimization(
       cards,
       method: "permutation-shapley",
       interpretation:
-        "相对第一轮现状的第二轮改进增量；不是现有六项措施的总贡献",
+        "相对第一轮现状的第二轮改进增量；与现状所选措施的组合贡献基准不同",
       permutations,
       trials: attributionTrials,
       coalitionCount: cache.size,
