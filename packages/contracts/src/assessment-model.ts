@@ -15,11 +15,16 @@ export const assessmentModels = {
 /** Interpret the frozen run, never the user's currently selected design model. */
 export function runAssessmentModel(run: { operation: string; result?: any }) {
   if (
-    ["audit", "audit-plan", "audit-experiment", "audit-compare"].includes(
-      run.operation,
-    ) ||
+    [
+      "audit",
+      "audit-plan",
+      "audit-plan-scales",
+      "audit-experiment",
+      "audit-compare",
+    ].includes(run.operation) ||
     [
       "expert-review-audit",
+      "expert-audit-plan-set",
       "expert-audit-plan",
       "expert-audit-experiment",
       "expert-audit-comparison",

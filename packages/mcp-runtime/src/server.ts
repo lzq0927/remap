@@ -144,8 +144,14 @@ export const registry = [
     "/audit/plan",
   ],
   [
+    "audit_plan_scales",
+    "从同一冻结第一轮按各需求规模分别做AGREE分配，生成独立措施与参数建议及汇总。body={sourceRunId,scales?,options?}；scales省略时包含全部需求规模并升序展示，参考点不参与。不合并最严参数、不自动执行复评。用run_status读取plans，采用某项时audit_evaluate传planRunId及planCards。",
+    "POST",
+    "/audit/plan-scales",
+  ],
+  [
     "audit_evaluate",
-    "在用户要求评估时独立执行改进轮。body={sourceRunId,name,configuration,planRunId?}。configuration为相对第一轮的完整改动集合（不是上次改进的补丁）；支持policy/model/extensions/checkpointPeriods/有来源fitTargets。参数名、单位和当前值先从run_status读取，按用户明确的目标设置。采用分配建议时传计划configuration及planRunId；先展示要求，再按用户意图执行。结果、输入和增量Shapley独立保存，不改变第一轮或六阶段确认",
+    "在用户要求评估时独立执行改进轮。body={sourceRunId,name,configuration,planRunId?,planCards?}。configuration为相对第一轮的完整改动集合（不是上次改进的补丁）；支持policy/model/extensions/checkpointPeriods/有来源fitTargets。参数名、单位和当前值先从run_status读取，按用户明确的目标设置。采用分配建议时传计划configuration及planRunId；先展示要求，再按用户意图执行。结果、输入和增量Shapley独立保存，不改变第一轮或六阶段确认",
     "POST",
     "/audit/evaluate",
   ],
@@ -200,6 +206,17 @@ const roundBodies: Record<string, z.ZodTypeAny> = {
         ),
     })
     .strict(),
+  audit_plan_scales: z
+    .object({
+      sourceRunId: z.string().min(1),
+      scales: z
+        .array(z.number().int().positive().max(1000000))
+        .min(1)
+        .max(6)
+        .optional(),
+      options: z.record(z.any()).optional(),
+    })
+    .strict(),
   audit_evaluate: z
     .object({
       sourceRunId: z.string().min(1),
@@ -209,6 +226,13 @@ const roundBodies: Record<string, z.ZodTypeAny> = {
         .describe(
           "相对第一轮的完整改动集合，或计划返回的configuration；不是上轮补丁",
         ),
+      planCards: z
+        .number()
+        .int()
+        .positive()
+        .max(1000000)
+        .optional()
+        .describe("采用分规模计划时必填：所选计划的prediction.cards"),
       planRunId: z
         .string()
         .min(1)
@@ -233,7 +257,7 @@ export function createMcpServer(
     token: process.env.RELIABILITY_TASK_TOKEN ?? "",
   },
 ) {
-  const server = new McpServer({ name: "sd-dfr-remap", version: "0.3.0" });
+  const server = new McpServer({ name: "sd-dfr-remap", version: "0.3.1" });
   for (const [name, description, method, route] of registry) {
     server.registerTool(
       name,
@@ -312,6 +336,7 @@ export function createMcpServer(
               "analysis_solve",
               "engineering_run",
               "audit_plan",
+              "audit_plan_scales",
               "audit_evaluate",
               "audit_compare",
             ].includes(name) &&

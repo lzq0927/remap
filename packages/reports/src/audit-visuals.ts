@@ -1,3 +1,4 @@
+import { auditSummaryScales } from "../../contracts/src/audit-presets";
 import {
   auditSelectedMechanisms,
   auditSamplingDescription,
@@ -18,7 +19,10 @@ export function auditMethodVisual(r: any) {
   return `<div class="audit-method-flow"><div><span>01 / 输入</span><h3>故障事件库</h3><p>${r.events.length} 条事件，分别记录硬件域、类型、FIT 与来源。当前中断、亚健康、静默总量和占比均从本次冻结输入计算。</p><code>λᵢ(N) = N × FITᵢ / 10⁹<br>MTBFᵢ = 1 / λᵢ</code></div><div><span>02 / 行为</span><h3>机制匹配与失败回退</h3><p>检测 → ${esc(r.config.recoveryOrder.join(" → "))} → 全局 CKPT → 人工。</p><p>只走已启用且事件适用的节点，成功即停止；失败耗时累计。静默使用独立的正确性恢复链，恢复机制不修改源 FIT。</p></div><div><span>03 / 结果</span><h3>有限窗口与正确进度</h3><p>${number(r.request.hours)} 小时，按故障、发现、恢复、保存等时刻推进。停机、保存、降速、局部容量、回滚和期末污染分别记账。</p><p>同一污染期合并，保留最后干净检查点；亚健康恢复保留进度，重算不重复扣账。</p></div></div>`;
 }
 export function auditVisuals(r: any) {
-  const scales = [...new Set<number>(r.rows.map((x: any) => x.cards))];
+  const scales = auditSummaryScales(
+    r.request,
+    r.rows.map((x: any) => x.cards),
+  );
   const overview = auditScaleSummary(r);
   const context = `<p class="evidence-note">${esc(auditSamplingDescription(r))}</p><details class="actual-combination" open><summary>本次实际启用组合 · ${auditSelectedMechanisms(r).length}项</summary><p class="chart-note">这是冻结输入中的实际组合；推荐子集不会自动替换它。常规CKPT与人工兜底已在基线中，预置样例不限定措施数量，也不代表最优部署。</p><div class="table-wrap"><table><thead><tr><th>措施</th><th>名称</th><th>本次参数</th></tr></thead><tbody>${auditSelectedMechanisms(
     r,

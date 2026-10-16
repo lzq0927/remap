@@ -1,3 +1,4 @@
+import { validatePlanScales } from "../../../packages/analysis/src/audit-plan-scales";
 import type { FastifyInstance } from "fastify";
 import type { TaskServices } from "../../../packages/tasks/src/service";
 import { DomainError } from "../../../packages/contracts/src/errors";
@@ -61,6 +62,17 @@ export function registerAuditExperimentRoutes(
         req.headers["idempotency-key"],
       );
   });
+  app.post("/api/tasks/:taskId/audit/plan-scales", async (req: any) => {
+    const input = {
+      source: sourceFor(req),
+      scales: req.body?.scales,
+      options: { ...req.body?.options, enabled: true },
+    };
+    validatePlanScales(input);
+    return tasks
+      .authorize(req, req.params.taskId)
+      .runs.start("audit-plan-scales", input, req.headers["idempotency-key"]);
+  });
   app.post("/api/tasks/:taskId/audit/evaluate", async (req: any) => {
     const source = sourceFor(req);
     const input = {
@@ -78,18 +90,36 @@ export function registerAuditExperimentRoutes(
         .store.getRun(req.body.planRunId);
       if (
         plan.status !== "succeeded" ||
-        plan.result?.kind !== "expert-audit-plan" ||
+        !["expert-audit-plan", "expert-audit-plan-set"].includes(
+          plan.result?.kind,
+        ) ||
         plan.result.sourceRunId !== source.id
       )
         throw new DomainError(
           "AUDIT_PLAN_INVALID",
           "分配建议必须来自本次冻结的第一轮",
         );
+      const selectedPlan =
+        plan.result.kind === "expert-audit-plan-set"
+          ? plan.result.plans.find(
+              (p: any) => p.prediction.cards === req.body?.planCards,
+            )
+          : plan.result;
+      if (
+        !selectedPlan ||
+        (plan.result.kind === "expert-audit-plan" &&
+          req.body?.planCards !== undefined &&
+          req.body.planCards !== selectedPlan.prediction.cards)
+      )
+        throw new DomainError(
+          "AUDIT_PLAN_INVALID",
+          "请选择分配建议中对应的规划规模",
+        );
       Object.assign(input, {
         plan: {
           id: plan.id,
           inputHash: plan.inputHash,
-          result: structuredClone(plan.result),
+          result: structuredClone(selectedPlan),
         },
       });
     }

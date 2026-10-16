@@ -439,6 +439,7 @@ export function auditExperiment(
     sourceRunId: source.id,
     sourceInputHash: source.inputHash,
     planningRunId: input.plan?.id,
+    planningCards:input.plan?.result.prediction.cards,
     request: source.input,
     configuration: structuredClone(configuration),
     configurationHash: hash(configuration),

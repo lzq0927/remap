@@ -7,6 +7,7 @@ import {
   auditContributionChart,
   auditChartCss,
 } from "../../../packages/reports/src/audit-charts";
+import { auditSummaryScales } from "../../../packages/contracts/src/audit-presets";
 
 export default function AuditContribution({
   result: r,
@@ -19,8 +20,9 @@ export default function AuditContribution({
 }) {
   const v = auditContributionView(r, cards),
     detail = auditContributionEvidence(r, cards);
-  const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
-    (a, b) => a - b,
+  const scales = auditSummaryScales(
+    r.request,
+    r.rows.map((row: any) => row.cards),
   );
   const num = (n: number | null) => (n === null ? "历史未记录" : n.toFixed(3));
   return (

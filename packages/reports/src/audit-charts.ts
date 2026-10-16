@@ -1,4 +1,8 @@
 import {
+  auditReferenceOnly,
+  auditSummaryScales,
+} from "../../contracts/src/audit-presets";
+import {
   auditContributionView,
   contributionExplanation,
 } from "./audit-contributions";
@@ -37,6 +41,9 @@ export function lineChart({
   fullRange = false,
   target,
   note,
+  yLabel = "可用度",
+  formatY = (v: number) => num(v * 100) + "%",
+  showIntervals = true,
 }: {
   title: string;
   series: Series[];
@@ -46,6 +53,9 @@ export function lineChart({
   fullRange?: boolean;
   target?: number;
   note: string;
+  yLabel?: string;
+  formatY?: (value: number) => string;
+  showIntervals?: boolean;
 }) {
   series = series
     .map((s) => ({
@@ -83,7 +93,7 @@ export function lineChart({
   const grid = Array.from({ length: 6 }, (_, i) => {
     const v = ymin + ((ymax - ymin) * i) / 5,
       y = coordinate(Y(v));
-    return `<line x1="78" y1="${y}" x2="906" y2="${y}" class="chart-grid"/><text x="65" y="${coordinate(Y(v) + 4)}" text-anchor="end">${num(v * 100, fullRange ? 0 : 2)}%</text>`;
+    return `<line x1="78" y1="${y}" x2="906" y2="${y}" class="chart-grid"/><text x="65" y="${coordinate(Y(v) + 4)}" text-anchor="end">${escape(formatY(v))}</text>`;
   }).join("");
   const targetLine = Number.isFinite(target)
     ? `<line x1="78" y1="${coordinate(Y(target!))}" x2="906" y2="${coordinate(Y(target!))}" class="chart-target"/><text x="900" y="${coordinate(Y(target!) - 7)}" text-anchor="end" class="target-label">目标 ${pct(target!)}</text>`
@@ -95,12 +105,12 @@ export function lineChart({
           .map((p) => {
             const x = coordinate(X(p.x)),
               y = coordinate(Y(p.statistics.mean));
-            return `<g data-value="${p.x}" data-mean="${p.statistics.mean}"><title>${escape(s.name)} · ${escape(formatX(p.x))}：${pct(p.statistics.mean)}；95% 区间 ${pct(p.statistics.ciLow)} ～ ${pct(p.statistics.ciHigh)}${p.current ? "；当前输入" : ""}</title><path d="M${x},${coordinate(Y(p.statistics.ciLow))} V${coordinate(Y(p.statistics.ciHigh))} M${coordinate(X(p.x) - 4)},${coordinate(Y(p.statistics.ciLow))} h8 M${coordinate(X(p.x) - 4)},${coordinate(Y(p.statistics.ciHigh))} h8" stroke="${s.color}" stroke-width="1.4" opacity="0.65"/><circle cx="${x}" cy="${y}" r="${p.current ? 6 : 4}" fill="${p.current ? "white" : s.color}" stroke="${s.color}" stroke-width="2"/></g>`;
+            return `<g data-value="${p.x}" data-mean="${p.statistics.mean}"><title>${escape(s.name)} · ${escape(formatX(p.x))}：${escape(formatY(p.statistics.mean))}${showIntervals ? "；95% 区间 " + escape(formatY(p.statistics.ciLow)) + " ～ " + escape(formatY(p.statistics.ciHigh)) : ""}${p.current ? "；当前输入" : ""}</title>${showIntervals ? `<path d="M${x},${coordinate(Y(p.statistics.ciLow))} V${coordinate(Y(p.statistics.ciHigh))} M${coordinate(X(p.x) - 4)},${coordinate(Y(p.statistics.ciLow))} h8 M${coordinate(X(p.x) - 4)},${coordinate(Y(p.statistics.ciHigh))} h8" stroke="${s.color}" stroke-width="1.4" opacity="0.65"/>` : ""}<circle cx="${x}" cy="${y}" r="${p.current ? 6 : 4}" fill="${p.current ? "white" : s.color}" stroke="${s.color}" stroke-width="2"/></g>`;
           })
           .join("")}`,
     )
     .join("");
-  return `<figure class="reliability-chart"><h3>${escape(title)}</h3>${legend(series)}<div class="reliability-plot" tabindex="0" aria-label="${escape(title)}图表，可横向滚动"><svg viewBox="0 0 960 390" role="img" aria-label="${escape(title)}"><title>${escape(title)}</title><desc>${escape(note)}</desc><text x="78" y="26" class="axis-label">可用度</text>${grid}${targetLine}${curves}${xs.map((x) => `<text x="${coordinate(X(x))}" y="334" text-anchor="middle">${escape(formatX(x))}</text>`).join("")}<text x="494" y="374" text-anchor="middle" class="axis-label">${escape(xLabel)}</text></svg></div><figcaption>${escape(note)}</figcaption></figure>`;
+  return `<figure class="reliability-chart"><h3>${escape(title)}</h3>${showIntervals ? legend(series) : legend(series).replace('<span class="interval-key">细竖线：95% 均值区间</span>', "")}<div class="reliability-plot" tabindex="0" aria-label="${escape(title)}图表，可横向滚动"><svg viewBox="0 0 960 390" role="img" aria-label="${escape(title)}"><title>${escape(title)}</title><desc>${escape(note)}</desc><text x="78" y="26" class="axis-label">${escape(yLabel)}</text>${grid}${targetLine}${curves}${xs.map((x) => `<text x="${coordinate(X(x))}" y="334" text-anchor="middle">${escape(formatX(x))}</text>`).join("")}<text x="494" y="374" text-anchor="middle" class="axis-label">${escape(xLabel)}</text></svg></div><figcaption>${escape(note)}</figcaption></figure>`;
 }
 
 export function auditScaleCurve(r: any) {
@@ -110,14 +120,17 @@ export function auditScaleCurve(r: any) {
     ["elastic", "#ba843b"],
     ["combined", "#16816a"],
   ];
-  const count = new Set(r.rows.map((row: any) => row.cards)).size;
+  const displayRows = r.rows.filter(
+    (row: any) => !auditReferenceOnly(r.request, row.cards),
+  );
+  const count = new Set(displayRows.map((row: any) => row.cards)).size;
   const chart = lineChart({
     title: "规模增大后，可用度如何变化",
     series: definitions.map(([id, color]) => ({
       name: r.rows.find((row: any) => row.id === id)?.name ?? id,
       color,
       dashed: id === "base",
-      points: r.rows
+      points: displayRows
         .filter((row: any) => row.id === id)
         .map((row: any) => ({ x: row.cards, statistics: row.statistics })),
     })),
@@ -130,8 +143,9 @@ export function auditScaleCurve(r: any) {
         ? `连接本次已仿真的 ${count} 个规模，未计算的规模不补点、不外推。细竖线为 95% 均值区间，仅反映抽样误差；超出 0–100% 的区间在边界截断，完整数值见表格。各规模可有不同目标，因此不画统一目标线。`
         : "本次只计算了一个规模，仅显示实际点。启用多规模对比并重新评估后可查看趋势；95% 均值区间仅反映抽样误差，超出 0–100% 的区间在边界截断，完整数值见表格。",
   });
-  const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
-    (a, b) => a - b,
+  const scales = auditSummaryScales(
+    r.request,
+    r.rows.map((row: any) => row.cards),
   );
   const values = `<div class="table-wrap curve-values"><table><thead><tr><th>曲线数值</th>${scales.map((cards) => `<th>${escape(scaleLabel(cards))}卡</th>`).join("")}</tr></thead><tbody>${definitions
     .map(
@@ -266,8 +280,9 @@ export function auditGainChart(r: any, cards = r.request.cards) {
 }
 
 export function auditGainCharts(r: any) {
-  const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
-    (a, b) => a - b,
+  const scales = auditSummaryScales(
+    r.request,
+    r.rows.map((row: any) => row.cards),
   );
   return `<label class="gain-scale-control">方案收益对照规模 <select id="gain-scale" aria-label="方案收益对照规模">${scales.map((cards) => `<option value="${cards}" ${cards === r.request.cards ? "selected" : ""}>${num(cards)} 卡</option>`).join("")}</select></label>${scales.map((cards) => `<div data-gain-scale="${cards}" ${cards !== r.request.cards ? "hidden" : ""}>${auditGainChart(r, cards)}</div>`).join("")}`;
 }
@@ -310,8 +325,9 @@ export function auditContributionChart(r: any, cards = r.request.cards) {
 }
 
 export function auditContributionScaleControl(r: any) {
-  const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
-    (a, b) => a - b,
+  const scales = auditSummaryScales(
+    r.request,
+    r.rows.map((row: any) => row.cards),
   );
   const selected = scales.includes(r.request.cards)
     ? r.request.cards

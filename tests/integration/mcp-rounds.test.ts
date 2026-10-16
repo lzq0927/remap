@@ -96,6 +96,23 @@ test("MCP executes separate rounds, preserves evidence and exports selected comp
       (await call("run_list", { query: { operation: "audit-experiment" } }))
         .total,
     ).toBe(0);
+    const perScaleQueued = await call("audit_plan_scales", {
+      body: {
+        sourceRunId: first.id,
+        scales: [500000, 10000],
+        options: { screeningTrials: 4, exploreExtensions: false },
+      },
+    });
+    expect(perScaleQueued.runId).toBeTruthy();
+    const perScale = await wait(perScaleQueued.runId);
+    expect(perScale.result.plans.map((p: any) => p.prediction.cards)).toEqual([
+      10000, 500000,
+    ]);
+    expect(perScale.result.scenarioEvaluated).toBe(false);
+    expect(
+      (await call("run_list", { query: { operation: "audit-experiment" } }))
+        .total,
+    ).toBe(0);
     const manualQueued = await call("audit_evaluate", {
       body: {
         sourceRunId: first.id,
@@ -116,9 +133,10 @@ test("MCP executes separate rounds, preserves evidence and exports selected comp
           body: {
             sourceRunId: first.id,
             name: "载入分配后独立评估",
-            planRunId: plan.id,
+            planRunId: perScale.id,
+            planCards: 10000,
             configuration: {
-              ...plan.result.configuration,
+              ...perScale.result.plans[0].configuration,
               attributionTrials: 4,
               permutations: 2,
             },
@@ -126,7 +144,9 @@ test("MCP executes separate rounds, preserves evidence and exports selected comp
         })
       ).runId,
     );
-    expect(improved.result.planningRunId).toBe(plan.id);
+    expect(improved.result.planningRunId).toBe(perScale.id);
+    expect(improved.result.planningCards).toBe(10000);
+    expect(improved.result.decision.cards).toBe(10000);
     expect(await call("design_get")).toEqual(saved);
     expect(await call("workflow_state")).toEqual(state);
     expect(JSON.stringify(await call("run_status", { id: first.id }))).toBe(
@@ -167,7 +187,7 @@ test("MCP executes separate rounds, preserves evidence and exports selected comp
     const history = await call("run_list", {
       query: { sourceRunId: first.id, limit: "2", offset: "1" },
     });
-    expect(history.total).toBe(5);
+    expect(history.total).toBe(6);
     expect(history.items).toHaveLength(2);
     const invalidPage: any = await client.callTool({
       name: "run_list",

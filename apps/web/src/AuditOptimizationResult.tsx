@@ -7,6 +7,7 @@ import {
 } from "../../../packages/reports/src/audit-optimization";
 import { auditChartCss } from "../../../packages/reports/src/audit-charts";
 import { useState } from "react";
+import { auditSummaryRows } from "../../../packages/contracts/src/audit-presets";
 export default function AuditOptimizationResult({
   result,
   onApply,
@@ -64,7 +65,10 @@ export default function AuditOptimizationResult({
                 value={cards}
                 onChange={(e) => setCards(Number(e.target.value))}
               >
-                {result.optimization.scales.map((s: any) => (
+                {auditSummaryRows(
+                  result.request,
+                  result.optimization.scales,
+                ).map((s: any) => (
                   <option key={s.cards} value={s.cards}>
                     {s.cards.toLocaleString()} 卡
                   </option>

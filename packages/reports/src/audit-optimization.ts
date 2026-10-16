@@ -6,6 +6,7 @@ import type { AuditSection } from "./audit";
 import { lineChart } from "./audit-charts";
 import { parameterLabels } from "./audit-labels";
 import { auditExtensionCatalog } from "../../contracts/src/audit-extensions";
+import { auditSummaryRows } from "../../contracts/src/audit-presets";
 const num = (n: number, digits = 4) =>
   Number.isFinite(n)
     ? n.toLocaleString("zh-CN", { maximumFractionDigits: digits })
@@ -113,8 +114,11 @@ export function optimizationFitRequirement(r: any) {
   return `关键实施条件：总源 FIT 需由 ${num(before)} 降至 ${num(after)}（降低 ${num((1 - after / before) * 100, 2)}%）。这部分是硬件设计要求，不能归功于检测恢复参数，也不表示产品已具备该能力。`;
 }
 export function auditOptimizationSections(r: any): AuditSection[] {
-  const o = r.optimization;
-  if (!o) return [];
+  if (!r.optimization) return [];
+  const o = {
+    ...r.optimization,
+    scales: auditSummaryRows(r.request, r.optimization.scales ?? []),
+  };
   const sections: AuditSection[] = [
     {
       title: "00 / 两轮评估与设计决策",

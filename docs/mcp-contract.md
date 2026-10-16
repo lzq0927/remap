@@ -28,3 +28,5 @@ input_mapping `{id}` 对应 GET /api/tasks/:taskId/inputs/:id/mapping；只接�
 - `run_list` → GET `/runs`，MCP返回有界运行摘要 `{items,total,limit,offset}`，不返回大输入/结果；query支持operation/sourceRunId/limit/offset，按时间倒序。完整证据用run_status读取。API `GET /runs?view=summary`提供相同摘要及筛选分页；未指定view的原始列表格式保持不变。摘要在存储层投影，不向网关传送整份试验快照。
 
 上述三个启动工具统一返回 `{runId,status,artifactRefs:[],warnings:[]}`，用run_status轮询。用户明确请求评估才调用audit_evaluate，不能因为audit_plan完成就自动接续。参考与示例不能当实测，均值区间跨目标标为待复核；第一轮与增量贡献分别解释。详见[分轮评估与Agent协作指南](分轮评估与Agent协作指南.md)。
+
+- `audit_plan_scales` → POST `/audit/plan-scales`，body `{sourceRunId,scales?,options?}`。按需求规模独立生成AGREE计划集合，参考点排除，规划不是评估。采用其中一项时，`audit_evaluate`同时提供集合`planRunId`及对应`planCards`。MCP0.3.1、Skill0.3.3支持。

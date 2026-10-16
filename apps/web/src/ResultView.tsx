@@ -734,6 +734,7 @@ function ResultBody({
 }) {
   if (
     [
+      "expert-audit-plan-set",
       "expert-audit-plan",
       "expert-audit-experiment",
       "expert-audit-comparison",

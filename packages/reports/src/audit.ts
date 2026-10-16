@@ -1,3 +1,7 @@
+import {
+  auditSummaryRows,
+  auditSummaryScales,
+} from "../../contracts/src/audit-presets";
 import { architectureSections } from "./audit-architecture";
 import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
 import { auditSummary } from "./audit-summary";
@@ -66,6 +70,7 @@ export interface AuditSection {
   tables?: AuditTable[];
   collapsed?: boolean;
   visual?:
+    | "plan-set"
     | "architecture"
     | "experiment-comparison"
     | "optimization"
@@ -79,12 +84,24 @@ export interface AuditSection {
   contributionCards?: number;
 }
 export function auditSections(r: any): AuditSection[] {
+  r = {
+    ...r,
+    rows: auditSummaryRows(r.request, r.rows),
+    attribution: auditSummaryRows(r.request, r.attribution),
+    designReview: r.designReview
+      ? {
+          ...r.designReview,
+          scales: auditSummaryRows(r.request, r.designReview.scales),
+        }
+      : r.designReview,
+  };
   const selected = r.request.cards,
     hours = r.request.hours;
   const selectedRows = r.rows.filter((row: any) => row.cards === selected),
     p = r.config.model;
-  const scales = [...new Set<number>(r.rows.map((row: any) => row.cards))].sort(
-    (a, b) => b - a,
+  const scales = auditSummaryScales(
+    r.request,
+    r.rows.map((row: any) => row.cards),
   );
   const hardFit = r.events
     .filter((e: any) => e.type === "hard")

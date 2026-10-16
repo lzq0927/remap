@@ -1,3 +1,4 @@
+import { auditSummaryScales } from "../../../packages/contracts/src/audit-presets";
 import { useState } from "react";
 import {
   defaultAuditArchitecture,
@@ -56,9 +57,10 @@ export default function AuditArchitectureEditor({
     });
   const root = architecture.nodes.find((n) => !n.parentId)!;
   const prefix = mode === "budget" ? "分层预算" : "架构";
-  const scales = [
-    ...new Set([request.cards, ...(request.scales ?? [])]),
-  ].filter((cards) => !auditReferenceOnly(request, cards));
+  const scales = auditSummaryScales(request, [
+    request.cards,
+    ...(request.scales ?? []),
+  ]).filter((cards) => !auditReferenceOnly(request, cards));
   let budgets: { cards: number; values: Map<string, number | null> }[] = [];
   let budgetError = "";
   try {

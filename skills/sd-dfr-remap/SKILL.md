@@ -38,6 +38,8 @@ AI训练集群默认数据与目标见[references/ai-cluster-example.md](referen
 3. **独立改进轮**：用户明确要求评估或点击后，调用 `audit_evaluate`，body={sourceRunId,name,configuration,planRunId?}。载入建议时使用计划返回的完整configuration并传planRunId；后续编辑保留关联，解释差异。单参数对照仅提供该参数的改动；参数名称、单位和当前值从运行快照读取。每次configuration是相对冻结第一轮的完整改动集合，不叠加上次试验。可反复手改、评估、导出，不回写第一轮，不重走其确认流程。
 4. **横向比较**：用户选定同一第一轮下的2–12次已完成评估，用 `audit_compare({body:{runIds:[firstId,scenarioId,...]}})`。分配计划不能作为评估参与比较。`report_export`导出各轮和比较报告；分别展示各规模曲线、参数差异、结论、排名、区间和未满足项。
 
+跨规模汇总依照[references/scale-summary.md](references/scale-summary.md)：需求规模升序，先架构目标分解与可用度差距曲线，再看故障细分差距、损失时间横柱和统一贡献排名。用户要求不同规模分别优化时调用audit_plan_scales生成各自方案；选择后audit_evaluate附planRunId和planCards，仍独立触发复评，不合并最严参数，不自动评估。
+
 **分配的解释**：AGREE设计责任是工程分配模型，不是各机制独立的物理损失，也不要求每条损失路径硬达预算。参数反推通过组合正向仿真检查总可用度目标，先验证专家机制参考，再按分配需求调整；不把多规模最严参数合并成所有规模通用要求，不为了98.5%自动追求100%。平均值仅略高于目标但区间跨过时标为待复核。有限搜索未达标不证明不可行；接近目标的方案也不等于唯一/全局最优。
 
 **机制依据**：优先读取 `model_defaults.auditExtensionCatalog` 的专家机制、适用对象、参数、来源、阶段及开销；底层参考为 `references/新可靠性机制库-单点量化交付包`。区分提高MTBF/降低FIT、缩短MTTR、降低保存/回滚/污染损失，以及发生前/发生时/发生后/恢复失败。检测恢复不能冒充源FIT降低。扩展机制需要完整 eligibleShare/success/failureSeconds/overhead 及特定参数、source、evidence。库中缺少的数值是工程情景，不能称专家实测。未明确给出来源的FIT不自动降低；精度专用检出率不可外推全部事件。

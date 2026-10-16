@@ -1,3 +1,4 @@
+import { auditSummaryScales } from "../../../packages/contracts/src/audit-presets";
 import AuditArchitectureResult from "./AuditArchitectureResult";
 import { useId, useState } from "react";
 import { useTaskApi } from "./api";
@@ -90,7 +91,10 @@ export default function AuditResult({
             value={cards}
             onChange={(e) => setScale(Number(e.target.value))}
           >
-            {[...new Set<number>(r.rows.map((x: any) => x.cards))].map((n) => (
+            {auditSummaryScales(
+              r.request,
+              r.rows.map((x: any) => x.cards),
+            ).map((n) => (
               <option key={n} value={n}>
                 {n.toLocaleString()} 卡
               </option>

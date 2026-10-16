@@ -1,3 +1,5 @@
+import { summaryScaleLabel } from "../../../packages/reports/src/audit-scale-summary";
+import { auditSummaryRows } from "../../../packages/contracts/src/audit-presets";
 import { useEffect, useRef, useState } from "react";
 import { useTaskApi } from "./api";
 import type { AuditOptimizationRequest } from "../../../packages/contracts/src/audit-optimization";
@@ -26,6 +28,8 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
     useState<AuditOptimizationRequest>(blank);
   const [name, setName] = useState("自定义改进方案");
   const [plan, setPlan] = useState<any>();
+  const [planSet, setPlanSet] = useState<any>();
+  const [adoptedPlanCards, setAdoptedPlanCards] = useState<number>();
   const [adoptedPlanId, setAdoptedPlanId] = useState<string>();
   const [pending, setPending] = useState<any>();
   const [history, setHistory] = useState<any[]>([]);
@@ -41,7 +45,17 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
   const [extensionId, setExtensionId] = useState(
     auditExtensionCatalog[0]?.id ?? "",
   );
-  const [importance, setImportance] = useState<Record<string, number>>({});
+  const [importanceByScale, setImportanceByScale] = useState<
+    Record<string, Record<string, number>>
+  >(() =>
+    structuredClone(sourceRun.result.request.optimization?.importance ?? {}),
+  );
+  const importance = importanceByScale[String(planningCards)] ?? {};
+  const setImportance = (values: Record<string, number>) =>
+    setImportanceByScale((current) => ({
+      ...current,
+      [String(planningCards)]: values,
+    }));
   const mounted = useRef(true);
   const source = sourceRun.result;
   const mechanismSummary = auditMechanismSummary(
@@ -67,10 +81,22 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
         r.result?.kind === "expert-audit-plan" &&
         r.result.sourceRunId === sourceRun.id,
     );
-    if (plans[0]) setPlan(plans[0]);
+    if (plans[0])
+      setPlan((current: any) =>
+        current?.planCards !== undefined ? current : plans[0],
+      );
+    const sets = runs.filter(
+      (r: any) =>
+        r.status === "succeeded" &&
+        r.result?.kind === "expert-audit-plan-set" &&
+        r.result.sourceRunId === sourceRun.id,
+    );
+    if (sets[0]) setPlanSet(sets[0]);
     const active = runs.find(
       (r: any) =>
-        ["audit-plan", "audit-experiment"].includes(r.operation) &&
+        ["audit-plan", "audit-plan-scales", "audit-experiment"].includes(
+          r.operation,
+        ) &&
         ["queued", "running"].includes(r.status) &&
         r.input.source?.id === sourceRun.id,
     );
@@ -94,7 +120,10 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
           setPending(undefined);
           if (run.status !== "succeeded")
             setError(run.error?.message ?? "运行已取消");
-          else if (run.operation === "audit-plan") {
+          else if (run.operation === "audit-plan-scales") {
+            setPlanSet(run);
+            setView("scale-plans");
+          } else if (run.operation === "audit-plan") {
             setPlan(run);
             setView("plan");
           } else {
@@ -118,28 +147,39 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
       clearInterval(timer);
     };
   }, [pending?.id]);
-  const start = async (kind: "plan" | "evaluate") => {
+  const start = async (kind: "plan" | "plan-scales" | "evaluate") => {
     setLoading(true);
     setError("");
     try {
       const run = await api(
         "/audit/" + kind,
-        kind === "plan"
+        kind === "plan-scales"
           ? {
               sourceRunId: sourceRun.id,
               options: {
                 ...source.request.optimization,
+                planningCards: undefined,
                 enabled: true,
-                planningCards,
-                importance: { [String(planningCards)]: importance },
+                importance: importanceByScale,
               },
             }
-          : {
-              sourceRunId: sourceRun.id,
-              name,
-              configuration,
-              planRunId: adoptedPlanId,
-            },
+          : kind === "plan"
+            ? {
+                sourceRunId: sourceRun.id,
+                options: {
+                  ...source.request.optimization,
+                  enabled: true,
+                  planningCards,
+                  importance: { [String(planningCards)]: importance },
+                },
+              }
+            : {
+                sourceRunId: sourceRun.id,
+                name,
+                configuration,
+                planRunId: adoptedPlanId,
+                planCards: adoptedPlanCards,
+              },
       );
       if (mounted.current) setPending(run);
     } catch (e) {
@@ -168,6 +208,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
       : (source.request.targets?.[String(scale)] ?? source.request.target);
   return (
     <section
+      id="audit-scale-plans"
       className="paper audit-experiments"
       aria-label="分轮评估与横向比较"
     >
@@ -223,10 +264,9 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
             value={planningCards}
             onChange={(event) => {
               setPlanningCards(Number(event.target.value));
-              setImportance({});
             }}
           >
-            {source.rows
+            {auditSummaryRows(source.request, source.rows)
               .filter(
                 (row: any) =>
                   row.id === "combined" &&
@@ -245,6 +285,12 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
               ))}
           </select>
         </label>
+        <button
+          disabled={busy || !canPlan}
+          onClick={() => void start("plan-scales")}
+        >
+          按各规模分别生成改进建议
+        </button>
         <button disabled={busy || !canPlan} onClick={() => void start("plan")}>
           生成AGREE改进分配
         </button>
@@ -255,6 +301,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
             setName("自定义改进方案");
             setView("configuration");
             setAdoptedPlanId(undefined);
+            setAdoptedPlanCards(undefined);
           }}
         >
           新建参数方案
@@ -266,11 +313,15 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
             setName("现状复核");
             setView("configuration");
             setAdoptedPlanId(undefined);
+            setAdoptedPlanCards(undefined);
           }}
         >
           恢复第一轮参数
         </button>
       </div>
+      <p className="note">
+        “按各规模分别生成改进建议”分别规划全部需求规模；“生成AGREE改进分配”仅规划上方选中规模。重要度编辑按规模分别保存。
+      </p>
       {!canPlan && (
         <p className="note">
           现状尚无可分配的候选贡献，可先补充Shapley分析，或直接新建参数方案。
@@ -287,6 +338,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
           查看第一轮
         </button>
         {[
+          { id: "scale-plans", name: "各规模建议汇总", disabled: !planSet },
           { id: "plan", name: "分配建议", disabled: !plan },
           { id: "configuration", name: "编辑改进方案" },
           { id: "result", name: "本轮结论", disabled: !last },
@@ -335,7 +387,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
       </details>
       {pending && (
         <p role="status">
-          {pending.operation === "audit-plan"
+          {["audit-plan", "audit-plan-scales"].includes(pending.operation)
             ? "正在生成分配建议（不会启动第二轮评估）"
             : "正在独立评估本次方案"}{" "}
           · {Math.round(pending.progress * 100)}%
@@ -346,6 +398,35 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
           {error}
         </p>
       )}
+      {planSet && view === "scale-plans" && (
+        <div className="scale-plan-set">
+          <AuditExperimentResult result={planSet.result} />
+          <a href={url(`/runs/${planSet.id}/report?format=html`)}>
+            下载各规模改进建议汇总报告
+          </a>
+          <p className="note">
+            每个规模都有独立方案；选择一个查看明细、载入并单独评估，规划结果不会自动进入已完成评估比较。
+          </p>
+          <div className="experiment-actions">
+            {planSet.result.plans.map((p: any) => (
+              <button
+                key={p.prediction.cards}
+                disabled={busy}
+                onClick={() => {
+                  setPlan({
+                    id: planSet.id,
+                    result: p,
+                    planCards: p.prediction.cards,
+                  });
+                  setView("plan");
+                }}
+              >
+                查看{summaryScaleLabel(p.prediction.cards)}改进建议
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {plan && view === "plan" && (
         <div className="experiment-plan">
           <AuditExperimentResult result={plan.result} />
@@ -353,8 +434,13 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
             disabled={busy}
             onClick={() => {
               setConfiguration(structuredClone(plan.result.configuration));
-              setName("AGREE分配后的改进方案");
+              setName(
+                plan.planCards
+                  ? `${summaryScaleLabel(plan.planCards)} · AGREE改进方案`
+                  : "AGREE分配后的改进方案",
+              );
               setAdoptedPlanId(plan.id);
+              setAdoptedPlanCards(plan.planCards);
               setView("configuration");
             }}
           >
@@ -480,6 +566,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
               setConfiguration(structuredClone(last.result.configuration));
               setName(last.result.name + " · 迭代");
               setAdoptedPlanId(last.result.planningRunId);
+              setAdoptedPlanCards(last.result.planningCards);
               setView("configuration");
             }}
           >
@@ -500,7 +587,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
             value={scale}
             onChange={(e) => setScale(Number(e.target.value))}
           >
-            {source.rows
+            {auditSummaryRows(source.request, source.rows)
               .filter((r: any) => r.id === "combined")
               .map((r: any) => (
                 <option key={r.cards} value={r.cards}>

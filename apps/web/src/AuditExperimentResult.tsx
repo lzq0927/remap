@@ -1,3 +1,4 @@
+import { planScaleChart } from "../../../packages/reports/src/audit-plan-scales";
 import {
   architectureReport,
   architectureCss,
@@ -17,11 +18,13 @@ export default function AuditExperimentResult({ result }: { result: any }) {
     <section
       className="audit-experiment-result"
       aria-label={
-        result.kind === "expert-audit-plan"
-          ? "改进分配建议"
-          : result.kind === "expert-audit-comparison"
-            ? "多次评估对比结果"
-            : "本次独立方案结果"
+        result.kind === "expert-audit-plan-set"
+          ? "各规模改进建议汇总"
+          : result.kind === "expert-audit-plan"
+            ? "改进分配建议"
+            : result.kind === "expert-audit-comparison"
+              ? "多次评估对比结果"
+              : "本次独立方案结果"
       }
     >
       <style>{auditChartCss + architectureCss}</style>
@@ -31,6 +34,9 @@ export default function AuditExperimentResult({ result }: { result: any }) {
           {section.paragraphs?.map((p) => (
             <p key={p}>{p}</p>
           ))}
+          {section.visual === "plan-set" && (
+            <div dangerouslySetInnerHTML={{ __html: planScaleChart(result) }} />
+          )}
           {section.visual === "architecture" && (
             <div
               dangerouslySetInnerHTML={{ __html: architectureReport(result) }}

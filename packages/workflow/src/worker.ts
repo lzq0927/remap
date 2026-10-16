@@ -11,6 +11,13 @@ process.once("message", async (message: any) => {
     if (message.operation === "engineering") {
       const { executeEngineering } = await import("../../modeling/src/execute");
       result = await executeEngineering(input);
+    } else if (message.operation === "audit-plan-scales") {
+      const { auditPlanScales } = await import(
+        "../../analysis/src/audit-plan-scales"
+      );
+      result = auditPlanScales(input, (fraction) =>
+        process.send?.({ type: "progress", progress: fraction }),
+      );
     } else if (message.operation === "audit-plan") {
       const { auditExperimentPlan } = await import(
         "../../analysis/src/audit-experiment-plan"

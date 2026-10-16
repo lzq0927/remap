@@ -1,3 +1,10 @@
+import {
+  architectureSummary,
+  contributionRankSummary,
+  orderedDiagnosisScales,
+  scaleSummaryCss,
+  architectureSummaryMarkdown,
+} from "./audit-scale-summary";
 import { auditExtensionCatalog } from "../../contracts/src/audit-extensions";
 import type { AuditArchitectureDiagnosis } from "../../analysis/src/audit-architecture";
 import type { AuditArchitecture } from "../../contracts/src/audit-architecture";
@@ -54,6 +61,7 @@ export function architectureHeatmap(
   d: AuditArchitectureDiagnosis,
   level: "subsystem" | "leaf" = "subsystem",
 ) {
+  d = { ...d, scales: orderedDiagnosisScales(d) };
   const root = d.architecture.nodes.find((n) => !n.parentId)!;
   const branches = d.architecture.nodes.filter((n) =>
     level === "subsystem"
@@ -74,14 +82,7 @@ export function architectureHeatmap(
 }
 
 export function architectureRankings(d: AuditArchitectureDiagnosis) {
-  const scales = d.scales.filter((s) => s.ranking.length);
-  const max = Math.max(
-    1e-9,
-    ...scales.flatMap((s) =>
-      s.ranking.map((c: any) => Math.abs(c.statistics.mean)),
-    ),
-  );
-  return `<div class="arch-chart"><h3>不同规模的措施贡献排序</h3><p class="note">${d.version.includes("incremental") ? "本次改进相对冻结第一轮的增量贡献。" : "现有候选措施相对固定基线的Shapley贡献。"}统一条形刻度，单位为百分点；保留负贡献。现有贡献不等于继续改善该项的边际收益。</p>${scales.length ? `<div class="arch-ranking-grid">${scales.map((s) => `<div class="arch-ranking"><h4>${scaleName(s.cards)}</h4>${s.ranking.map((c: any) => `<div class="arch-rank-row"><span>${c.rank}. ${esc(c.name)}</span><b>${num(c.statistics.mean * 100)} pp</b><div class="arch-track"><i style="width:${Math.min(100, (Math.abs(c.statistics.mean) / max) * 100)}%;background:${c.statistics.mean < 0 ? "#ab5945" : "#237b6a"}"></i></div><small>95%区间 ${num(c.statistics.ciLow * 100)} ～ ${num(c.statistics.ciHigh * 100)} pp</small></div>`).join("")}</div>`).join("")}</div>` : '<p class="note">本次未计算措施贡献；不能据此推断收益可加或生成贡献排序。</p>'}</div>`;
+  return contributionRankSummary(d);
 }
 
 export function architectureScaleDetail(
@@ -113,7 +114,20 @@ export function architectureReport(result: any) {
   const d: AuditArchitectureDiagnosis | undefined =
     result.architectureDiagnosis;
   if (!d) return "<p>本历史结果未保存分层诊断；原结果与口径保持不变。</p>";
-  return `<div class="architecture-diagnosis"><p class="note">${esc(d.architecture.basis)}</p>${architectureHeatmap(d)}<details class="arch-evidence"><summary>展开故障对象的跨规模差距</summary>${architectureHeatmap(d, "leaf")}</details>${architectureRankings(d)}${d.scales.map((s) => `<details class="arch-scale-panel" ${s.cards === result.request.cards ? "open" : ""}><summary>${scaleName(s.cards)} · 分层目标、MTBF与恢复损失诊断</summary>${architectureScaleDetail(d, s.cards, true, true)}</details>`).join("")}<details class="arch-evidence"><summary>分层方法、计量与适用边界</summary>${d.notes.map((note) => `<p>${esc(note)}</p>`).join("")}</details></div>`;
+  const primary =
+    d.scales.find((s) => s.cards === result.request.cards) ??
+    orderedDiagnosisScales(d, true)[0];
+  return `<div class="architecture-diagnosis scale-summary"><p class="note">${esc(d.architecture.basis)}</p><h3>系统架构 · ${primary.cards.toLocaleString()}卡</h3>${architectureTree(d.architecture, d, primary.cards, 1)}<details class="arch-evidence"><summary>展开完整系统架构</summary>${architectureTree(d.architecture, d, primary.cards, 10)}</details>${architectureSummary(d)}<details class="arch-evidence"><summary>子系统与故障对象差距矩阵</summary>${architectureHeatmap(d)}${architectureHeatmap(d, "leaf")}</details>${orderedDiagnosisScales(
+    d,
+    true,
+  )
+    .map(
+      (s) =>
+        `<details class="arch-scale-panel"><summary>${scaleName(s.cards)} · 分层目标、MTBF与恢复损失诊断${s.referenceOnly ? "（参考点）" : ""}</summary>${architectureScaleDetail(d, s.cards, false)}</details>`,
+    )
+    .join(
+      "",
+    )}<details class="arch-evidence"><summary>分层方法、计量与适用边界</summary>${d.notes.map((note) => `<p>${esc(note)}</p>`).join("")}</details></div>`;
 }
 export function architectureSections(result: any): AuditSection[] {
   if (!result.architectureDiagnosis) return [];
@@ -150,7 +164,9 @@ export function architectureMarkdown(result: any) {
     "\n\n" +
     cell(d.architecture.basis) +
     "\n\n" +
-    d.scales
+    architectureSummaryMarkdown(d) +
+    "\n\n" +
+    orderedDiagnosisScales(d, true)
       .map((scale) => {
         const rows = scale.nodes.map((n) => [
           n.name,
@@ -209,8 +225,11 @@ export function architectureMarkdown(result: any) {
   );
 }
 
-export const architectureCss = `
+export const architectureCss =
+  scaleSummaryCss +
+  `
 .architecture-diagnosis,.audit-architecture-editor{min-width:0;scroll-margin-top:calc(var(--workflow-navigation-height,150px) + 15px)}.arch-tree{padding:18px 0}.arch-branch{min-width:0;text-align:center}.arch-node{padding:12px;border:1px solid #d2ded7;border-top:3px solid #387968;border-radius:8px;background:#f2f7f3;overflow-wrap:anywhere}.arch-node b,.arch-node span,.arch-node small{display:block}.arch-node b{font-size:14px}.arch-node span{font-size:12px;margin:6px 0}.arch-node small{font-size:11px;color:#526c61;line-height:1.7}.arch-arrow{display:block;color:#718e81;line-height:24px}.arch-children{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}.arch-children .arch-children{display:flex;flex-direction:column;gap:8px;border-left:1px solid #c9d8ce;padding-left:9px}.arch-node.gap{border-top-color:#c57f40;background:#fff7ec}.arch-node.within{border-top-color:#29826b}.arch-node.pending{border-top-color:#87958b}.arch-chart{margin:24px 0}.arch-heatmap{font-variant-numeric:tabular-nums}.arch-heatmap td,.arch-heatmap th{min-width:132px}.architecture-diagnosis td small,.architecture-diagnosis th small{display:block;font-weight:400;font-size:11px;margin-top:5px;line-height:1.7}.arch-heatmap td.gap{background:#fff2e0;color:#875219}.arch-heatmap td.within{background:#e8f4ee;color:#22624e}.arch-heatmap td.pending{background:#f0f2ee;color:#54655a}.arch-ranking-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.arch-ranking{padding:16px;border:1px solid #dce6df;border-radius:8px;background:#fafcf9}.arch-ranking h4{margin:0 0 12px}.arch-rank-row{display:grid;grid-template-columns:1fr auto;gap:5px 12px;margin:14px 0;font-size:12px}.arch-rank-row span{overflow-wrap:anywhere}.arch-rank-row b{font-variant-numeric:tabular-nums}.arch-track{grid-column:1/-1;height:7px;border-radius:4px;background:#e8eee8;overflow:hidden}.arch-track i{display:block;height:100%}.arch-rank-row small{grid-column:1/-1;color:#657b6d}.arch-conclusion{padding:16px;background:#edf5ef;border-left:3px solid #2d806b;border-radius:6px;margin:12px 0}.arch-conclusion p{font-size:13px;margin:8px 0}.arch-conclusion small{font-size:11px}.arch-scale-panel,.arch-evidence{border:1px solid #dde7df;border-radius:8px;padding:8px 14px;margin:14px 0}.arch-evidence p{font-size:12px;overflow-wrap:anywhere}.arch-evidence small{display:block}.arch-dependencies{border-left:2px dashed #86a08d;padding-left:14px;text-align:left}.arch-dependencies p{font-size:12px}.arch-dependencies small{display:block}.architecture-diagnosis .table-wrap table{min-width:1050px}.architecture-diagnosis .arch-heatmap{min-width:650px}.architecture-diagnosis td:last-child{min-width:190px}.arch-editor-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.arch-editor-table input,.arch-editor-table select{min-width:95px;max-width:220px}.arch-editor-table input[type=number]{width:95px}.arch-editor-table td{min-width:100px}.arch-editor-table label{font-size:12px}.arch-budget-table{min-width:650px}.arch-short-note{font-size:12px;color:#627568}.arch-toggle{display:flex!important;flex-direction:row!important;align-items:center;justify-content:flex-start;gap:8px;font-size:12px;margin:12px 0}.arch-toggle input[type=checkbox]{width:16px;height:16px;flex:0 0 16px;margin:0}.arch-brief{padding:12px 16px;background:#f2f6f1;border-radius:8px;font-size:13px}.arch-brief button{margin-top:8px}
+.architecture-diagnosis .scale-target-breakdown table,.architecture-diagnosis [data-summary-chart] table{min-width:650px}.audit-experiments{scroll-margin-top:calc(var(--workflow-navigation-height,150px) + 12px)}
 @media(max-width:650px){.arch-children{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.arch-node{padding:10px 6px}.arch-node b{font-size:12px}.arch-ranking-grid{grid-template-columns:1fr}.arch-conclusion{padding:12px}.arch-rank-row{font-size:11px}.arch-evidence{padding:6px 10px}.arch-editor-actions button{flex:1}.arch-children .arch-children{padding-left:5px}}
 @media print{.arch-node,.arch-heatmap td,.arch-track i{print-color-adjust:exact;-webkit-print-color-adjust:exact}.arch-ranking-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.arch-ranking{break-inside:avoid}.arch-tree{break-inside:avoid}.architecture-diagnosis .table-wrap table{min-width:0;width:100%}.architecture-diagnosis td:last-child{min-width:0}.arch-scale-panel{break-before:auto}.arch-evidence{font-size:10px}}
 `;

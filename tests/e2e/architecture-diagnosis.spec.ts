@@ -112,6 +112,9 @@ for (const width of [1440, 390])
     await expect(diagnosis).toContainText("计算子系统");
     await expect(diagnosis).toContainText("恢复停机 / 次（秒）");
     await expect(diagnosis).toContainText("不同规模的措施贡献排序");
+    await diagnosis
+      .getByText("展开分层与对象差距矩阵", { exact: true })
+      .click();
     await diagnosis.getByLabel("薄弱点对比层级").selectOption("leaf");
     await expect(diagnosis.locator(".arch-heatmap")).toContainText(
       "AI Core计算单元",
@@ -124,15 +127,11 @@ for (const width of [1440, 390])
     await diagnosis.locator(".arch-tree").screenshot({
       path: `artifacts/architecture-diagnosis/diagram-${width}.png`,
     });
+    await diagnosis.locator('[data-summary-chart="fault-gaps"]').screenshot({
+      path: `artifacts/architecture-diagnosis/heatmap-${width}.png`,
+    });
     await diagnosis
-      .locator(".arch-chart")
-      .first()
-      .screenshot({
-        path: `artifacts/architecture-diagnosis/heatmap-${width}.png`,
-      });
-    await diagnosis
-      .locator(".arch-chart")
-      .nth(1)
+      .locator('[data-summary-chart="contribution-ranks"]')
       .screenshot({
         path: `artifacts/architecture-diagnosis/ranking-${width}.png`,
       });
@@ -217,6 +216,9 @@ for (const width of [1440, 390])
         exact: true,
       }),
     });
+    await section
+      .getByText("子系统与故障对象差距矩阵", { exact: true })
+      .click();
     await expect(
       section.getByText("各规模的分层损失与目标差距", { exact: true }),
     ).toBeVisible();

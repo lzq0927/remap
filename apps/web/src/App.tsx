@@ -95,6 +95,7 @@ const toolNames: Record<string, string> = {
   training: "历史模型 V4 评估",
   audit: "第一轮现状评估",
   "audit-plan": "AGREE分配建议",
+  "audit-plan-scales":"各规模改进分配",
   "audit-experiment": "改进方案独立评估",
   "audit-compare": "多次评估横向比较",
   allocate: "指标分配",

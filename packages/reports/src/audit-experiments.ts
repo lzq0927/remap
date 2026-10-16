@@ -1,6 +1,10 @@
+import { planScaleSections } from "./audit-plan-scales";
 import { architectureSections } from "./audit-architecture";
 import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
-import { auditReferenceOnly } from "../../contracts/src/audit-presets";
+import {
+  auditReferenceOnly,
+  auditSummaryRows,
+} from "../../contracts/src/audit-presets";
 import type { Run } from "../../contracts/src/types";
 import type { AuditSection } from "./audit";
 import { parameterLabels } from "./audit-labels";
@@ -158,6 +162,19 @@ function parameterSources(result: any): AuditSection {
   };
 }
 export function experimentSections(result: any): AuditSection[] {
+  result = {
+    ...result,
+    ...(result.rows
+      ? { rows: auditSummaryRows(result.request, result.rows) }
+      : {}),
+    ...(result.allocations
+      ? { allocations: auditSummaryRows(result.request, result.allocations) }
+      : {}),
+    ...(result.attribution
+      ? { attribution: auditSummaryRows(result.request, result.attribution) }
+      : {}),
+  };
+  if (result.kind === "expert-audit-plan-set") return planScaleSections(result);
   if (result.kind === "expert-audit-plan") {
     return [
       {
@@ -401,7 +418,11 @@ export function experimentSections(result: any): AuditSection[] {
     ...new Set<number>(
       entries.flatMap((e: any) => e.rows.map((r: any) => r.cards)),
     ),
-  ].sort((a, b) => b - a);
+  ].sort(
+    (a, b) =>
+      Number(auditReferenceOnly(result.request, a)) -
+        Number(auditReferenceOnly(result.request, b)) || a - b,
+  );
   const main = result.request.cards;
   const comparisonRows = (cards: number) =>
     entries.map((e: any) => {
@@ -591,9 +612,7 @@ export function experimentChart(result: any) {
     ),
   ];
   const targetPoints = scales
-    .filter(
-      (n) => n !== 1000 || result.request.targets?.[String(n)] !== undefined,
-    )
+    .filter((n) => !auditReferenceOnly(result.request, n))
     .map((x) => {
       const v =
         x === result.request.cards
@@ -607,10 +626,12 @@ export function experimentChart(result: any) {
       ...entries.map((e: any, i: number) => ({
         name: e.name,
         color: colors[i % colors.length],
-        points: e.rows.map((r: any) => ({
-          x: r.cards,
-          statistics: r.statistics,
-        })),
+        points: e.rows
+          .filter((r: any) => !auditReferenceOnly(result.request, r.cards))
+          .map((r: any) => ({
+            x: r.cards,
+            statistics: r.statistics,
+          })),
       })),
       {
         name: "可用度目标",

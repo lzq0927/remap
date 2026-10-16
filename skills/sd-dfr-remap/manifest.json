@@ -1,17 +1,18 @@
 {
   "name": "sd-dfr-remap",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "entry": "SKILL.md",
   "references": [
     "references/workflow.md",
     "references/assessment-rounds.md",
     "references/architecture-diagnosis.md",
+    "references/scale-summary.md",
     "references/ai-cluster-example.md"
   ],
   "protocol": "MCP",
   "requires": {
     "server": "sd-dfr-remap",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "taskBinding": true
   },
   "agentAdapters": {
@@ -30,6 +31,7 @@
     "run_list",
     "run_status",
     "audit_plan",
+    "audit_plan_scales",
     "audit_evaluate",
     "audit_compare",
     "report_export"

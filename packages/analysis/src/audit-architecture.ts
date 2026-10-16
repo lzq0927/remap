@@ -311,6 +311,7 @@ export function auditArchitectureDiagnosis(result: any) {
         ? "architecture-diagnosis.incremental.v1"
         : "architecture-diagnosis.v1",
     architecture,
+    hours,
     scales,
     notes: [
       "分层目标是系统损失责任预算；父层汇总子层，不是各模块自身运行可用度，也不直接连乘。",

@@ -86,3 +86,25 @@ export function changeAuditCards<
     targets: { ...targets, [String(cards)]: target },
   };
 }
+
+/** Presentation only: requirement scales ascend; supplementary reference points follow. */
+export function auditSummaryScales(
+  request: Parameters<typeof auditReferenceOnly>[0],
+  values: Iterable<number>,
+): number[] {
+  return [...new Set(values)].sort(
+    (a, b) =>
+      Number(auditReferenceOnly(request, a)) -
+        Number(auditReferenceOnly(request, b)) || a - b,
+  );
+}
+export function auditSummaryRows<T extends { cards: number }>(
+  request: Parameters<typeof auditReferenceOnly>[0],
+  rows: T[],
+): T[] {
+  return [...rows].sort(
+    (a, b) =>
+      Number(auditReferenceOnly(request, a.cards)) -
+        Number(auditReferenceOnly(request, b.cards)) || a.cards - b.cards,
+  );
+}
