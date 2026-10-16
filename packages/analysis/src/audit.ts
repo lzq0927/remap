@@ -1,3 +1,13 @@
+import {
+  defaultAuditArchitecture,
+  resolveAuditArchitecture,
+  type AuditArchitecture,
+} from "../../contracts/src/audit-architecture";
+import {
+  auditArchitectureDiagnosis,
+  architectureBudgets,
+  architectureReviewChecks,
+} from "./audit-architecture";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import sourceInputs from "../../../references/expert-review-2026-10-09/inputs.json";
@@ -76,6 +86,7 @@ export type EventOverride = {
   note?: string;
 };
 export interface AuditRequest {
+  architecture?: AuditArchitecture;
   eventCatalogVersion?: AuditCatalogVersion;
   optimization?: AuditOptimizationRequest;
   rateArithmetic?: "expert-reference" | "catalog";
@@ -149,6 +160,7 @@ function numberIn(
 }
 export function getAuditDefaults() {
   return {
+    architecture: defaultAuditArchitecture(getAuditEvents()),
     cards: 500000,
     eventCatalogVersion: currentAuditCatalogVersion,
     hours: 720,
@@ -480,6 +492,16 @@ export function resolveAudit(request: AuditRequest) {
     numberIn(cost, 0, 1e15, "cost");
   }
   const events = baseline.events;
+  const architecture = resolveAuditArchitecture(request.architecture, events);
+  for (const cards of scales)
+    architectureBudgets(
+      architecture,
+      cards,
+      request.hours,
+      auditReferenceOnly(request, cards) || architecture.budgetMethod === "none"
+        ? null
+        : (1 - auditTarget(request, cards)) * request.hours,
+    );
   if (request.submodelAllocation?.source === "event-catalog") {
     const allocation = request.submodelAllocation;
     const expected = auditHardwareItems(events, request.cards);
@@ -984,13 +1006,16 @@ function auditOneRound(
     rate: (request.cards * event.fit) / 1e9,
     mtbfHours: event.fit > 0 ? 1e9 / (request.cards * event.fit) : null,
   }));
-  return {
+  const result = {
     kind: "expert-review-audit",
     optimization: null as any,
     metricId: AUDIT_METRIC,
     modelVersion: AUDIT_VERSION,
     request: structuredClone(request),
-    selection: { candidates: [...mechanisms], deployed: [...baseline.mechanisms] },
+    selection: {
+      candidates: [...mechanisms],
+      deployed: [...baseline.mechanisms],
+    },
     referenceComparison: auditReferenceComparison(request, resolved),
     rows,
     baseline: {
@@ -1075,6 +1100,15 @@ function auditOneRound(
       "固定时延与周期检查点采用离散事件仿真；CTMC 仅适用于指数停留时间等前提",
       "置信区间只反映抽样误差；不同参数下配对种子不保证事件逐一对齐",
       "费用与工程可行性需现场确认；候选达到均值目标不等于生产 SLA 或全局最优",
+    ],
+  };
+  const architectureDiagnosis = auditArchitectureDiagnosis(result);
+  return {
+    ...result,
+    architectureDiagnosis,
+    reviewChecks: [
+      ...result.reviewChecks,
+      ...architectureReviewChecks(architectureDiagnosis),
     ],
   };
 }

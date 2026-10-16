@@ -6,7 +6,7 @@
 
 先读取task_current/design_get/workflow_state。已有第一轮用run_list({query:{operation:'audit',limit:'20'}})查找，再run_status核对已完成、kind=expert-review-audit、目标、证据和措施。不要一律取最新ID：用户可能指定历史第一轮，且当前草稿可能已改变。run_list支持sourceRunId筛选同一研究系列；run_status读取完整输入/结果，摘要不代替证据。
 
-没有第一轮时按当前六阶段运行analysis_solve，或在用户明确授权全自动后workflow_automatic；使用完整assessment.input。现状使用已保存的措施与参数，不提前载入改进要求，也不启用旧自动双轮optimization。完成后先给本轮结论和报告。
+没有第一轮时按当前六阶段运行analysis_solve，或在用户明确授权全自动后workflow_automatic；使用完整assessment.input。现状使用已保存的措施与参数，不提前载入改进要求，也不启用旧自动双轮optimization。完成后先给本轮结论和报告。读取architectureDiagnosis.scales，按各规模解释nodes的actualHours/allowedHours/excessHours、types的中断MTBF与其他事件间隔、恢复停机及损失来源；不把父层与子层再次相加。
 
 ## 只生成分配建议
 
@@ -14,7 +14,7 @@
 {"body":{"sourceRunId":"<第一轮ID>","options":{"planningCards":500000}}}
 ```
 
-调用audit_plan。用户未给具体规划选项时省略options，使用冻结第一轮的主规模/目标。先run_status读取计划，说明result.prediction是规划试算、result.scenarioEvaluated=false；查看allocations、factors、decisions、configuration及来源。计划配置未部署，不能拿计划prediction充当第二轮实测或正式复评。不得因为生成成功自动调用audit_evaluate。
+调用audit_plan。用户未给具体规划选项时省略options，使用冻结第一轮的主规模/目标。先run_status读取计划，说明result.prediction是规划试算、result.scenarioEvaluated=false；查看architectureDiagnosis、allocations[].layerLinks、factors、decisions、configuration及来源。layerLinks追溯逐事件适用范围，responsibilityResidualHours核对设计责任守恒；unaddressed不是已存在措施。高现状Shapley不等于追加优化收益，须检查条件响应。计划配置未部署，不能拿计划prediction充当第二轮实测或正式复评。不得因为生成成功自动调用audit_evaluate。
 
 第一轮没有Shapley时无法据其排序分配，解释缺失并按用户意图补充新的现状运行；不要编造贡献或覆盖旧运行。其他规模可独立指定planningCards。importance按规模和机制ID提供；维持target，不能为通过规划放宽目标。
 

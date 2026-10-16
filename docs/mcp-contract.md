@@ -22,7 +22,7 @@ input_mapping `{id}` 对应 GET /api/tasks/:taskId/inputs/:id/mapping；只接�
 
 ## 独立评估轮次（MCP 0.3）
 
-- `audit_plan` → POST `/audit/plan`，body `{sourceRunId,options?}`。服务端读取同任务已完成第一轮，以Shapley重要度做AGREE工程责任分配；options可指定planningCards/importance/parameterTargets等。仅生成建议，规划试算不算正式改进评估。
+- `audit_plan` → POST `/audit/plan`，body `{sourceRunId,options?}`。服务端读取同任务已完成第一轮，从architectureDiagnosis定位分层损失，仅在故障与损失项适用范围内按Shapley分担责任，再做AGREE分配；allocations[].layerLinks保留追溯，未覆盖责任单列；options可指定planningCards/importance/parameterTargets等。仅生成建议，规划试算不算正式改进评估。
 - `audit_evaluate` → POST `/audit/evaluate`，body `{sourceRunId,name,configuration,planRunId?}`。configuration是相对第一轮的完整改动集合；采用计划时传其configuration及planRunId，服务校验同源。每次独立运行，不改草稿、历史输入或六阶段确认。
 - `audit_compare` → POST `/audit/compare`，body `{runIds}`，2–12次同源已完成评估（含第一轮），不允许计划混入。结果可用report_export输出HTML/ZIP。
 - `run_list` → GET `/runs`，MCP返回有界运行摘要 `{items,total,limit,offset}`，不返回大输入/结果；query支持operation/sourceRunId/limit/offset，按时间倒序。完整证据用run_status读取。API `GET /runs?view=summary`提供相同摘要及筛选分页；未指定view的原始列表格式保持不变。摘要在存储层投影，不向网关传送整份试验快照。

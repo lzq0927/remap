@@ -1,3 +1,7 @@
+import {
+  auditArchitectureDiagnosis,
+  architectureReviewChecks,
+} from "./audit-architecture";
 import { createHash } from "node:crypto";
 import { validateOptimization } from "./audit-optimization";
 import { resolveAudit, type AuditRequest } from "./audit";
@@ -425,7 +429,7 @@ export function auditExperiment(
       };
     });
   onProgress?.(1);
-  return {
+  const result = {
     kind: "expert-audit-experiment",
     selection: source.result.selection,
     round: "scenario",
@@ -458,5 +462,49 @@ export function auditExperiment(
       "各改进方案复用相同评估种子以便比较，规划、第一轮及增量归因另用种子；置信区间仅含抽样误差。",
       "达标按总可用度的区间下限判断，不要求每个损失子预算独立达标，也不合并各规模最严参数。",
     ],
+  };
+  // FIT edits and screening affect this scenario's diagnostic rates, never the frozen source.
+  const scenarioEvents = resolved.events.map((event) => {
+    const patch = configuration.fitTargets?.find((p) => p.id === event.id);
+    const screen = configuration.extensions?.find(
+      (m) => m.id === "H-SDC-SCREEN",
+    );
+    const eligible = (
+      auditExtensionCatalog.find((m) => m.id === "H-SDC-SCREEN")!
+        .eventCandidates as string[]
+    ).includes(event.id);
+    const fit = patch?.fit ?? event.fit;
+    return {
+      ...event,
+      ...(patch ?? {}),
+      ...(screen && eligible
+        ? {
+            source:
+              (patch?.source ?? event.source) +
+              "；残余事件率按H-SDC-SCREEN情景折算：" +
+              screen.source,
+            evidence: "scenario",
+            note: "本轮筛查情景的残余FIT；不是修改第一轮源FIT或新增实测数据",
+          }
+        : {}),
+      fit:
+        screen && eligible
+          ? fit *
+            (1 -
+              screen.parameters.eligibleShare *
+                screen.parameters.success *
+                screen.parameters.reduction)
+          : fit,
+    };
+  });
+  const architectureDiagnosis = auditArchitectureDiagnosis({
+    ...result,
+    events: scenarioEvents,
+  });
+  return {
+    ...result,
+    events: scenarioEvents,
+    architectureDiagnosis,
+    reviewChecks: architectureReviewChecks(architectureDiagnosis),
   };
 }

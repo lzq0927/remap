@@ -5,6 +5,21 @@ import { draftFromAuditRequest } from "../../packages/contracts/src/audit-draft"
 
 const changes: [string, number, (draft: any) => void][] = [
   [
+    "architecture structure",
+    1,
+    (d) => {
+      d.request.architecture.nodes[1].name = "新分层名称";
+    },
+  ],
+  [
+    "architecture budget",
+    2,
+    (d) => {
+      d.request.architecture.budgetMethod = "weighted";
+      d.request.architecture.nodes[1].weight = 2;
+    },
+  ],
+  [
     "sampling",
     4,
     (d) => {

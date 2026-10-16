@@ -37,6 +37,7 @@ export function registerAuditExperimentRoutes(
         modelVersion: run.result.modelVersion,
         config: run.result.config,
         selection: run.result.selection,
+        architectureDiagnosis: run.result.architectureDiagnosis,
         events: run.result.events,
         baseline: run.result.baseline,
         rows: run.result.rows

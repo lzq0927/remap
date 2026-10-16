@@ -305,7 +305,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
       <details>
         <summary>AGREE重要度与目标约束</summary>
         <p>
-          先用第一轮Shapley形成可编辑重要度，分配改进责任，再以主规模总可用度目标反解参数。其他规模独立显示结果；不合并成一套最严参数，不要求各损失子预算都通过。
+          先沿架构定位各规模薄弱点，仅在措施适用的故障范围内按第一轮Shapley形成重要度与责任，再用AGREE及总目标反解参数。其他规模独立显示结果；不合并成一套最严参数，不要求各损失子预算都通过。
         </p>
         <div className="fields">
           {(

@@ -19,7 +19,7 @@ description: Help users set reliability goals, assess current mechanisms, alloca
 
 ## 默认任务与第一轮现状
 
-统一入口“可靠性设计与评估”，保留六阶段：**可用度目标 → 故障模式 → 可用度分配 → 可靠性措施 → 计算与权衡 → 验证与交付**。第三步第一轮确认“现状评估、不预先改造分配”，不为了填写预算而改变固定的失效率或措施。参数核对合入第五步，可折叠。
+统一入口“可靠性设计与评估”，保留六阶段：**可用度目标 → 故障模式 → 可用度分配 → 可靠性措施 → 计算与权衡 → 验证与交付**。第二步确认系统分层架构、共同依赖和故障唯一归属；第三步确认各规模分层损失预算作为现状诊断参照，不改变固定的失效率或措施。默认功能分组与均分预算是暂定设计参照，不能称为已验证部署架构或专家模块指标。参数核对合入第五步，可折叠。
 
 新任务默认专家评估口径 `operation:'audit'`、`metricId:'training.retained-clean-progress'`：可用度=期末保留的正确进度/理想产出，仍污染时保留最后干净检查点。所有界面与解释统一称“可用度”，计算语义保持。稳态运行可用度、无故障任务可靠度与此指标分别记录。历史模型 V4 在“高级设置 → 历史模型”，沿用原终态污染整任务清零口径，历史查看/导出/重放不改变当前设计。
 
@@ -33,8 +33,8 @@ AI训练集群默认数据与目标见[references/ai-cluster-example.md](referen
 
 详细工具调用、结果读取与恢复见 [references/assessment-rounds.md](references/assessment-rounds.md)。默认每轮单独给结论，先让用户看到第一轮真实输入下的结果，再做后续。这里的“真实现状评估”表示按确认的现状参数计算，不等于现场实测。
 
-1. **第一轮**：读取正式运行，展示各需求规模均值、95%区间、损失账本和所选候选措施Shapley；导出本轮报告。若未达标，解释差距；不要提前宣布第二轮结论。
-2. **分配建议**：用户请求后调用 `audit_plan`，body={sourceRunId,options?}。服务从已完成第一轮冻结证据，正Shapley形成初始重要度，AGREE分配工程责任与允许损失，按责任差额反推现有/新增机制参数。默认规划主规模；可用options.planningCards对其他需求规模独立规划。`prediction`仅为规划试算，`scenarioEvaluated=false`。展示来源、假设、开销、目标参数和取舍，等待用户决定评估；不要调用 audit_evaluate 自动接续。
+1. **第一轮**：读取正式运行，展示各需求规模均值、95%区间、分层目标、MTBF/事件间隔、恢复停机与其他损失、薄弱点及所选候选措施Shapley；导出本轮报告。读取architectureDiagnosis，核对residualHours，详情见[references/architecture-diagnosis.md](references/architecture-diagnosis.md)。若未达标，解释差距；不要提前宣布第二轮结论。
+2. **分配建议**：用户请求后调用 `audit_plan`，body={sourceRunId,options?}。服务从已完成第一轮冻结证据，先沿架构定位薄弱点，在逐事件适用范围内按正Shapley分担互斥工程责任；未覆盖责任单列。正Shapley形成初始重要度，AGREE分配允许责任损失，按责任差额反推现有/新增机制参数。默认规划主规模；可用options.planningCards对其他需求规模独立规划。`prediction`仅为规划试算，`scenarioEvaluated=false`。展示来源、假设、开销、目标参数和取舍，等待用户决定评估；不要调用 audit_evaluate 自动接续。
 3. **独立改进轮**：用户明确要求评估或点击后，调用 `audit_evaluate`，body={sourceRunId,name,configuration,planRunId?}。载入建议时使用计划返回的完整configuration并传planRunId；后续编辑保留关联，解释差异。单参数对照仅提供该参数的改动；参数名称、单位和当前值从运行快照读取。每次configuration是相对冻结第一轮的完整改动集合，不叠加上次试验。可反复手改、评估、导出，不回写第一轮，不重走其确认流程。
 4. **横向比较**：用户选定同一第一轮下的2–12次已完成评估，用 `audit_compare({body:{runIds:[firstId,scenarioId,...]}})`。分配计划不能作为评估参与比较。`report_export`导出各轮和比较报告；分别展示各规模曲线、参数差异、结论、排名、区间和未满足项。
 
@@ -48,7 +48,7 @@ AI训练集群默认数据与目标见[references/ai-cluster-example.md](referen
 
 阶段产物、确认和恢复见 [references/workflow.md](references/workflow.md)。`workflow_save`带 executionId、expectedRevision、inputRevision、stepId、status、artifacts、notes，来自最新 workflow_state；409重新读取，不盲重试。正式audit使用已保存assessment.input与executionId/inputRevision，前四阶段满足进入条件后才运行。独立试算不传executionId，也不能替代正式第一轮交付。
 
-修改正式草稿后，服务识别最早受影响阶段：目标/规模/指标从第一步，故障从第二步，分配从第三步，措施从第四步，采样从第五步；用户可沿用此前连续人工确认。Agent不能伪造confirmed或代用户沿用。独立audit_plan/evaluate/compare不修改草稿版本、不使原流程过期。
+修改正式草稿后，服务识别最早受影响阶段：目标/规模/指标从第一步，故障或架构结构从第二步，分配或架构预算从第三步，措施从第四步，采样从第五步；用户可沿用此前连续人工确认。Agent不能伪造confirmed或代用户沿用。独立audit_plan/evaluate/compare不修改草稿版本、不使原流程过期。
 
 ## 子模型方法与条件分析
 
@@ -72,6 +72,6 @@ eventOverrides只改明确事件并保留source/evidence/rateBasis。缺少的�
 
 输入导入后待人工确认，input_mapping仅预览确认后的映射，不自动应用、冻结或确认。示例/公共资产先复制到任务，核对固定revision/contentHash/适用范围；示例不能升级为实测。Agent可catalog_create/validate或提交候选，用户冻结，独立审核发布。不要把凭据写入skill、公共资产或导出。
 
-每轮报告包含目标、冻结参数/故障与来源、机制/适用范围、损失账本、均值与95%区间、各规模达标结论、贡献排名与待验证项；比较报告有参数对照、曲线和每轮独立结论。按实际字段报告P05/P50/P95及窗口达标比例，历史未记录的不补造。`report_export({id,query:{format:'html'}})`读取HTML；format=manifest/zip返回下载描述，离线包含HTML/Markdown/JSON与摘要。反馈用feedback_record记录采纳理由。
+每轮报告包含总体与分层目标、架构/故障归属、各规模薄弱点热力图与贡献对比、冻结参数/故障与来源、机制/适用范围、损失账本、均值与95%区间、各规模达标结论、贡献排名与待验证项；比较报告有参数对照、曲线和每轮独立结论。按实际字段报告P05/P50/P95及窗口达标比例，历史未记录的不补造。`report_export({id,query:{format:'html'}})`读取HTML；format=manifest/zip返回下载描述，离线包含HTML/Markdown/JSON与摘要。反馈用feedback_record记录采纳理由。
 
 解释：输入→故障损失→现有机制→实际缺口→分配→改进要求→复评与权衡→验证交付。置信区间只含采样误差，模型与参数仍需工程校准；报告明确未达标规模、不利结果和未验证要求。结论依据实际run_status，不把规划预期、示例回归或代码测试称产品已达标。

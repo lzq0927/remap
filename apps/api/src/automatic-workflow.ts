@@ -1,3 +1,6 @@
+import { auditReferenceOnly } from "../../../packages/contracts/src/audit-presets";
+import { resolveAuditArchitecture } from "../../../packages/contracts/src/audit-architecture";
+import { architectureBudgets } from "../../../packages/analysis/src/audit-architecture";
 import {
   setTimeout as pause,
   setImmediate as yieldStage,
@@ -120,6 +123,10 @@ export function registerAutomaticWorkflow(
             id: "describe",
             type: "architecture",
             data: {
+              architecture: resolveAuditArchitecture(
+                input.architecture,
+                resolved.events,
+              ),
               events: resolved.events,
               baseline: {
                 resolvedEvents: resolved.baseline.resolvedEvents,
@@ -132,12 +139,37 @@ export function registerAutomaticWorkflow(
             id: "select",
             type: "method-plan",
             data: {
+              architectureBudget: {
+                method: input.architecture?.budgetMethod ?? "equal",
+                basis: input.architecture?.basis ?? "功能分组模板，待确认",
+                scales: resolved.scales.map((cards) => ({
+                  cards,
+                  budgets: Object.fromEntries(
+                    architectureBudgets(
+                      resolveAuditArchitecture(
+                        input.architecture,
+                        resolved.events,
+                      ),
+                      cards,
+                      input.hours,
+                      auditReferenceOnly(input, cards) ||
+                        input.architecture?.budgetMethod === "none"
+                        ? null
+                        : (1 -
+                            (cards === input.cards
+                              ? input.target
+                              : (input.targets?.[cards] ?? input.target))) *
+                            input.hours,
+                    ),
+                  ),
+                })),
+              },
               submodel: resolved.submodelPlan,
               lossBudgetMethod: input.lossBudgetMethod ?? "custom",
               optimization: input.optimization,
               lossBudgetWeights: input.lossBudgetWeights,
             },
-            note: "先冻结并评估当前所选措施和能力参数；未达标时根据各规模 Shapley 贡献进行第二轮 AGREE 分配，再验证具体改进方案。",
+            note: "冻结架构与分层目标参照，保留现状FIT和措施；完成各规模薄弱点诊断与Shapley后，再按适用范围进行AGREE改进分配。",
           },
           {
             id: "prepare",

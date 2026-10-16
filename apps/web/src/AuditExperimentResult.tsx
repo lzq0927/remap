@@ -1,3 +1,7 @@
+import {
+  architectureReport,
+  architectureCss,
+} from "../../../packages/reports/src/audit-architecture";
 import { useState } from "react";
 import {
   experimentSections,
@@ -20,13 +24,18 @@ export default function AuditExperimentResult({ result }: { result: any }) {
             : "本次独立方案结果"
       }
     >
-      <style>{auditChartCss}</style>
+      <style>{auditChartCss + architectureCss}</style>
       {sections.map((section, index) => (
         <details key={section.title} open={index === 0 || index === 1}>
           <summary>{section.title}</summary>
           {section.paragraphs?.map((p) => (
             <p key={p}>{p}</p>
           ))}
+          {section.visual === "architecture" && (
+            <div
+              dangerouslySetInnerHTML={{ __html: architectureReport(result) }}
+            />
+          )}
           {section.visual === "experiment-comparison" && (
             <div
               dangerouslySetInnerHTML={{ __html: experimentChart(result) }}

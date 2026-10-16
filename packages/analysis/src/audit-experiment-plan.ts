@@ -1,4 +1,8 @@
 import {
+  auditArchitectureDiagnosis,
+  architectureResponsibilities,
+} from "./audit-architecture";
+import {
   auditMechanismCodes,
   auditMechanismSummary,
 } from "../../contracts/src/audit-mechanism-view";
@@ -45,6 +49,9 @@ export function auditExperimentPlan(
     throw new Error(
       "现状缺少可分配的候选措施贡献；请先选择候选措施并计算Shapley，或直接新建参数方案",
     );
+  const architectureDiagnosis: ReturnType<typeof auditArchitectureDiagnosis> =
+    source.result.architectureDiagnosis ??
+    auditArchitectureDiagnosis({ ...source.result, request });
   const allocations = source.result.rows
     .filter(
       (r: any) => r.id === "combined" && !auditReferenceOnly(request, r.cards),
@@ -57,15 +64,17 @@ export function auditExperimentPlan(
         1e-12,
         ...contributions.map((c: any) => Math.max(0, c.statistics.mean)),
       );
-      const sum = contributions.reduce(
-        (s: number, c: any) => s + Math.max(0, c.statistics.mean),
-        0,
-      );
       const target =
         row.cards === request.cards
           ? request.target
           : (request.targets?.[String(row.cards)] ?? request.target);
       const currentLoss = (1 - row.statistics.mean) * request.hours;
+      const layerLinks = architectureResponsibilities(
+        { ...source.result, request },
+        architectureDiagnosis,
+        row.cards,
+        contributions,
+      );
       const items = contributions.map((c: any) => ({
         id: c.id,
         name: c.name,
@@ -75,12 +84,23 @@ export function auditExperimentPlan(
         suggestedImportance: shapleyImportance(c.statistics.mean, maximum),
         contribution: c.statistics.mean,
         complexity: 1,
-        actualHours:
-          currentLoss *
-          (sum
-            ? Math.max(0, c.statistics.mean) / sum
-            : 1 / contributions.length),
+        actualHours: layerLinks
+          .filter((link) => link.mechanismId === c.id)
+          .reduce((sum, link) => sum + link.actualHours, 0),
       }));
+      const unaddressed = layerLinks
+        .filter((link) => link.mechanismId === "unaddressed")
+        .reduce((sum, link) => sum + link.actualHours, 0);
+      if (unaddressed > 0)
+        items.push({
+          id: "unaddressed",
+          name: "未覆盖设计责任",
+          importance: 0.2,
+          suggestedImportance: 0.2,
+          contribution: 0,
+          complexity: 1,
+          actualHours: unaddressed,
+        });
       const plan = agreeLossAllocation(
         (1 - target) * request.hours,
         request.hours,
@@ -92,8 +112,12 @@ export function auditExperimentPlan(
         current: row.statistics,
         gapHours: Math.max(0, (target - row.statistics.mean) * request.hours),
         ...plan,
+        layerLinks,
+        responsibilityResidualHours:
+          items.reduce((sum: number, item: any) => sum + item.actualHours, 0) -
+          currentLoss,
         basis:
-          "按第一轮正Shapley划分互斥设计责任，再用AGREE分配允许责任损失；用于优先级和工程讨论，不是机制独立物理损失，不要求所有子预算硬达标",
+          "先沿架构定位实际损失与分层目标，再在措施适用层内按第一轮正Shapley分担互斥设计责任，以AGREE分配允许责任损失；未覆盖责任明确保留。重要度不是追加改善收益，仍按条件响应与总目标正向求解，不要求所有子预算硬达标",
       };
     });
   const mainPlan = allocations.find((p: any) => p.cards === primary)!;
@@ -468,6 +492,15 @@ export function auditExperimentPlan(
         "30秒参考不足时探索10秒完整恢复与失败概率，非专家已有能力",
       ],
     ] as const) {
+      if (
+        "policy" in patch &&
+        !Object.keys(patch.policy).some((code) =>
+          auditMechanismSummary(request, source.result.selection).ids.some(
+            (id) => auditMechanismCodes[id] === code,
+          ),
+        )
+      )
+        continue;
       const trial = evaluate(id, merge(chosen.configuration, config(patch)));
       if (trial.statistics.mean > chosen.statistics.mean) {
         chosen = trial;
@@ -609,6 +642,7 @@ export function auditExperimentPlan(
     sourceInputHash: source.inputHash,
     request,
     allocations,
+    architectureDiagnosis,
     decisions,
     configuration: chosen.configuration,
     factors: experimentFactors(source, chosen.configuration).map((factor) => ({

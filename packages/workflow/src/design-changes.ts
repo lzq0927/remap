@@ -19,6 +19,7 @@ export function changedAuditStage(previous: any, current: any): number {
       scales,
       metricId,
       modelVersion,
+      architecture,
       eventOverrides,
       eventCatalogVersion,
       rateArithmetic,
@@ -62,6 +63,20 @@ export function changedAuditStage(previous: any, current: any): number {
         unknown,
       },
       {
+        architectureStructure: architecture && {
+          version: architecture.version,
+          name: architecture.name,
+          basis: architecture.basis,
+          nodes: architecture.nodes.map(
+            ({
+              weight: _weight,
+              importance: _importance,
+              scaleWeights: _scaleWeights,
+              ...node
+            }: any) => node,
+          ),
+          dependencies: architecture.dependencies,
+        },
         eventOverrides,
         eventCatalogVersion,
         rateArithmetic,
@@ -69,6 +84,15 @@ export function changedAuditStage(previous: any, current: any): number {
         note: baseline?.note,
       },
       {
+        architectureBudget: architecture && {
+          method: architecture.budgetMethod,
+          nodes: architecture.nodes.map((n: any) => ({
+            id: n.id,
+            weight: n.weight,
+            importance: n.importance,
+            scaleWeights: n.scaleWeights,
+          })),
+        },
         lossBudgetMethod,
         lossBudgetWeights,
         submodelAllocation,

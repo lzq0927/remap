@@ -1,3 +1,4 @@
+import { architectureSections } from "./audit-architecture";
 import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
 import { auditReferenceOnly } from "../../contracts/src/audit-presets";
 import type { Run } from "../../contracts/src/types";
@@ -77,6 +78,7 @@ export function compareAuditExperiments(runs: Run[]) {
     },
     factors: run.result.factors ?? [],
     attribution: run.result.attribution,
+    architectureDiagnosis: run.result.architectureDiagnosis,
     sampling:
       run.result.kind === "expert-review-audit"
         ? run.result.request.trials
@@ -175,6 +177,40 @@ export function experimentSections(result: any): AuditSection[] {
               percent(a.target),
               number(a.gapHours),
             ]),
+          },
+        ],
+      },
+      ...architectureSections(result),
+      {
+        title: "分层薄弱点到机制的责任追溯",
+        paragraphs: [
+          "原分层预算与现状保持冻结；只在机制适用的故障范围内分担设计责任。未覆盖责任单列，需要新增措施或进一步建模；下表不是机制独立物理损失。",
+        ],
+        tables: [
+          {
+            heads: [
+              "架构叶层",
+              "适用措施",
+              "现状设计责任 / h",
+              "原分层参照 / h",
+              "故障 / 开销",
+              "可改善损失项",
+            ],
+            rows: [],
+            scaleLabel: "责任追溯规模",
+            scaleRows: result.allocations.map((a: any) => ({
+              cards: a.cards,
+              rows: (a.layerLinks ?? [])
+                .filter((l: any) => l.actualHours > 0 || l.allowedHours > 0)
+                .map((l: any) => [
+                  l.layerName,
+                  l.mechanismName,
+                  number(l.actualHours),
+                  number(l.allowedHours),
+                  l.eventIds.join("、"),
+                  l.lossKeys?.join("、") ?? "历史责任未分损失项",
+                ]),
+            })),
           },
         ],
       },
@@ -288,6 +324,7 @@ export function experimentSections(result: any): AuditSection[] {
           },
         ],
       },
+      ...architectureSections(result),
       {
         title: "本次参数快照与第一轮差异",
         tables: [
@@ -435,6 +472,55 @@ export function experimentSections(result: any): AuditSection[] {
             rows: comparisonRows(cards),
           })),
           scaleLabel: "横向比较规模",
+        },
+      ],
+    },
+    {
+      title: "各轮分层薄弱点比较",
+      paragraphs: [
+        "按相同架构、同一分层目标比较各轮叶层损失；父层只作汇总。现有措施贡献与改进增量分别排序。",
+      ],
+      tables: [
+        {
+          heads: [
+            "评估",
+            "主要薄弱层",
+            "主要损失",
+            "损失 / h",
+            "超分层预算 / h",
+            "改善方向",
+          ],
+          rows: [],
+          scaleLabel: "薄弱点对比规模",
+          scaleRows: scales.map((cards) => ({
+            cards,
+            rows: entries.flatMap((entry: any) => {
+              const scale = entry.architectureDiagnosis?.scales.find(
+                (s: any) => s.cards === cards,
+              );
+              return scale
+                ? scale.weaknesses
+                    .slice(0, 3)
+                    .map((w: any) => [
+                      entry.name,
+                      w.name,
+                      w.focus,
+                      number(w.lossHours),
+                      number(w.excessHours),
+                      w.action,
+                    ])
+                : [
+                    [
+                      entry.name,
+                      "历史结果未保存分层诊断",
+                      "—",
+                      "—",
+                      "—",
+                      "保持原结果与口径",
+                    ],
+                  ];
+            }),
+          })),
         },
       ],
     },

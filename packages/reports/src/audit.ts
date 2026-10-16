@@ -1,3 +1,4 @@
+import { architectureSections } from "./audit-architecture";
 import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
 import { auditSummary } from "./audit-summary";
 import { auditOptimizationSections } from "./audit-optimization";
@@ -65,6 +66,7 @@ export interface AuditSection {
   tables?: AuditTable[];
   collapsed?: boolean;
   visual?:
+    | "architecture"
     | "experiment-comparison"
     | "optimization"
     | "optimized-objects"
@@ -194,6 +196,7 @@ export function auditSections(r: any): AuditSection[] {
         },
       ],
     },
+    ...architectureSections(r),
     {
       title: "01 / 确认口径与数据证据",
       paragraphs: [

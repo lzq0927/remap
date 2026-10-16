@@ -1,3 +1,4 @@
+import AuditArchitectureResult from "./AuditArchitectureResult";
 import { useId, useState } from "react";
 import { useTaskApi } from "./api";
 import WorkspaceViewTabs, { useViewPreference } from "./WorkspaceViewTabs";
@@ -55,6 +56,7 @@ export default function AuditResult({
           ...(r.optimization ? [{ id: "decision", label: "两轮决策" }] : []),
           { id: "overview", label: r.optimization ? "第一轮现状" : "结论概览" },
           { id: "gains", label: "方案收益" },
+          { id: "architecture", label: "分层诊断" },
           { id: "diagram", label: "可靠性框图" },
           {
             id: "contributions",
@@ -95,6 +97,12 @@ export default function AuditResult({
             ))}
           </select>
         </label>
+        <div
+          className="workspace-result-panel"
+          hidden={!visible("architecture")}
+        >
+          <AuditArchitectureResult result={r} cards={cards} />
+        </div>
         <div className="workspace-result-panel" hidden={!visible("diagram")}>
           <AuditReliabilityDiagram events={r.events} result={r} cards={cards} />
         </div>
@@ -143,6 +151,27 @@ export default function AuditResult({
               </small>
             </div>
           </div>
+          {r.architectureDiagnosis?.scales.find((s: any) => s.cards === cards)
+            ?.weaknesses[0] && (
+            <div className="arch-brief">
+              <b>分层诊断重点：</b>
+              {
+                r.architectureDiagnosis.scales.find(
+                  (s: any) => s.cards === cards,
+                ).weaknesses[0].name
+              }{" "}
+              ·{" "}
+              {
+                r.architectureDiagnosis.scales.find(
+                  (s: any) => s.cards === cards,
+                ).weaknesses[0].focus
+              }
+              <br />
+              <button type="button" onClick={() => setView("architecture")}>
+                查看分层目标与跨规模薄弱点
+              </button>
+            </div>
+          )}
           {budget && (
             <section aria-label="预算与实际损失">
               <h3>预算与实际损失</h3>

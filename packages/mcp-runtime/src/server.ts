@@ -139,7 +139,7 @@ export const registry = [
   ],
   [
     "audit_plan",
-    "依据已完成第一轮Shapley生成AGREE工程责任分配与参数建议。body={sourceRunId,options?}，options支持planningCards、importance（规模→机制→重要度）、parameterTargets、exploreExtensions、screeningTrials。规划规模和目标遵从冻结输入及本次options，不固定卡数或目标值。只做规划，不执行第二轮、不修改设计；返回runId后用run_status读取configuration、prediction和来源",
+    "沿冻结第一轮架构定位各规模薄弱点，在逐事件适用范围内按Shapley分担设计责任，再生成AGREE分配与参数建议。result.architectureDiagnosis和allocations[].layerLinks可追溯分层来源；未覆盖责任单列。body={sourceRunId,options?}，options支持planningCards、importance（规模→机制→重要度）、parameterTargets、exploreExtensions、screeningTrials。规划规模和目标遵从冻结输入及本次options，不固定卡数或目标值。只做规划，不执行第二轮、不修改设计；返回runId后用run_status读取configuration、prediction和来源",
     "POST",
     "/audit/plan",
   ],

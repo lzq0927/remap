@@ -58,6 +58,7 @@ const include = [
   "docs/分轮评估与Agent协作指南.md",
   "docs/2026-10-15-Skill与平台闭环复核.md",
   "docs/2026-10-15-通用参数试验与场景样例.md",
+  "docs/2026-10-16-分层目标与现状诊断.md",
   "docs/numerical-methods.md",
   "docs/2026-10-12-专家原始配置复现验收.md",
   "docs/2026-10-12-专家方法与Agent流水线使用指南.md",

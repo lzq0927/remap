@@ -1,3 +1,4 @@
+import AuditArchitectureEditor from "./AuditArchitectureEditor";
 import { optimizationSampling } from "../../../packages/contracts/src/audit-optimization";
 import {
   auditLossBudgetLabels,
@@ -318,6 +319,11 @@ export default function AuditWorkbench({
             / 2% / 1.4%，万卡中断 MTBF 约30小时。逐项更新仍优先使用你填写的值。
           </p>
         )}
+        <AuditArchitectureEditor
+          request={request}
+          events={currentEvents}
+          onChange={setRequest}
+        />
         <AuditEventCatalog
           events={currentEvents}
           onEdit={(id) => {
@@ -381,6 +387,12 @@ export default function AuditWorkbench({
           <p>
             现状评估按当前配置计算，改进要求在后续方案中独立设置。评估完成后，可在“分轮评估与横向比较”中调整或新增措施，逐次计算与导出报告。
           </p>
+          <AuditArchitectureEditor
+            request={request}
+            events={currentEvents}
+            onChange={setRequest}
+            mode="budget"
+          />
           <details
             className="audit-help"
             open={
@@ -391,7 +403,7 @@ export default function AuditWorkbench({
           >
             <summary>高级：独立子模型与第一轮损失预算</summary>
             <p className="note">
-              第一轮现状评估默认不做分配。以下保留历史任务与专项设计的手动分配功能。
+              上方分层预算用于现状诊断，不改变故障或机制。以下独立子模型分配保留给专项设计和历史任务。
             </p>
             <AuditAllocationEditor
               request={request}
