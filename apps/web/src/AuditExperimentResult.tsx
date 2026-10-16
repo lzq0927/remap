@@ -1,4 +1,5 @@
 import { planScaleChart } from "../../../packages/reports/src/audit-plan-scales";
+import { decisionStudyCharts } from "../../../packages/reports/src/audit-decision-study";
 import {
   architectureReport,
   architectureCss,
@@ -9,11 +10,39 @@ import {
   experimentChart,
 } from "../../../packages/reports/src/audit-experiments";
 import { auditChartCss } from "../../../packages/reports/src/audit-charts";
-export default function AuditExperimentResult({ result }: { result: any }) {
+export default function AuditExperimentResult({
+  result,
+  alternativeId,
+}: {
+  result: any;
+  alternativeId?: string;
+}) {
   const [cards, setCards] = useState(
     result.prediction?.cards ?? result.request.cards,
   );
-  const sections = experimentSections(result);
+  const selectedAlternative = result.decisionStudy?.alternatives.find(
+    (a: any) => a.id === alternativeId,
+  );
+  const sections = experimentSections(
+    alternativeId && result.decisionStudy
+      ? {
+          ...result,
+          configuration:
+            selectedAlternative?.configuration ?? result.configuration,
+          factors: selectedAlternative?.factors ?? result.factors,
+          prediction: {
+            ...result.prediction,
+            mean:
+              selectedAlternative?.nominal.statistics.mean ??
+              result.prediction.mean,
+          },
+          decisionStudy: {
+            ...result.decisionStudy,
+            displayAlternativeId: alternativeId,
+          },
+        }
+      : result,
+  );
   return (
     <section
       className="audit-experiment-result"
@@ -36,6 +65,13 @@ export default function AuditExperimentResult({ result }: { result: any }) {
           ))}
           {section.visual === "plan-set" && (
             <div dangerouslySetInnerHTML={{ __html: planScaleChart(result) }} />
+          )}
+          {section.visual === "decision-study" && (
+            <div
+              dangerouslySetInnerHTML={{
+                __html: decisionStudyCharts(result, alternativeId),
+              }}
+            />
           )}
           {section.visual === "architecture" && (
             <div

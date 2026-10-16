@@ -6,8 +6,17 @@ import {
   auditMechanismCodes,
   auditMechanismSummary,
 } from "../../contracts/src/audit-mechanism-view";
-import { agreeLossAllocation } from "./audit-allocation";
-import { shapleyImportance } from "./audit-optimization";
+import {
+  designAllocation,
+  compareDesignAllocations,
+} from "./audit-design-allocation";
+import {
+  boundPlanningConfiguration,
+  validatePlanningSource,
+} from "./audit-planning-bounds";
+import { completeDecisionStudy } from "./audit-decision-study";
+import { planningWork } from "./audit-planning-work";
+import { shapleyImportance, validateOptimization } from "./audit-optimization";
 import {
   experimentFactors,
   experimentSampler,
@@ -33,7 +42,7 @@ type Group = {
 /** AGREE allocates design responsibility; total availability is the forward constraint.
  * The allocation is not asserted to be a unique physical inverse or independent mechanism gain.
  */
-export function auditExperimentPlan(
+function guidedExperimentPlan(
   input: { source: AuditSource; options?: AuditOptimizationRequest },
   onProgress?: (fraction: number) => void,
 ) {
@@ -83,7 +92,7 @@ export function auditExperimentPlan(
           shapleyImportance(c.statistics.mean, maximum),
         suggestedImportance: shapleyImportance(c.statistics.mean, maximum),
         contribution: c.statistics.mean,
-        complexity: 1,
+        complexity: options.planning?.complexity?.[c.id] ?? 1,
         actualHours: layerLinks
           .filter((link) => link.mechanismId === c.id)
           .reduce((sum, link) => sum + link.actualHours, 0),
@@ -91,20 +100,21 @@ export function auditExperimentPlan(
       const unaddressed = layerLinks
         .filter((link) => link.mechanismId === "unaddressed")
         .reduce((sum, link) => sum + link.actualHours, 0);
-      if (unaddressed > 0)
+      if (unaddressed > 0 || options.planning?.budgetBounds?.unaddressed)
         items.push({
           id: "unaddressed",
           name: "未覆盖设计责任",
           importance: 0.2,
           suggestedImportance: 0.2,
           contribution: 0,
-          complexity: 1,
+          complexity: options.planning?.complexity?.unaddressed ?? 1,
           actualHours: unaddressed,
         });
-      const plan = agreeLossAllocation(
+      const plan = designAllocation(
         (1 - target) * request.hours,
         request.hours,
         items,
+        options.planning,
       );
       return {
         cards: row.cards,
@@ -112,6 +122,14 @@ export function auditExperimentPlan(
         current: row.statistics,
         gapHours: Math.max(0, (target - row.statistics.mean) * request.hours),
         ...plan,
+        comparisons: compareDesignAllocations(
+          (1 - target) * request.hours,
+          request.hours,
+          items,
+          options.planning,
+        ),
+        weightBasis:
+          "正Shapley映射到0.2–1的工程优先级；不是经典AGREE条件失效概率。复杂度由本次规划设置，缺省1。",
         layerLinks,
         responsibilityResidualHours:
           items.reduce((sum: number, item: any) => sum + item.actualHours, 0) -
@@ -267,16 +285,24 @@ export function auditExperimentPlan(
         0,
       )) /
     1e9;
+  const work = planningWork(source, [primary], trials);
   if (
-    trials * 120 > 1000000 ||
-    (trials * 120 + Math.min(1024, request.trials) * 32) *
+    trials * 360 > 1000000 ||
+    (trials * 360 + Math.min(1024, request.trials) * 32) *
       expectedPerTrajectory >
-      450000000
+      450000000 ||
+    work.trajectories > 1000000 ||
+    work.events > 450000000
   )
     throw new Error("AGREE规划工作量超过上限，请减少规划采样或评估范围");
   let seeds = experimentSeeds(source, "planning", trials);
   const candidates: any[] = [];
   const evaluate = (name: string, configuration: AuditOptimizationRequest) => {
+    configuration = boundPlanningConfiguration(
+      source,
+      configuration,
+      options.planning,
+    );
     const factors = experimentFactors(source, configuration);
     const row = sample(primary, factors, seeds);
     const candidate = {
@@ -636,7 +662,7 @@ export function auditExperimentPlan(
   return {
     kind: "expert-audit-plan",
     selection: source.result.selection,
-    name: "AGREE第二轮改进分配",
+    name: (mainPlan.methodName ?? "AGREE") + "第二轮改进分配",
     modelVersion: "agree-total-target.v4",
     sourceRunId: source.id,
     sourceInputHash: source.inputHash,
@@ -683,4 +709,22 @@ export function auditExperimentPlan(
       "参考方案不足可适度扩展并反向收回改进幅度；专家单点、工程假设与产品能力须分别验证。",
     ],
   };
+}
+
+export function auditExperimentPlan(
+  input: { source: AuditSource; options?: AuditOptimizationRequest },
+  onProgress?: (fraction: number) => void,
+) {
+  validateOptimization({
+    ...input.source.input,
+    optimization: input.options ?? { enabled: true },
+  });
+  validatePlanningSource(input.source, input.options?.planning);
+  const guided = guidedExperimentPlan(input, (f) => onProgress?.(f * 0.6));
+  return completeDecisionStudy(
+    input.source,
+    input.options ?? { enabled: true },
+    guided,
+    (f) => onProgress?.(0.6 + f * 0.4),
+  );
 }

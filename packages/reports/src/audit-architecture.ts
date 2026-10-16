@@ -5,6 +5,7 @@ import {
   scaleSummaryCss,
   architectureSummaryMarkdown,
 } from "./audit-scale-summary";
+import { contributionHeatmap } from "./audit-decision-study";
 import { auditExtensionCatalog } from "../../contracts/src/audit-extensions";
 import type { AuditArchitectureDiagnosis } from "../../analysis/src/audit-architecture";
 import type { AuditArchitecture } from "../../contracts/src/audit-architecture";
@@ -117,7 +118,7 @@ export function architectureReport(result: any) {
   const primary =
     d.scales.find((s) => s.cards === result.request.cards) ??
     orderedDiagnosisScales(d, true)[0];
-  return `<div class="architecture-diagnosis scale-summary"><p class="note">${esc(d.architecture.basis)}</p><h3>系统架构 · ${primary.cards.toLocaleString()}卡</h3>${architectureTree(d.architecture, d, primary.cards, 1)}<details class="arch-evidence"><summary>展开完整系统架构</summary>${architectureTree(d.architecture, d, primary.cards, 10)}</details>${architectureSummary(d)}<details class="arch-evidence"><summary>子系统与故障对象差距矩阵</summary>${architectureHeatmap(d)}${architectureHeatmap(d, "leaf")}</details>${orderedDiagnosisScales(
+  return `<div class="architecture-diagnosis scale-summary"><p class="note">${esc(d.architecture.basis)}</p><h3>系统架构 · ${primary.cards.toLocaleString()}卡</h3>${architectureTree(d.architecture, d, primary.cards, 1)}<details class="arch-evidence"><summary>展开完整系统架构</summary>${architectureTree(d.architecture, d, primary.cards, 10)}</details>${architectureSummary(d)}${contributionHeatmap(d)}<details class="arch-evidence"><summary>子系统与故障对象差距矩阵</summary>${architectureHeatmap(d)}${architectureHeatmap(d, "leaf")}</details>${orderedDiagnosisScales(
     d,
     true,
   )

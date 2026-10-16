@@ -135,6 +135,8 @@ test("MCP executes separate rounds, preserves evidence and exports selected comp
             name: "载入分配后独立评估",
             planRunId: perScale.id,
             planCards: 10000,
+            planAlternativeId:
+              perScale.result.plans[0].decisionStudy.recommendedId,
             configuration: {
               ...perScale.result.plans[0].configuration,
               attributionTrials: 4,
@@ -146,6 +148,9 @@ test("MCP executes separate rounds, preserves evidence and exports selected comp
     );
     expect(improved.result.planningRunId).toBe(perScale.id);
     expect(improved.result.planningCards).toBe(10000);
+    expect(improved.result.planningAlternativeId).toBe(
+      perScale.result.plans[0].decisionStudy.recommendedId,
+    );
     expect(improved.result.decision.cards).toBe(10000);
     expect(await call("design_get")).toEqual(saved);
     expect(await call("workflow_state")).toEqual(state);

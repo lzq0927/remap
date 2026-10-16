@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { contributionHeatmap } from "../../../packages/reports/src/audit-decision-study";
 import type { AuditArchitectureDiagnosis } from "../../../packages/analysis/src/audit-architecture";
 import {
   architectureCss,
@@ -162,6 +163,7 @@ export default function AuditArchitectureResult({
       </div>
       <div data-summary-stage="contributions">
         <h3>04 / 跨规模贡献与排名</h3>
+        <div dangerouslySetInnerHTML={{ __html: contributionHeatmap(d) }} />
         <div dangerouslySetInnerHTML={{ __html: contributionRankSummary(d) }} />
       </div>
       <div data-summary-stage="improvements" className="scale-next-step">

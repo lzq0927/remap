@@ -1,4 +1,5 @@
 import { optimizationSampling } from "../../contracts/src/audit-optimization";
+import { planningSchema } from "../../contracts/src/audit-planning";
 import { mechanismTargetCatalog } from "../../contracts/src/audit-mechanism-targets";
 import { deriveAgreeDesign, expertBudgetPaths } from "./audit-agree-design";
 import { createHash } from "node:crypto";
@@ -71,6 +72,7 @@ export function shapleyImportance(contribution: number, maximum: number) {
 export function validateOptimization(request: AuditRequest) {
   const input = request.optimization;
   if (!input) return;
+  if (input.planning !== undefined) planningSchema.parse(input.planning);
   if (
     typeof input !== "object" ||
     Array.isArray(input) ||

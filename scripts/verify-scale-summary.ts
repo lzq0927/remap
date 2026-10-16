@@ -14,7 +14,12 @@ import { hash } from "../packages/assets/src/hash";
 import { enterProject } from "./runtime.mjs";
 enterProject();
 const expert = process.argv.includes("--expert"),
-  directory = resolve("artifacts/scale-summary", expert ? "full" : "quick");
+  decision = process.argv.includes("--decision"),
+  directory = resolve(
+    "artifacts",
+    decision ? "decision-study" : "scale-summary",
+    expert ? "full" : "quick",
+  );
 await mkdir(directory, { recursive: true });
 const cached = resolve(
   "artifacts/architecture-diagnosis/full/architecture-first.json",
@@ -76,6 +81,23 @@ for (const [name, operation, value] of [
       report(run as any, format),
     );
 }
+if (decision)
+  for (const p of result.plans) {
+    const run = {
+      id: "decision-plan-" + p.prediction.cards,
+      operation: "audit-plan",
+      status: "succeeded",
+      input: { source },
+      result: p,
+    };
+    for (const format of ["html", "md", "json"])
+      await writeFile(
+        join(directory, "plan-" + p.prediction.cards + "." + format),
+        format === "json"
+          ? JSON.stringify(run, null, 2)
+          : report(run as any, format),
+      );
+  }
 const evidence = {
   profile: input.samplingProfile,
   trials: input.trials,
@@ -90,8 +112,21 @@ const evidence = {
     prediction: p.prediction.mean,
     planningSupported: p.prediction.supported,
     configuration: p.configuration,
-    measures: p.factors.map((f) => ({ id: f.id, name: f.name })),
+    measures: p.factors.map((f: any) => ({ id: f.id, name: f.name })),
     notes: p.prediction.note,
+    decision: p.decisionStudy
+      ? {
+          search: p.decisionStudy.search,
+          alternatives: p.decisionStudy.alternatives.map((a: any) => ({
+            id: a.id,
+            label: a.label,
+            effort: a.effort,
+            mean: a.nominal.statistics.mean,
+            conservative: a.conservative?.statistics.mean,
+          })),
+          curveTrials: p.decisionStudy.trials,
+        }
+      : undefined,
   })),
 };
 await writeFile(

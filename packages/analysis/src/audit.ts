@@ -1,3 +1,4 @@
+import { auditPlanningModelKeys } from "../../contracts/src/audit-planning";
 import {
   defaultAuditArchitecture,
   resolveAuditArchitecture,
@@ -124,22 +125,7 @@ export interface AuditRequest {
     | "selected-combination"
     | "expert-reproduction";
 }
-const modelKeys = [
-  "checkpointComputeSeconds",
-  "checkpointSaveSeconds",
-  "recoveryAttemptSeconds",
-  "recoverySuccess",
-  "manualAdditionalSeconds",
-  "detectProbability",
-  "detectSeconds",
-  "timeoutSeconds",
-  "slowDetectProbability",
-  "slowDetectHours",
-  "slowLifetimeHours",
-  "slowLoss",
-  "sdcDelayHours",
-  "validationOverhead",
-];
+const modelKeys = auditPlanningModelKeys;
 function numberIn(
   value: unknown,
   min: number,

@@ -1,4 +1,5 @@
 import { planScaleChart } from "./audit-plan-scales";
+import { decisionStudyCharts } from "./audit-decision-study";
 import {
   architectureReport,
   architectureCss,
@@ -922,43 +923,46 @@ export function report(run: Run, format = "md", options: ReportOptions = {}) {
         (s.paragraphs ?? []).map((p) => "<p>" + escape(p) + "</p>").join("") +
         (s.visual === "plan-set"
           ? planScaleChart(result)
-          : s.visual === "architecture"
-            ? architectureReport(result)
-            : s.visual === "experiment-comparison"
-              ? experimentChart(result)
-              : s.visual === "optimization"
-                ? auditOptimizationChart(result)
-                : s.visual === "optimized-objects"
-                  ? auditOptimizedObjectDiagram(result)
-                  : s.visual === "objects"
-                    ? '<div class="table-wrap" tabindex="0" aria-label="可靠性框图，可横向滚动"><div style="min-width:780px">' +
-                      auditObjectDiagram(
-                        result.events,
-                        result.rows.find(
-                          (r: any) =>
-                            r.cards === result.request.cards && r.id === "base",
-                        ),
-                        result.rows.find(
-                          (r: any) =>
-                            r.cards === result.request.cards &&
-                            r.id === "combined",
-                        ),
-                      ) +
-                      "</div></div>"
-                    : s.visual === "overview"
-                      ? auditScaleCurve(result) + auditGainCharts(result)
-                      : s.visual === "sensitivity"
-                        ? auditSensitivityCurves(result)
-                        : s.visual === "method"
-                          ? auditMethodVisual(result)
-                          : s.visual === "contribution"
-                            ? auditContributionChart(
-                                result,
-                                s.contributionCards,
-                              )
-                            : s.visual === "contribution-controls"
-                              ? auditContributionScaleControl(result)
-                              : "") +
+          : s.visual === "decision-study"
+            ? decisionStudyCharts(result)
+            : s.visual === "architecture"
+              ? architectureReport(result)
+              : s.visual === "experiment-comparison"
+                ? experimentChart(result)
+                : s.visual === "optimization"
+                  ? auditOptimizationChart(result)
+                  : s.visual === "optimized-objects"
+                    ? auditOptimizedObjectDiagram(result)
+                    : s.visual === "objects"
+                      ? '<div class="table-wrap" tabindex="0" aria-label="可靠性框图，可横向滚动"><div style="min-width:780px">' +
+                        auditObjectDiagram(
+                          result.events,
+                          result.rows.find(
+                            (r: any) =>
+                              r.cards === result.request.cards &&
+                              r.id === "base",
+                          ),
+                          result.rows.find(
+                            (r: any) =>
+                              r.cards === result.request.cards &&
+                              r.id === "combined",
+                          ),
+                        ) +
+                        "</div></div>"
+                      : s.visual === "overview"
+                        ? auditScaleCurve(result) + auditGainCharts(result)
+                        : s.visual === "sensitivity"
+                          ? auditSensitivityCurves(result)
+                          : s.visual === "method"
+                            ? auditMethodVisual(result)
+                            : s.visual === "contribution"
+                              ? auditContributionChart(
+                                  result,
+                                  s.contributionCards,
+                                )
+                              : s.visual === "contribution-controls"
+                                ? auditContributionScaleControl(result)
+                                : "") +
         (s.tables ?? []).map(htmlTable).join("") +
         (s.collapsed ? "</details>" : "") +
         "</section>",

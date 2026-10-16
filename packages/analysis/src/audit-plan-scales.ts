@@ -1,3 +1,4 @@
+import { planningWork } from "./audit-planning-work";
 import { auditExperimentPlan } from "./audit-experiment-plan";
 import { validateOptimization } from "./audit-optimization";
 import type { AuditSource } from "./audit-experiments";
@@ -52,19 +53,8 @@ export function validatePlanScales(input: AuditPlanScalesInput) {
       "部分规模没有第一轮Shapley贡献，请先补充现状计算或选择已有贡献的规模",
     );
   const trials = input.options?.screeningTrials ?? 128;
-  const trajectoriesPerScale =
-    trials * 120 + Math.min(1024, source.input.trials) * 32;
-  const fit = source.result.events.reduce((s: number, e: any) => s + e.fit, 0);
-  const expectedEvents =
-    (trajectoriesPerScale *
-      scales.reduce((s, n) => s + n, 0) *
-      source.input.hours *
-      fit) /
-    1e9;
-  if (
-    trajectoriesPerScale * scales.length > 1000000 ||
-    expectedEvents > 450000000
-  )
+  const work = planningWork(source, scales, trials);
+  if (work.trajectories > 1000000 || work.events > 450000000)
     throw new Error("分规模规划总工作量超过上限，请减少规模或规划采样量");
   return auditSummaryScales(source.input, scales);
 }

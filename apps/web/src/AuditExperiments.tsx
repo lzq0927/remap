@@ -10,6 +10,9 @@ import {
 import { NumericParameters, EventEditor } from "./AuditEditors";
 import AuditExperimentResult from "./AuditExperimentResult";
 import AuditParameterEditor from "./AuditParameterEditor";
+import AuditPlanningEditor from "./AuditPlanningEditor";
+import { planningMethodNames } from "../../../packages/contracts/src/audit-planning";
+import type { AuditPlanningOptions } from "../../../packages/contracts/src/audit-planning";
 import { auditMechanismSummary } from "../../../packages/contracts/src/audit-mechanism-view";
 import { auditReferenceOnly } from "../../../packages/contracts/src/audit-presets";
 import { experimentStatus } from "../../../packages/reports/src/audit-experiments";
@@ -29,6 +32,11 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
   const [name, setName] = useState("自定义改进方案");
   const [plan, setPlan] = useState<any>();
   const [planSet, setPlanSet] = useState<any>();
+  const [planning, setPlanning] = useState<AuditPlanningOptions>(
+    sourceRun.result.request.optimization?.planning ?? {},
+  );
+  const [alternativeId, setAlternativeId] = useState<string>();
+  const [adoptedAlternativeId, setAdoptedAlternativeId] = useState<string>();
   const [adoptedPlanCards, setAdoptedPlanCards] = useState<number>();
   const [adoptedPlanId, setAdoptedPlanId] = useState<string>();
   const [pending, setPending] = useState<any>();
@@ -58,6 +66,11 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
     }));
   const mounted = useRef(true);
   const source = sourceRun.result;
+  const chosenAlternative = plan?.result.decisionStudy?.alternatives.find(
+    (a: any) =>
+      a.id === (alternativeId ?? plan.result.decisionStudy.recommendedId),
+  );
+  useEffect(() => setAlternativeId(undefined), [plan?.id, plan?.planCards]);
   const mechanismSummary = auditMechanismSummary(
     source.request,
     source.selection,
@@ -161,6 +174,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
                 planningCards: undefined,
                 enabled: true,
                 importance: importanceByScale,
+                planning,
               },
             }
           : kind === "plan"
@@ -171,6 +185,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
                   enabled: true,
                   planningCards,
                   importance: { [String(planningCards)]: importance },
+                  planning,
                 },
               }
             : {
@@ -179,6 +194,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
                 configuration,
                 planRunId: adoptedPlanId,
                 planCards: adoptedPlanCards,
+                planAlternativeId: adoptedAlternativeId,
               },
       );
       if (mounted.current) setPending(run);
@@ -292,7 +308,9 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
           按各规模分别生成改进建议
         </button>
         <button disabled={busy || !canPlan} onClick={() => void start("plan")}>
-          生成AGREE改进分配
+          {planning.method && planning.method !== "agree"
+            ? "生成" + planningMethodNames[planning.method] + "改进分配"
+            : "生成AGREE改进分配"}
         </button>
         <button
           disabled={busy}
@@ -301,6 +319,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
             setName("自定义改进方案");
             setView("configuration");
             setAdoptedPlanId(undefined);
+            setAdoptedAlternativeId(undefined);
             setAdoptedPlanCards(undefined);
           }}
         >
@@ -313,6 +332,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
             setName("现状复核");
             setView("configuration");
             setAdoptedPlanId(undefined);
+            setAdoptedAlternativeId(undefined);
             setAdoptedPlanCards(undefined);
           }}
         >
@@ -327,6 +347,12 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
           现状尚无可分配的候选贡献，可先补充Shapley分析，或直接新建参数方案。
         </p>
       )}
+      <AuditPlanningEditor
+        sourceRun={sourceRun}
+        value={planning}
+        onChange={setPlanning}
+        disabled={busy}
+      />
       <nav className="experiment-view-tabs" aria-label="分轮操作">
         <button
           onClick={() =>
@@ -429,11 +455,35 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
       )}
       {plan && view === "plan" && (
         <div className="experiment-plan">
-          <AuditExperimentResult result={plan.result} />
+          {plan.result.decisionStudy && (
+            <label>
+              查看备选方案
+              <select
+                aria-label="查看规划备选方案"
+                value={chosenAlternative?.id ?? ""}
+                onChange={(e) => setAlternativeId(e.target.value)}
+              >
+                {plan.result.decisionStudy.alternatives.map((a: any) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label} · 工作量{a.effort} ·{" "}
+                    {pct(a.nominal.statistics.mean)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <AuditExperimentResult
+            result={plan.result}
+            alternativeId={chosenAlternative?.id}
+          />
           <button
             disabled={busy}
             onClick={() => {
-              setConfiguration(structuredClone(plan.result.configuration));
+              setConfiguration(
+                structuredClone(
+                  chosenAlternative?.configuration ?? plan.result.configuration,
+                ),
+              );
               setName(
                 plan.planCards
                   ? `${summaryScaleLabel(plan.planCards)} · AGREE改进方案`
@@ -441,6 +491,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
               );
               setAdoptedPlanId(plan.id);
               setAdoptedPlanCards(plan.planCards);
+              setAdoptedAlternativeId(chosenAlternative?.id);
               setView("configuration");
             }}
           >
@@ -567,6 +618,7 @@ export default function AuditExperiments({ sourceRun }: { sourceRun: any }) {
               setName(last.result.name + " · 迭代");
               setAdoptedPlanId(last.result.planningRunId);
               setAdoptedPlanCards(last.result.planningCards);
+              setAdoptedAlternativeId(last.result.planningAlternativeId);
               setView("configuration");
             }}
           >

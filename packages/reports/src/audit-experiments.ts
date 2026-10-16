@@ -1,4 +1,5 @@
 import { planScaleSections } from "./audit-plan-scales";
+import { decisionStudySections } from "./audit-decision-study";
 import { architectureSections } from "./audit-architecture";
 import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
 import {
@@ -177,8 +178,12 @@ export function experimentSections(result: any): AuditSection[] {
   if (result.kind === "expert-audit-plan-set") return planScaleSections(result);
   if (result.kind === "expert-audit-plan") {
     return [
+      ...decisionStudySections(result),
       {
-        title: "改进分配 / AGREE建议（尚未评估）",
+        title:
+          "改进分配 / " +
+          (result.allocations[0]?.methodName ?? "AGREE") +
+          "建议（尚未评估）",
         paragraphs: [
           `现状配置：${auditMechanismSummary(result.request, result.selection).title}；${auditMechanismSummary(result.request, result.selection).roles}。`,
           `第一轮运行 ${result.sourceRunId}；规划规模${number(result.prediction.cards, 0)}卡，目标${percent(result.prediction.target)}，规划试算${percent(result.prediction.mean)}。${result.prediction.note}`,
@@ -232,7 +237,8 @@ export function experimentSections(result: any): AuditSection[] {
         ],
       },
       {
-        title: "AGREE责任分配与重要度",
+        title:
+          (result.allocations[0]?.methodName ?? "AGREE责任") + "分配与重要度",
         paragraphs: [
           result.allocations[0].formula,
           result.allocations[0].interpretation,

@@ -68,6 +68,7 @@ it("freezes scoped multi-scale plans and requires the chosen scale when evaluati
         name: "万卡方案",
         planRunId: set.id,
         planCards: 10000,
+        planAlternativeId: set.result.plans[0].decisionStudy.recommendedId,
         configuration: {
           ...set.result.plans[0].configuration,
           attributionTrials: 2,
@@ -79,6 +80,9 @@ it("freezes scoped multi-scale plans and requires the chosen scale when evaluati
     const result = auditExperiment(adopted.json().input);
     expect(result.planningRunId).toBe(set.id);
     expect(result.planningCards).toBe(10000);
+    expect(result.planningAlternativeId).toBe(
+      set.result.plans[0].decisionStudy.recommendedId,
+    );
     expect(result.decision.cards).toBe(10000);
     expect(JSON.stringify(context.store.getRun(first.id))).toBe(before);
     const report = await app.inject(
@@ -86,6 +90,32 @@ it("freezes scoped multi-scale plans and requires the chosen scale when evaluati
     );
     expect(report.statusCode).toBe(200);
     expect(report.body.includes("各规模参数要求对照")).toBe(true);
+    const wrongAlternative = await app.inject({
+      method: "POST",
+      url: prefix + "/audit/evaluate",
+      payload: {
+        sourceRunId: first.id,
+        name: "错误备选",
+        planRunId: set.id,
+        planCards: 10000,
+        planAlternativeId: "missing",
+        configuration: { enabled: true },
+      },
+    });
+    expect(wrongAlternative.statusCode).toBe(400);
+    const badBound = await app.inject({
+      method: "POST",
+      url: prefix + "/audit/plan",
+      payload: {
+        sourceRunId: first.id,
+        options: {
+          planning: {
+            bounds: [{ path: "model.unknown", min: 1, source: "invalid" }],
+          },
+        },
+      },
+    });
+    expect(badBound.statusCode).toBe(400);
     const invalid = await app.inject({
       method: "POST",
       url: prefix + "/audit/plan-scales",

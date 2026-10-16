@@ -168,7 +168,7 @@ test("native OpenCode sessions are named and scoped to task directories", async 
     const manifest = JSON.parse(
       await readFile(join(skillDirectory, "manifest.json"), "utf8"),
     );
-    expect(manifest.version).toBe("0.3.3");
+    expect(manifest.version).toBe("0.4.0");
     expect(manifest.primaryScenario).toBe("training.retained-clean-progress");
     for (const reference of manifest.references)
       expect(await readFile(join(skillDirectory, reference), "utf8")).toBe(

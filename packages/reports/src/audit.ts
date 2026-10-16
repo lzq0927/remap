@@ -70,6 +70,7 @@ export interface AuditSection {
   tables?: AuditTable[];
   collapsed?: boolean;
   visual?:
+    | "decision-study"
     | "plan-set"
     | "architecture"
     | "experiment-comparison"

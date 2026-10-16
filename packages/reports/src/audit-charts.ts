@@ -44,6 +44,7 @@ export function lineChart({
   yLabel = "可用度",
   formatY = (v: number) => num(v * 100) + "%",
   showIntervals = true,
+  bands = [],
 }: {
   title: string;
   series: Series[];
@@ -56,6 +57,11 @@ export function lineChart({
   yLabel?: string;
   formatY?: (value: number) => string;
   showIntervals?: boolean;
+  bands?: {
+    name: string;
+    color: string;
+    points: { x: number; low: number; high: number }[];
+  }[];
 }) {
   series = series
     .map((s) => ({
@@ -77,6 +83,10 @@ export function lineChart({
   const xmin = transform(xs[0]),
     xmax = transform(xs.at(-1)!);
   const ys = points.flatMap((p) => [p.statistics.ciLow, p.statistics.ciHigh]);
+  for (const band of bands)
+    for (const p of band.points)
+      if (Number.isFinite(p.low) && Number.isFinite(p.high))
+        ys.push(p.low, p.high);
   if (Number.isFinite(target)) ys.push(target!);
   const low = fullRange ? 0 : Math.min(...ys);
   const high = fullRange ? 1 : Math.max(...ys);
@@ -90,6 +100,30 @@ export function lineChart({
     (((fullRange ? Math.max(0, Math.min(1, v)) : v) - ymin) / (ymax - ymin)) *
       250;
   const coordinate = (v: number) => v.toFixed(2);
+  const bandSvg = bands
+    .map((b) => {
+      const ps = b.points
+        .filter((p) => [p.x, p.low, p.high].every(Number.isFinite))
+        .sort((a, b) => a.x - b.x);
+      return ps.length < 2
+        ? ""
+        : '<polygon data-scenario-band="' +
+            escape(b.name) +
+            '" points="' +
+            [
+              ...ps.map((p) => coordinate(X(p.x)) + "," + coordinate(Y(p.low))),
+              ...ps
+                .slice()
+                .reverse()
+                .map((p) => coordinate(X(p.x)) + "," + coordinate(Y(p.high))),
+            ].join(" ") +
+            '" fill="' +
+            b.color +
+            '" opacity="0.12"><title>' +
+            escape(b.name) +
+            "：参数情景范围</title></polygon>";
+    })
+    .join("");
   const grid = Array.from({ length: 6 }, (_, i) => {
     const v = ymin + ((ymax - ymin) * i) / 5,
       y = coordinate(Y(v));
@@ -110,7 +144,7 @@ export function lineChart({
           .join("")}`,
     )
     .join("");
-  return `<figure class="reliability-chart"><h3>${escape(title)}</h3>${showIntervals ? legend(series) : legend(series).replace('<span class="interval-key">细竖线：95% 均值区间</span>', "")}<div class="reliability-plot" tabindex="0" aria-label="${escape(title)}图表，可横向滚动"><svg viewBox="0 0 960 390" role="img" aria-label="${escape(title)}"><title>${escape(title)}</title><desc>${escape(note)}</desc><text x="78" y="26" class="axis-label">${escape(yLabel)}</text>${grid}${targetLine}${curves}${xs.map((x) => `<text x="${coordinate(X(x))}" y="334" text-anchor="middle">${escape(formatX(x))}</text>`).join("")}<text x="494" y="374" text-anchor="middle" class="axis-label">${escape(xLabel)}</text></svg></div><figcaption>${escape(note)}</figcaption></figure>`;
+  return `<figure class="reliability-chart"><h3>${escape(title)}</h3>${showIntervals ? legend(series) : legend(series).replace('<span class="interval-key">细竖线：95% 均值区间</span>', "")}<div class="reliability-plot" tabindex="0" aria-label="${escape(title)}图表，可横向滚动"><svg viewBox="0 0 960 390" role="img" aria-label="${escape(title)}"><title>${escape(title)}</title><desc>${escape(note)}</desc><text x="78" y="26" class="axis-label">${escape(yLabel)}</text>${grid}${targetLine}${bandSvg}${curves}${xs.map((x) => `<text x="${coordinate(X(x))}" y="334" text-anchor="middle">${escape(formatX(x))}</text>`).join("")}<text x="494" y="374" text-anchor="middle" class="axis-label">${escape(xLabel)}</text></svg></div><figcaption>${escape(note)}</figcaption></figure>`;
 }
 
 export function auditScaleCurve(r: any) {

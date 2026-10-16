@@ -30,3 +30,5 @@ input_mapping `{id}` 对应 GET /api/tasks/:taskId/inputs/:id/mapping；只接�
 上述三个启动工具统一返回 `{runId,status,artifactRefs:[],warnings:[]}`，用run_status轮询。用户明确请求评估才调用audit_evaluate，不能因为audit_plan完成就自动接续。参考与示例不能当实测，均值区间跨目标标为待复核；第一轮与增量贡献分别解释。详见[分轮评估与Agent协作指南](分轮评估与Agent协作指南.md)。
 
 - `audit_plan_scales` → POST `/audit/plan-scales`，body `{sourceRunId,scales?,options?}`。按需求规模独立生成AGREE计划集合，参考点排除，规划不是评估。采用其中一项时，`audit_evaluate`同时提供集合`planRunId`及对应`planCards`。MCP0.3.1、Skill0.3.3支持。
+
+0.4.0扩展：options.planning支持工程责任方法、复杂度/可改进性/有来源成本、相对工作量、参数bounds及责任budgetBounds、有限组合上限和可配置conservative压力情景。结果decisionStudy保留设置、证据、备选和固定配置跨规模试算；未知参数路径/冲突约束在规划前拒绝。audit_evaluate新增planAlternativeId，服务校验属于本任务、原第一轮及所选规划规模，并保存planningAlternativeId；同时提交该备选完整configuration。无计划或未知备选不能建立关联。

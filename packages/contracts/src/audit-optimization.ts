@@ -1,6 +1,8 @@
 import type { AuditExtensionInput } from "./audit-extensions";
+import type { AuditPlanningOptions } from "./audit-planning";
 export interface AuditOptimizationRequest {
   enabled: boolean;
+  planning?: AuditPlanningOptions;
   /** Independent planning focus, without changing the frozen first-round target set. */
   planningCards?: number;
   autoTune?: boolean;

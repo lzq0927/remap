@@ -151,7 +151,7 @@ export const registry = [
   ],
   [
     "audit_evaluate",
-    "在用户要求评估时独立执行改进轮。body={sourceRunId,name,configuration,planRunId?,planCards?}。configuration为相对第一轮的完整改动集合（不是上次改进的补丁）；支持policy/model/extensions/checkpointPeriods/有来源fitTargets。参数名、单位和当前值先从run_status读取，按用户明确的目标设置。采用分配建议时传计划configuration及planRunId；先展示要求，再按用户意图执行。结果、输入和增量Shapley独立保存，不改变第一轮或六阶段确认",
+    "在用户要求评估时独立执行改进轮。body={sourceRunId,name,configuration,planRunId?,planCards?,planAlternativeId?}。configuration为相对第一轮的完整改动集合（不是上次改进的补丁）；支持policy/model/extensions/checkpointPeriods/有来源fitTargets。参数名、单位和当前值先从run_status读取，按用户明确的目标设置。采用分配建议时传计划configuration及planRunId；选备选方案还须传planAlternativeId与其完整configuration；先展示要求，再按用户意图执行。结果、输入和增量Shapley独立保存，不改变第一轮或六阶段确认",
     "POST",
     "/audit/evaluate",
   ],
@@ -202,7 +202,7 @@ const roundBodies: Record<string, z.ZodTypeAny> = {
         .record(z.any())
         .optional()
         .describe(
-          "可选planningCards/importance/parameterTargets等；不改变冻结目标",
+          "可选planningCards/importance/parameterTargets/planning；planning含method、complexity、feasibility、costs、effort、bounds、budgetBounds、objective、maxCandidates、conservative。先读Skill与冻结参数，不改变目标。",
         ),
     })
     .strict(),
@@ -219,6 +219,7 @@ const roundBodies: Record<string, z.ZodTypeAny> = {
     .strict(),
   audit_evaluate: z
     .object({
+      planAlternativeId: z.string().min(1).max(100).optional().describe("采用decisionStudy.alternatives中的备选方案时提供其id，同时传该方案完整configuration"),
       sourceRunId: z.string().min(1),
       name: z.string().trim().min(1).max(100).describe("本次独立改进方案名称"),
       configuration: z
@@ -257,7 +258,7 @@ export function createMcpServer(
     token: process.env.RELIABILITY_TASK_TOKEN ?? "",
   },
 ) {
-  const server = new McpServer({ name: "sd-dfr-remap", version: "0.3.1" });
+  const server = new McpServer({ name: "sd-dfr-remap", version: "0.4.0" });
   for (const [name, description, method, route] of registry) {
     server.registerTool(
       name,

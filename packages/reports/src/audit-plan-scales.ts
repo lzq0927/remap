@@ -168,7 +168,14 @@ export function planScaleSections(result: any): AuditSection[] {
       ],
     },
     {
-      title: "各规模AGREE责任预算与重要度",
+      title: "固定代表方案的跨规模效果（规划试算）",
+      visual: "decision-study",
+      paragraphs: [
+        "此处使用主规模建议中的固定配置，查看其在全部需求规模的效果；各规模独立建议仍分别保留。规划情景没有产生正式第二轮结果。",
+      ],
+    },
+    {
+      title: "各规模责任预算与重要度",
       collapsed: true,
       paragraphs: [
         "每格为：重要度 / 允许损失 / 现状损失，时间单位为小时。重要度来自各自第一轮Shapley与本次覆盖范围，可由专家修订；各列分别分配，不跨规模相加。预算用于设计责任追溯，最终仍按总可用度及独立复评判断，不强制每项子预算均通过。",
