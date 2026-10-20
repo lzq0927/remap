@@ -1,4 +1,5 @@
 import { optimizationSampling } from "../../contracts/src/audit-optimization";
+import { hardwareScaleEvents } from "../../contracts/src/audit-hardware";
 import { planningSchema } from "../../contracts/src/audit-planning";
 import { mechanismTargetCatalog } from "../../contracts/src/audit-mechanism-targets";
 import { deriveAgreeDesign, expertBudgetPaths } from "./audit-agree-design";
@@ -329,6 +330,9 @@ export function auditOptimization(
           fit: f.value.find((e: any) => e.id === event.id)?.fit ?? event.fit,
         }));
     }
+    events = hardwareScaleEvents(events, request.architecture, cards);
+    if (request.architecture?.nodes.some((n) => n.rateModel))
+      model.referenceRateArithmetic = false;
     const engine = createEnhancedAuditEngine(events, policy, model, extensions),
       opts = {
         ...Object.fromEntries(selected.map((id) => [id, true])),
@@ -400,6 +404,9 @@ export function auditOptimization(
     return {
       cards,
       statistics: stats(values, auditTarget(request, cards)),
+      ...(request.architecture?.nodes.some((n) => n.rateModel)
+        ? { scaleEvents: engine.events }
+        : {}),
       ledger,
       perEvent,
       values,
@@ -725,6 +732,7 @@ export function auditOptimization(
     // re-derives parameters from the ORIGINAL frozen allocation, never from verification data.
     for (const utilization of [0.85, 0.65, 0.45]) {
       const proposed = deriveAgreeDesign({
+        architecture: request.architecture,
         hours: request.hours,
         scales,
         events: resolved.events,

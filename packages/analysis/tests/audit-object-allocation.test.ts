@@ -82,6 +82,31 @@ it("requires explicit repair times for availability-to-FIT, and recomposes AGREE
     6,
   );
 });
+it("returns reference FIT targets so inventory scaling is applied only once", () => {
+  const effectiveEvents = events.map((event) => ({
+    ...event,
+    fit: event.fit * 0.2,
+    rateMultiplier: 0.2,
+  }));
+  const allocation = {
+    ...input(),
+    target: Math.exp(-0.004),
+    items: auditHardwareItems(effectiveEvents, 10000),
+  };
+  const overrides = hardwareTargetOverrides(allocation, effectiveEvents);
+  expect(overrides.map((event) => event.fit)).toEqual([
+    expect.closeTo(45, 9),
+    expect.closeTo(5, 9),
+    expect.closeTo(135, 9),
+    expect.closeTo(15, 9),
+  ]);
+  const actualRate =
+    (overrides.reduce((sum, event) => sum + event.fit * 0.2, 0) * 10000) / 1e9;
+  expect(Math.exp(-actualRate * allocation.hours)).toBeCloseTo(
+    allocation.target,
+    12,
+  );
+});
 it("uses the current catalogue, including explicit updates, instead of redistributing internal hard FIT by external ratios", () => {
   const catalog = getAuditEvents(),
     objects = auditObjects(catalog);

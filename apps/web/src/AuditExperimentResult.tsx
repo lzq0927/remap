@@ -1,3 +1,4 @@
+import AuditArchitectureResult from "./AuditArchitectureResult";
 import { planScaleChart } from "../../../packages/reports/src/audit-plan-scales";
 import { decisionStudyCharts } from "../../../packages/reports/src/audit-decision-study";
 import {
@@ -73,11 +74,14 @@ export default function AuditExperimentResult({
               }}
             />
           )}
-          {section.visual === "architecture" && (
-            <div
-              dangerouslySetInnerHTML={{ __html: architectureReport(result) }}
-            />
-          )}
+          {section.visual === "architecture" &&
+            (result.kind === "expert-audit-experiment" ? (
+              <AuditArchitectureResult result={result} cards={cards} />
+            ) : (
+              <div
+                dangerouslySetInnerHTML={{ __html: architectureReport(result) }}
+              />
+            ))}
           {section.visual === "experiment-comparison" && (
             <div
               dangerouslySetInnerHTML={{ __html: experimentChart(result) }}

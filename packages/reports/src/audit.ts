@@ -85,8 +85,10 @@ export interface AuditSection {
   contributionCards?: number;
 }
 export function auditSections(r: any): AuditSection[] {
+  const frozen = r;
   r = {
     ...r,
+    events: hardwareEventView(r, r.request.cards),
     rows: auditSummaryRows(r.request, r.rows),
     attribution: auditSummaryRows(r.request, r.attribution),
     designReview: r.designReview
@@ -113,7 +115,7 @@ export function auditSections(r: any): AuditSection[] {
       (s: number, v: any) => s + loss(v),
       0,
     );
-    return r.events.map((e: any) => {
+    return hardwareEventView(frozen, cards).map((e: any) => {
       const x = row.perEvent[e.id] ?? {};
       return [
         e.id,
@@ -861,3 +863,4 @@ export function auditSections(r: any): AuditSection[] {
   });
   return sections;
 }
+import { hardwareEventView } from "../../contracts/src/audit-hardware";

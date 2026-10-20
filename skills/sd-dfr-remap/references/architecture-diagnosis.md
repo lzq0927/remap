@@ -1,5 +1,7 @@
 # 系统分层目标、现状诊断与改进追溯
 
+新任务默认硬件主视图；数量、传播与规模FIT见[hardware-architecture.md](hardware-architecture.md)。下文功能模板与没有新增字段的历史结果继续兼容。
+
 ## 架构输入
 
 `assessment.input.architecture`保存version/name/basis/budgetMethod/nodes/dependencies。节点含id/name/parentId/kind/eventIds/weight/importance/source，可用scaleWeights按卡数覆盖权重。model_defaults.audit返回可编辑的功能分组模板；不是已核实的部署拓扑。仅一个system根节点和一个overhead叶节点；故障只能归属一个叶节点，父层汇总。未映射故障保留在“未归属故障”，禁止为消除缺口而删掉它们。
@@ -12,7 +14,7 @@
 
 `run_status.result.architectureDiagnosis`含architecture/scales/notes。每个scale含目标、总损失、允许损失、residualHours、nodes、weaknesses和ranking。nodes父层仅汇总；核对叶层实际与预算总和，不能把全部层相加。保存阻塞与检测/机制常态开销在overhead独立计账。
 
-types按hard/slow/sdc显示fit/rate/intervalHours。当前专家评估FIT以NPU等效业务影响事件为单位，λ=卡数×FIT/10^9，只乘一次暴露量；不能混入物理器件FIT再乘硬件数量。只有hard称中断MTBF，其他是事件间隔。零FIT是输入假设，不是已证实无风险。
+types按hard/slow/sdc显示fit/rate/intervalHours。当前专家评估FIT以NPU等效业务影响事件为单位，λ=卡数×本规模等效FIT/10^9，只乘一次暴露量；显式数量模型先做参考配置外推，不能混入物理器件FIT再乘硬件数量。hard表示中断事件间隔，不能冒充已观测业务中断MTBF；其他是对应事件间隔。零FIT是输入假设，不是已证实无风险。
 
 recoveryPauseSeconds=事件账停机/恢复次数，包含检测、失败回退、有限窗口截断；不是完整物理修复MTTR或所有局部修复时长。equivalentLossSeconds还含回滚、污染、降速及局部损失。未观察到事件/恢复时为null，不能报成0秒恢复。主可用度仍为保留的正确进度/窗口理想产出，不用两状态A公式替代完整仿真。
 

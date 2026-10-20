@@ -27,6 +27,7 @@ import {
 
 import {
   auditDraftInput,
+  auditDraftScales,
   type AuditDraft,
 } from "../../../packages/contracts/src/audit-draft";
 export {
@@ -76,6 +77,10 @@ export default function AuditWorkbench({
   const [allScales, setAllScales] = useState(
     draft?.allScales ?? (defaults.scales?.length ?? 0) > 1,
   );
+  const scopedRequest = {
+    ...request,
+    scales: auditDraftScales(request, allScales),
+  };
   useEffect(() => {
     onDraftChange({ request, overrides, hardware, model, policy, allScales });
   }, [request, overrides, hardware, model, policy, allScales, onDraftChange]);
@@ -320,7 +325,7 @@ export default function AuditWorkbench({
           </p>
         )}
         <AuditArchitectureEditor
-          request={request}
+          request={scopedRequest}
           events={currentEvents}
           onChange={setRequest}
         />
@@ -388,7 +393,7 @@ export default function AuditWorkbench({
             现状评估按当前配置计算，改进要求在后续方案中独立设置。评估完成后，可在“分轮评估与横向比较”中调整或新增措施，逐次计算与导出报告。
           </p>
           <AuditArchitectureEditor
-            request={request}
+            request={scopedRequest}
             events={currentEvents}
             onChange={setRequest}
             mode="budget"
@@ -406,7 +411,7 @@ export default function AuditWorkbench({
               上方分层预算用于现状诊断，不改变故障或机制。以下独立子模型分配保留给专项设计和历史任务。
             </p>
             <AuditAllocationEditor
-              request={request}
+              request={scopedRequest}
               events={currentEvents}
               onChange={setRequest}
               onApplyHardware={setHardware}

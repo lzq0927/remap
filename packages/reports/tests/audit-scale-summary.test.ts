@@ -35,6 +35,8 @@ it("orders requirement summaries ascending and keeps reference points separate w
     (m) => m[1],
   );
   expect(headers).toEqual(["1万卡", "10万卡", "20万卡", "50万卡"]);
+  expect(html).toContain("故障数据不完整；已知损失仅作参照");
+  expect(architectureTargetBreakdown(d, "hardware-board")).toContain("待补充");
   const trend = architectureTrend(d);
   expect(trend.includes('data-value="1000"')).toBe(false);
   expect(trend.includes("各规模可用度目标与现状趋势")).toBe(true);
@@ -79,6 +81,15 @@ it("keeps event budgets traceable to their leaf and ranks the actual scale-speci
     }
     const gaps = scale.rows.map((r) => r.excessHours!);
     expect(gaps).toEqual([...gaps].sort((a, b) => b - a));
+    expect(
+      scale.rows.filter((r) => r.type !== "unknown").map((r) => r.rank),
+    ).toEqual(
+      scale.rows.filter((r) => r.type !== "unknown").map((_, i) => i + 1),
+    );
+    for (const row of scale.rows.filter((r) => r.type === "unknown")) {
+      expect(row.rank).toBe(0);
+      expect(row.excessHours).toBeNull();
+    }
   }
   const html = faultModeGapSummary(d);
   expect(html.includes("仅作诊断参照")).toBe(true);

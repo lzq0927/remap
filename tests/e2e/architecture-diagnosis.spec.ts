@@ -47,7 +47,7 @@ for (const width of [1440, 390])
       exact: true,
     });
     await expect(
-      structure.getByRole("group", { name: "系统分层架构图" }),
+      structure.getByRole("img", { name: "架构全景图", exact: true }),
     ).toBeVisible();
     await structure.getByText("编辑层级、名称与依据", { exact: true }).click();
     await structure
@@ -83,7 +83,11 @@ for (const width of [1440, 390])
     await budget.getByText("编辑分层设计权重与重要度", { exact: true }).click();
     await expect(
       budget.getByRole("table").first().getByRole("row"),
-    ).toHaveCount(9);
+    ).toHaveCount(
+      2 +
+        input.architecture.nodes.filter((n: any) => n.parentId === "system")
+          .length,
+    );
     await budget.getByLabel("展开对象预算").check();
     expect(
       await budget.getByRole("table").first().getByRole("row").count(),
@@ -116,7 +120,7 @@ for (const width of [1440, 390])
       .getByText("展开分层与对象差距矩阵", { exact: true })
       .click();
     await diagnosis.getByLabel("薄弱点对比层级").selectOption("leaf");
-    await expect(diagnosis.locator(".arch-heatmap")).toContainText(
+    await expect(diagnosis.locator(".arch-heatmap").last()).toContainText(
       "AI Core计算单元",
     );
     await diagnosis.getByLabel("薄弱点对比层级").selectOption("subsystem");
@@ -185,6 +189,25 @@ for (const width of [1440, 390])
         exact: true,
       }),
     ).toBeVisible({ timeout: 30000 });
+    const independent = experiments.getByRole("region", {
+      name: "本次独立方案结果",
+      exact: true,
+    });
+    const secondSummary = independent.getByText("本次方案分层诊断", {
+      exact: true,
+    });
+    if ((await secondSummary.locator("..").getAttribute("open")) === null)
+      await secondSummary.click();
+    const secondAtlas = independent.getByRole("region", {
+      name: "架构故障机制全景",
+      exact: true,
+    });
+    await expect(secondAtlas).toBeVisible();
+    await expect(secondAtlas).toContainText("相对冻结第一轮");
+    await secondAtlas.getByLabel("全景叠加指标").selectOption("improvement");
+    await expect(secondAtlas.locator(".atlas-svg")).toContainText(
+      "相对对照减少损失",
+    );
     const runs = await (await request.get(prefix + "/runs")).json();
     const scenario = runs.find((r: any) => r.operation === "audit-experiment");
     expect(scenario.result.architectureDiagnosis.version).toContain(

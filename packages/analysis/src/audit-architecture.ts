@@ -9,7 +9,14 @@ import {
   type AuditEventView,
 } from "../../contracts/src/audit-objects";
 import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
-import { auditExtensionCatalog } from "../../contracts/src/audit-extensions";
+import {
+  auditExtensionCatalog,
+  existingMechanismClasses,
+} from "../../contracts/src/audit-extensions";
+import {
+  hardwareCount,
+  hardwareScaleEvents,
+} from "../../contracts/src/audit-hardware";
 import { auditReferenceOnly } from "../../contracts/src/audit-presets";
 import { agreeLossAllocation } from "./audit-allocation";
 
@@ -135,6 +142,8 @@ export function auditArchitectureDiagnosis(result: any) {
   );
   const scales = rows.map((row: any) => {
     const cards: number = row.cards;
+    const scaleEvents: AuditEventView[] =
+      row.scaleEvents ?? hardwareScaleEvents(events, architecture, cards);
     const target: number =
       cards === result.request.cards
         ? result.request.target
@@ -151,7 +160,14 @@ export function auditArchitectureDiagnosis(result: any) {
         .filter((c) => included.has(c.id))
         .flatMap((c) => c.eventIds);
       const eventSet = new Set(eventIds);
-      const selectedEvents = events.filter((e) => eventSet.has(e.id));
+      const selectedEvents = scaleEvents.filter((e) => eventSet.has(e.id));
+      const missingData = architecture.nodes.filter(
+        (c) =>
+          included.has(c.id) &&
+          c.kind !== "overhead" &&
+          !children(c.id).length &&
+          !c.eventIds.length,
+      );
       const hasOverhead = architecture.nodes.some(
         (c) => included.has(c.id) && c.kind === "overhead",
       );
@@ -185,6 +201,9 @@ export function auditArchitectureDiagnosis(result: any) {
           fit,
           rate,
           intervalHours: rate > 0 ? 1 / rate : null,
+          lossHours: selectedEvents
+            .filter((e) => e.type === type)
+            .reduce((sum, e) => sum + eventLossHours(row.perEvent?.[e.id]), 0),
         };
       });
       const mechanisms = coverage
@@ -239,6 +258,30 @@ export function auditArchitectureDiagnosis(result: any) {
         ...n,
         leaf: children(n.id).length === 0,
         eventIds,
+        quantity:
+          n.kind === "overhead"
+            ? null
+            : hardwareCount(architecture, n.id, cards),
+        dataStatus: missingData.length
+          ? selectedEvents.length || hasOverhead
+            ? "partial"
+            : "unknown"
+          : "modeled",
+        missingObjects: missingData.map((c) => c.name),
+        targetAvailability:
+          allowedHours === null ? null : 1 - allowedHours / hours,
+        attributedAvailability: 1 - actualHours / hours,
+        businessMtbfHours: null,
+        propagationRecords: (architecture.propagations ?? []).filter((p) =>
+          eventSet.has(p.eventId),
+        ),
+        mechanismEffects: mechanisms.map((id) => ({
+          id,
+          effect:
+            existingMechanismClasses[id]?.effect ??
+            auditExtensionCatalog.find((m) => m.id === id)?.effect ??
+            "需核对作用范围",
+        })),
         types,
         fit: types.reduce((a, t) => a + t.fit, 0),
         observedEvents,
@@ -303,6 +346,7 @@ export function auditArchitectureDiagnosis(result: any) {
       nodes,
       weaknesses,
       ranking,
+      scaleEvents,
     };
   });
   return {
@@ -314,6 +358,9 @@ export function auditArchitectureDiagnosis(result: any) {
     hours,
     scales,
     notes: [
+      "硬件数量可逐规模填写；数量折算仅在显式启用且提供参考数量与依据时进入求解。当前源FIT仍为NPU等效业务影响率，不能再次作为实测单器件FIT相乘。",
+      "架构目标和现状百分比为折算至业务口径的损失责任；未知故障对象不代表零风险。图中连接、共享故障域及传播路径是证据记录，不自动改变传播概率或引入冗余收益。",
+      "业务中断MTBF需要中断定义及独立计数，当前不由硬件FIT冒充。快速倒换可缩短恢复；只有符合业务连续性条件才可归为提高业务MTBF，同一收益不重复计算。",
       "分层目标是系统损失责任预算；父层汇总子层，不是各模块自身运行可用度，也不直接连乘。",
       "FIT为NPU等效业务影响事件率，按评估卡数换算一次；故障时钟按非全局停机暴露运行，hard为中断MTBF，slow与sdc显示事件间隔。",
       "恢复停机/次来自仿真事件账，包含检测、失败回退及窗口截断，不代表完整物理修复MTTR；局部损失另计。",
@@ -391,9 +438,11 @@ export function architectureResponsibilities(
             ]
           : n.eventIds.length
             ? n.eventIds.flatMap((eventId) => {
-                const event = result.events.find((e: any) => e.id === eventId);
+                const event = (scale.scaleEvents ?? result.events).find(
+                  (e: any) => e.id === eventId,
+                );
                 const keys =
-                  eventLossScopes[event?.type] ??
+                  eventLossScopes[event?.type ?? ""] ??
                   Object.keys(architectureLossNames).filter(
                     (key) => !["save", "mechanismOverhead"].includes(key),
                   );

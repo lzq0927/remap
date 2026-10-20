@@ -55,11 +55,14 @@ export function hardwareTargetOverrides(
       .filter((event) => event.fit > 0)
       .map((event) => ({
         id: event.id,
-        fit: (Math.min(target.fit!, object.fit) * event.fit) / object.fit,
+        fit:
+          (Math.min(target.fit!, object.fit) * event.fit) /
+          object.fit /
+          (event.rateMultiplier ?? 1),
         evidence: "scenario" as const,
         source: `${input.method} 对象分配 · ${input.cards}卡 · ${input.metricId}=${input.target}`,
         rateBasis: "npu-equivalent-hour",
-        note: "以分配值为 FIT 上限，不调高已满足预算的对象；沿用本对象当前故障类型比例，需正向仿真和工程验证，不是实测 FIT。",
+        note: "以分配值为 FIT 上限，不调高已满足预算的对象；沿用本对象当前故障类型比例。有数量模型时已还原到参考目录FIT，避免再次乘数量。需正向仿真和工程验证，不是实测 FIT。",
       }));
   });
 }

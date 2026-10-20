@@ -1,4 +1,6 @@
+import AuditAtlasExplorer from "./AuditAtlasExplorer";
 import { useState } from "react";
+import AuditHardwareDiagnosis from "./AuditHardwareDiagnosis";
 import { contributionHeatmap } from "../../../packages/reports/src/audit-decision-study";
 import type { AuditArchitectureDiagnosis } from "../../../packages/analysis/src/audit-architecture";
 import {
@@ -60,20 +62,36 @@ export default function AuditArchitectureResult({
         <span>→</span>
         <b>分规模改进</b>
       </div>
-      <label className="arch-toggle">
-        <input
-          type="checkbox"
-          aria-label="展开诊断对象"
-          checked={expanded}
-          onChange={(e) => setExpanded(e.target.checked)}
-        />
-        展开故障对象
-      </label>
-      <div
-        dangerouslySetInnerHTML={{
-          __html: architectureTree(d.architecture, d, cards, expanded ? 10 : 1),
-        }}
+      <AuditAtlasExplorer
+        result={result}
+        events={result.events ?? []}
+        cards={cards}
       />
+      {d.architecture.view === "hardware" ? (
+        <AuditHardwareDiagnosis diagnosis={d} cards={cards} />
+      ) : (
+        <>
+          <label className="arch-toggle">
+            <input
+              type="checkbox"
+              aria-label="展开诊断对象"
+              checked={expanded}
+              onChange={(e) => setExpanded(e.target.checked)}
+            />
+            展开故障对象
+          </label>
+          <div
+            dangerouslySetInnerHTML={{
+              __html: architectureTree(
+                d.architecture,
+                d,
+                cards,
+                expanded ? 10 : 1,
+              ),
+            }}
+          />
+        </>
+      )}
       <div data-summary-stage="targets">
         <h3>01 / 各层目标分解与整体差距</h3>
         <div className="scale-summary-controls">

@@ -22,7 +22,9 @@ export function auditObjectComparison(
   leftEvents = events,
   rightEvents = events,
 ) {
-  return auditObjects(events).map((object) => {
+  leftEvents = left?.scaleEvents ?? leftEvents;
+  rightEvents = right?.scaleEvents ?? rightEvents;
+  return auditObjects(leftEvents).map((object) => {
     const fits = (catalog: AuditEventView[]) =>
       object.events.reduce(
         (s, e) => s + (catalog.find((x) => x.id === e.id)?.fit ?? e.fit),

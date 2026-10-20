@@ -13,13 +13,9 @@ export interface AuditDraft {
   policy: string;
   allScales: boolean;
 }
-export function auditDraftInput(draft: AuditDraft): AuditRequest {
-  const { request, overrides, hardware, model, policy, allScales } = draft;
-  const eventOverrides = JSON.parse(overrides),
-    candidateFitOverrides = JSON.parse(hardware);
-  if (!Array.isArray(eventOverrides) || !Array.isArray(candidateFitOverrides))
-    throw new Error("事件更新必须是数组");
-  const scales = allScales
+/** The editor and submitted run must expose the same required inventory scales. */
+export function auditDraftScales(request: AuditRequest, allScales: boolean) {
+  return allScales
     ? [
         ...new Set([
           request.cards,
@@ -29,6 +25,14 @@ export function auditDraftInput(draft: AuditDraft): AuditRequest {
         ]),
       ].sort(auditScaleOrder)
     : [request.cards];
+}
+export function auditDraftInput(draft: AuditDraft): AuditRequest {
+  const { request, overrides, hardware, model, policy, allScales } = draft;
+  const eventOverrides = JSON.parse(overrides),
+    candidateFitOverrides = JSON.parse(hardware);
+  if (!Array.isArray(eventOverrides) || !Array.isArray(candidateFitOverrides))
+    throw new Error("事件更新必须是数组");
+  const scales = auditDraftScales(request, allScales);
   return {
     ...request,
     scales,

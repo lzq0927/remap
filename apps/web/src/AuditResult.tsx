@@ -44,6 +44,9 @@ export default function AuditResult({
   const selected = r.rows.filter((row: any) => row.cards === cards);
   const budget = r.designReview?.scales.find((x: any) => x.cards === cards);
   const recommendation = r.recommendation;
+  const layerDiagnosis = r.architectureDiagnosis?.scales.find(
+    (item: any) => item.cards === cards,
+  );
   return (
     <>
       <h3>事件与机制收益审核 · 保留干净检查点</h3>
@@ -155,21 +158,12 @@ export default function AuditResult({
               </small>
             </div>
           </div>
-          {r.architectureDiagnosis?.scales.find((s: any) => s.cards === cards)
-            ?.weaknesses[0] && (
+          {layerDiagnosis && (
             <div className="arch-brief">
               <b>分层诊断重点：</b>
-              {
-                r.architectureDiagnosis.scales.find(
-                  (s: any) => s.cards === cards,
-                ).weaknesses[0].name
-              }{" "}
-              ·{" "}
-              {
-                r.architectureDiagnosis.scales.find(
-                  (s: any) => s.cards === cards,
-                ).weaknesses[0].focus
-              }
+              {layerDiagnosis.weaknesses[0]
+                ? `${layerDiagnosis.weaknesses[0].name} · ${layerDiagnosis.weaknesses[0].focus}`
+                : "本次未形成薄弱点排序，可继续核对架构、故障数据和目标。"}
               <br />
               <button type="button" onClick={() => setView("architecture")}>
                 查看分层目标与跨规模薄弱点

@@ -81,7 +81,7 @@ for (const width of [1440, 390])
         )
         .count(),
     ).toBe(0);
-    await summary.getByLabel("目标分解层级").selectOption("domain-1");
+    await summary.getByLabel("目标分解层级").selectOption("hardware-chip");
     await expect(summary.locator(".scale-target-breakdown")).toContainText(
       "AI Core计算单元",
     );

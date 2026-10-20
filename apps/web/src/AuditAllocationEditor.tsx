@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hardwareScaleEvents } from "../../../packages/contracts/src/audit-hardware";
 import {
   auditSubmodelPlan,
   auditHardwareItems,
@@ -31,6 +32,11 @@ export default function AuditAllocationEditor({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [text, setText] = useState<string>();
+  try {
+    events = hardwareScaleEvents(events, request.architecture, request.cards);
+  } catch (e) {
+    return <p role="alert">请先补齐硬件规模配置：{(e as Error).message}</p>;
+  }
   const input = request.submodelAllocation,
     objects = auditObjects(events);
   let plan: ReturnType<typeof auditSubmodelPlan> = null,

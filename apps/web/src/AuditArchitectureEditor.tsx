@@ -1,5 +1,8 @@
+import AuditAtlasExplorer from "./AuditAtlasExplorer";
 import { auditSummaryScales } from "../../../packages/contracts/src/audit-presets";
 import { useState } from "react";
+import AuditHardwareEditor from "./AuditHardwareEditor";
+import { hardwareAuditArchitecture } from "../../../packages/contracts/src/audit-hardware";
 import {
   defaultAuditArchitecture,
   resolveAuditArchitecture,
@@ -29,6 +32,9 @@ export default function AuditArchitectureEditor({
   const [expandGraph, setExpandGraph] = useState(false);
   const [showObjects, setShowObjects] = useState(false);
   const [error, setError] = useState("");
+  const [relationKind, setRelationKind] = useState<
+    "dependency" | "connection" | "shared-domain"
+  >("dependency");
   const [from, setFrom] = useState(""),
     [to, setTo] = useState(""),
     [label, setLabel] = useState(""),
@@ -93,11 +99,22 @@ export default function AuditArchitectureEditor({
       </h4>
       <p className="arch-short-note">
         {mode === "structure"
-          ? "先确认功能分层，再绑定故障。下图可改名、增加层级或调整归属；共同依赖单独记录，不自动假设串并联关系。"
+          ? "按硬件组成逐层确认故障归属。Pod、机柜、超节点顺序可调整；各规模为并列方案，数量、连接与共享故障域分别记录。"
           : "分层损失预算用于定位差距，保持现状FIT与措施参数不变。父层汇总子层；当前默认均分仅为暂定设计参照，不代表专家已确认的模块指标。"}
       </p>
       {mode === "structure" && (
-        <details open>
+        <AuditAtlasExplorer
+          architecture={architecture}
+          events={events}
+          request={request}
+          cards={request.cards}
+          onDomainChange={(id, functionalDomain) =>
+            patch(id, { functionalDomain })
+          }
+        />
+      )}
+      {mode === "structure" && (
+        <details>
           <summary>查看系统分层架构图</summary>
           <label className="arch-toggle">
             <input
@@ -206,6 +223,12 @@ export default function AuditArchitectureEditor({
             : "编辑分层设计权重与重要度"}
         </summary>
         <div className="arch-editor-actions">
+          <button
+            type="button"
+            onClick={() => update(hardwareAuditArchitecture(events))}
+          >
+            载入硬件分层模板
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -351,6 +374,20 @@ export default function AuditArchitectureEditor({
       </details>
       {mode === "structure" && (
         <>
+          <AuditHardwareEditor
+            architecture={architecture}
+            events={events}
+            scales={[
+              ...new Set([
+                request.cards,
+                ...(request.scales ?? []),
+                ...(request.sensitivity
+                  ? [request.sensitivityCards ?? request.cards]
+                  : []),
+              ]),
+            ].sort((a, b) => a - b)}
+            onChange={update}
+          />
           <details>
             <summary>逐事件调整故障归属</summary>
             <p className="note">
@@ -419,6 +456,20 @@ export default function AuditArchitectureEditor({
             </p>
             <div className="fields">
               <label>
+                关系类型
+                <select
+                  aria-label="架构关系类型"
+                  value={relationKind}
+                  onChange={(e) =>
+                    setRelationKind(e.target.value as typeof relationKind)
+                  }
+                >
+                  <option value="dependency">服务依赖</option>
+                  <option value="connection">网络连接</option>
+                  <option value="shared-domain">共享故障域</option>
+                </select>
+              </label>
+              <label>
                 依赖方
                 <select
                   aria-label="架构依赖方"
@@ -473,7 +524,7 @@ export default function AuditArchitectureEditor({
                   ...architecture,
                   dependencies: [
                     ...architecture.dependencies,
-                    { from, to, label, source },
+                    { from, to, label, source, kind: relationKind },
                   ],
                 })
               }

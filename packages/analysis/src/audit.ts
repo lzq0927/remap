@@ -1,6 +1,9 @@
 import { auditPlanningModelKeys } from "../../contracts/src/audit-planning";
 import {
-  defaultAuditArchitecture,
+  hardwareAuditArchitecture,
+  hardwareScaleEvents,
+} from "../../contracts/src/audit-hardware";
+import {
   resolveAuditArchitecture,
   type AuditArchitecture,
 } from "../../contracts/src/audit-architecture";
@@ -146,7 +149,7 @@ function numberIn(
 }
 export function getAuditDefaults() {
   return {
-    architecture: defaultAuditArchitecture(getAuditEvents()),
+    architecture: hardwareAuditArchitecture(getAuditEvents()),
     cards: 500000,
     eventCatalogVersion: currentAuditCatalogVersion,
     hours: 720,
@@ -490,7 +493,10 @@ export function resolveAudit(request: AuditRequest) {
     );
   if (request.submodelAllocation?.source === "event-catalog") {
     const allocation = request.submodelAllocation;
-    const expected = auditHardwareItems(events, request.cards);
+    const expected = auditHardwareItems(
+      hardwareScaleEvents(events, architecture, request.cards),
+      request.cards,
+    );
     if (
       allocation.cards !== request.cards ||
       allocation.items.length !== expected.length ||
@@ -525,8 +531,19 @@ export function resolveAudit(request: AuditRequest) {
     sourceInputs.current.events.map(({ id, fit }) => ({ id, fit })),
   );
   const totalFit = Math.max(
-    events.reduce((s, e) => s + e.fit, 0),
-    candidateEvents.reduce((s, e) => s + e.fit, 0),
+    ...[
+      ...new Set([
+        ...scales,
+        ...(request.sensitivity !== false ? [sensitivityCards] : []),
+      ]),
+    ].flatMap((cards) =>
+      [events, candidateEvents].map((catalog) =>
+        hardwareScaleEvents(catalog, architecture, cards).reduce(
+          (s, e) => s + e.fit,
+          0,
+        ),
+      ),
+    ),
   );
   const sensitivityPlan = auditSensitivityPlan(
     request,
@@ -610,8 +627,28 @@ function auditOneRound(
       sensitivityTrials,
       baseline,
     } = resolved;
-  const engine = createEngine(events, policy, model);
-  const candidateEngine = createEngine(candidateEvents, policy, {
+  const buildEngine = (catalog: typeof events, config: typeof model) => {
+    const base = createEngine(catalog, policy, config);
+    if (!request.architecture?.nodes.some((n) => n.rateModel)) return base;
+    const cache = new Map<number, any>();
+    return {
+      ...base,
+      forCards: (cards: number) => {
+        if (!cache.has(cards))
+          cache.set(
+            cards,
+            createEngine(
+              hardwareScaleEvents(catalog, request.architecture, cards),
+              policy,
+              { ...config, referenceRateArithmetic: false },
+            ),
+          );
+        return cache.get(cards);
+      },
+    };
+  };
+  const engine = buildEngine(events, model);
+  const candidateEngine = buildEngine(candidateEvents, {
     ...model,
     referenceRateArithmetic: resolved.candidateReferenceRates,
   });
@@ -628,6 +665,7 @@ function auditOneRound(
     seedOffset = 0,
     seedBase = request.seed,
   ) => {
+    selectedEngine = selectedEngine.forCards?.(cards) ?? selectedEngine;
     opts = {
       ...Object.fromEntries(baseline.mechanisms.map((id) => [id, true])),
       ...opts,
@@ -666,6 +704,9 @@ function auditOneRound(
     }
     return {
       cards,
+      ...(request.architecture?.nodes.some((n) => n.rateModel)
+        ? { scaleEvents: selectedEngine.events }
+        : {}),
       statistics: stats(values, auditTarget(request, cards)),
       availability,
       ledger,
@@ -853,7 +894,7 @@ function auditOneRound(
         };
         const selectedEngine =
           parameter === "sdcDelayHours"
-            ? createEngine(events, policy, { ...model, sdcDelayHours: value })
+            ? buildEngine(events, { ...model, sdcDelayHours: value })
             : engine;
         const sampled = sample(
           sensitivityCards,
@@ -1055,6 +1096,9 @@ function auditOneRound(
             policy,
             recoveryOrder,
             ...(baseline.active ? { baseline } : {}),
+            ...(request.architecture?.nodes.some((n) => n.rateModel)
+              ? { architecture: request.architecture }
+              : {}),
           }),
         )
         .digest("hex"),

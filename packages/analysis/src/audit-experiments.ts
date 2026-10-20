@@ -2,6 +2,7 @@ import {
   auditArchitectureDiagnosis,
   architectureReviewChecks,
 } from "./audit-architecture";
+import { hardwareScaleEvents } from "../../contracts/src/audit-hardware";
 import { createHash } from "node:crypto";
 import { validateOptimization } from "./audit-optimization";
 import { resolveAudit, type AuditRequest } from "./audit";
@@ -189,9 +190,14 @@ export function validateExperiment(input: AuditExperimentInput) {
   const cards = first.scales ?? [first.cards];
   const perScale =
     first.trials + attributionTrials * (permutations * (count + 1) + 2);
-  const fit = input.source.result.events.reduce(
-    (s: number, e: any) => s + e.fit,
-    0,
+  const fit = Math.max(
+    ...cards.map((n) =>
+      hardwareScaleEvents(
+        input.source.result.events,
+        first.architecture,
+        n,
+      ).reduce((s: number, e: any) => s + e.fit, 0),
+    ),
   );
   if (
     perScale * cards.length > 1000000 ||
@@ -274,6 +280,9 @@ export function experimentSampler(source: AuditSource) {
           fit: factor.value.find((f: any) => f.id === e.id)?.fit ?? e.fit,
         }));
     }
+    events = hardwareScaleEvents(events, request.architecture, cards);
+    if (request.architecture?.nodes.some((n) => n.rateModel))
+      model.referenceRateArithmetic = false;
     const engine = createEnhancedAuditEngine(events, policy, model, extensions);
     const opts = {
       ...Object.fromEntries(selected.map((id) => [id, true])),
@@ -308,6 +317,9 @@ export function experimentSampler(source: AuditSource) {
     );
     return {
       cards,
+      ...(request.architecture?.nodes.some((n) => n.rateModel)
+        ? { scaleEvents: engine.events }
+        : {}),
       statistics,
       values,
       ledger,

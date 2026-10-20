@@ -1,11 +1,13 @@
 {
   "name": "sd-dfr-remap",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "entry": "SKILL.md",
   "references": [
     "references/workflow.md",
     "references/assessment-rounds.md",
     "references/architecture-diagnosis.md",
+    "references/hardware-architecture.md",
+    "references/architecture-atlas.md",
     "references/scale-summary.md",
     "references/decision-planning.md",
     "references/ai-cluster-example.md"
@@ -13,7 +15,7 @@
   "protocol": "MCP",
   "requires": {
     "server": "sd-dfr-remap",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "taskBinding": true
   },
   "agentAdapters": {

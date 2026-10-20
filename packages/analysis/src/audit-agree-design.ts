@@ -49,6 +49,7 @@ type Budget = ReturnType<typeof mechanismLossBudget>;
  * Event path probabilities follow the same ordered recovery scopes as the engine.
  */
 export function deriveAgreeDesign(args: {
+  architecture?: import("../../contracts/src/audit-architecture").AuditArchitecture;
   hours: number;
   scales: number[];
   events: any[];
@@ -119,7 +120,7 @@ export function deriveAgreeDesign(args: {
   const screenScope = auditExtensionCatalog.find(
     (e) => e.id === "H-SDC-SCREEN",
   )!.eventCandidates;
-  const events = originalEvents.map((e) => ({
+  const referenceEvents = originalEvents.map((e) => ({
     ...e,
     fit:
       e.fit *
@@ -131,6 +132,11 @@ export function deriveAgreeDesign(args: {
         : 1),
   }));
   const perScale = scales.map((cards) => {
+    const events = hardwareScaleEvents(
+      referenceEvents,
+      args.architecture,
+      cards,
+    );
     const policy = structuredClone(refPolicy),
       model = { ...refModel },
       extensions = structuredClone(baseExtensions);
@@ -683,3 +689,4 @@ export function deriveAgreeDesign(args: {
     reserveFraction: 1 - utilization,
   };
 }
+import { hardwareScaleEvents } from "../../contracts/src/audit-hardware";

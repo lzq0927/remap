@@ -130,7 +130,12 @@ export const registry = [
     "GET",
     "/inputs/:id/mapping",
   ],
-  ["model_defaults", "读取场景指标和参考模型参数", "GET", "/defaults"],
+  [
+    "model_defaults",
+    "读取场景指标和参考模型参数；audit.architecture提供可编辑硬件模板。inventory记录各规模数量，rateModel显式启用参考FIT数量外推；propagations只记录传播证据，不自动生成收益",
+    "GET",
+    "/defaults",
+  ],
   [
     "analysis_solve",
     "执行专业求解。operation=audit 使用 design_get.assessment.input 评估当前配置的故障数据、措施集合及参数；新建任务optimization.enabled=false；历史输入遵从保存口径。独立改进使用 audit_plan / audit_evaluate。正式六阶段需 executionId,inputRevision；返回runId，用run_status读取结果",
@@ -219,7 +224,14 @@ const roundBodies: Record<string, z.ZodTypeAny> = {
     .strict(),
   audit_evaluate: z
     .object({
-      planAlternativeId: z.string().min(1).max(100).optional().describe("采用decisionStudy.alternatives中的备选方案时提供其id，同时传该方案完整configuration"),
+      planAlternativeId: z
+        .string()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe(
+          "采用decisionStudy.alternatives中的备选方案时提供其id，同时传该方案完整configuration",
+        ),
       sourceRunId: z.string().min(1),
       name: z.string().trim().min(1).max(100).describe("本次独立改进方案名称"),
       configuration: z

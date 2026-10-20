@@ -1,5 +1,6 @@
 import type { AuditSource } from "./audit-experiments";
 import { auditReferenceOnly } from "../../contracts/src/audit-presets";
+import { hardwareScaleEvents } from "../../contracts/src/audit-hardware";
 export function planningWork(
   source: AuditSource,
   scales: number[],
@@ -17,6 +18,14 @@ export function planningWork(
   const exposure =
     primary * scales.reduce((s, n) => s + n, 0) +
     curve * demands.reduce((s: number, n: number) => s + n, 0);
-  const fit = source.result.events.reduce((s: number, e: any) => s + e.fit, 0);
+  const fit = Math.max(
+    ...[...scales, ...demands].map((cards) =>
+      hardwareScaleEvents(
+        source.result.events,
+        source.input.architecture,
+        cards,
+      ).reduce((s: number, e: any) => s + e.fit, 0),
+    ),
+  );
   return { trajectories, events: (exposure * source.input.hours * fit) / 1e9 };
 }

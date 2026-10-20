@@ -135,7 +135,8 @@ export function architectureTargetBreakdown(
         `<tr><th>${esc(n.name)}</th>${scales
           .map((s) => {
             const x = s.nodes.find((v) => v.id === n.id)!;
-            return `<td class="${x.excessHours === null ? "pending" : x.excessHours > 0 ? "gap" : "within"}"><b>${num(x.allowedHours)} / ${num(x.actualHours)} h</b><small>${x.excessHours === null ? "未分配" : (x.excessHours > 0 ? "超出 " : "余量 ") + num(Math.abs(x.excessHours)) + " h"}</small></td>`;
+            const incomplete = x.dataStatus && x.dataStatus !== "modeled";
+            return `<td class="${x.excessHours === null || incomplete ? "pending" : x.excessHours > 0 ? "gap" : "within"}"><b>${num(x.allowedHours)} / ${x.dataStatus === "unknown" ? "待补充" : num(x.actualHours)} h</b><small>${incomplete ? "故障数据不完整；已知损失仅作参照" : x.excessHours === null ? "未分配" : (x.excessHours > 0 ? "超出 " : "余量 ") + num(Math.abs(x.excessHours)) + " h"}</small></td>`;
           })
           .join("")}</tr>`,
     )
@@ -149,19 +150,33 @@ export function faultModeGapRows(d: AuditArchitectureDiagnosis) {
       .filter((n) => n.leaf && n.kind !== "overhead")
       .flatMap((n) => {
         const total = n.drivers.reduce((s, e) => s + e.fit, 0);
-        return n.drivers.map((e) => {
+        const drivers = n.drivers.length
+          ? n.drivers
+          : [
+              {
+                id: "unmodeled:" + n.id,
+                name: n.name,
+                type: "unknown",
+                fit: 0,
+                lossHours: 0,
+                source: n.source,
+                evidence: "故障数据待补充",
+              },
+            ];
+        return drivers.map((e) => {
           const allowedHours =
             n.allowedHours === null
               ? null
-              : n.allowedHours *
-                (total ? e.fit / total : 1 / Math.max(1, n.drivers.length));
+              : n.allowedHours * (total ? e.fit / total : 1 / drivers.length);
           return {
             ...e,
             layerId: n.id,
             layerName: n.name,
             allowedHours,
             excessHours:
-              allowedHours === null ? null : e.lossHours - allowedHours,
+              allowedHours === null || e.type === "unknown"
+                ? null
+                : e.lossHours - allowedHours,
           };
         });
       })
@@ -170,14 +185,28 @@ export function faultModeGapRows(d: AuditArchitectureDiagnosis) {
           (b.excessHours ?? b.lossHours) - (a.excessHours ?? a.lossHours) ||
           a.id.localeCompare(b.id),
       );
+    let knownRank = 0;
     return {
       cards: scale.cards,
-      rows: rows.map((r, i) => ({ ...r, rank: i + 1 })),
+      rows: rows.map((r) => ({
+        ...r,
+        rank: r.type === "unknown" ? 0 : ++knownRank,
+      })),
     };
   });
 }
 export function faultModeGapSummary(d: AuditArchitectureDiagnosis, limit = 5) {
   const scales = faultModeGapRows(d);
+  const unknownIds = [
+    ...new Set(
+      scales.flatMap((s) =>
+        s.rows.filter((r) => r.type === "unknown").map((r) => r.id),
+      ),
+    ),
+  ];
+  const reserved = unknownIds.length
+    ? `<details class="arch-evidence"><summary>未建模对象的预留预算（${unknownIds.length}项）</summary><p class="note">这些预算尚无故障模型对应，不计为可用余量，也不进入薄弱点已知损失排名。</p><div class="table-wrap"><table><thead><tr><th>对象</th>${scales.map((s) => `<th>${label(s.cards)} / h</th>`).join("")}</tr></thead><tbody>${unknownIds.map((id) => `<tr><th>${esc(scales[0].rows.find((r) => r.id === id)?.layerName ?? id)}</th>${scales.map((s) => `<td>${num(s.rows.find((r) => r.id === id)?.allowedHours)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>`
+    : "";
   const ids = [
     ...new Set(
       scales.flatMap((s) =>
@@ -188,7 +217,7 @@ export function faultModeGapSummary(d: AuditArchitectureDiagnosis, limit = 5) {
       ),
     ),
   ];
-  return `<div class="arch-chart fault-gap-summary" data-summary-chart="fault-gaps"><h3>故障模式的细分差距与排名</h3><p class="note">汇集各需求规模前${limit}项，单元格按本规模分别排名。叶层预算按本叶层FIT份额分到故障模式，仅作诊断参照；保存与检测开销另列，零观测不代表零风险。</p>${
+  return `<div class="arch-chart fault-gap-summary" data-summary-chart="fault-gaps"><h3>故障模式的细分差距与排名</h3><p class="note">汇集各需求规模前${limit}项，单元格按本规模分别排名。叶层预算按本叶层FIT份额分到故障模式，仅作诊断参照；保存与检测开销另列，零观测不代表零风险。</p>${reserved}${
     ids.length
       ? `<div class="table-wrap"><table><thead><tr><th>故障模式 / 归属</th>${scales.map((s) => `<th>${label(s.cards)}</th>`).join("")}</tr></thead><tbody>${ids
           .map((id) => {
