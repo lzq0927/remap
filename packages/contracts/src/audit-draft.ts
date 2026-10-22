@@ -19,6 +19,13 @@ export function auditDraftScales(request: AuditRequest, allScales: boolean) {
     ? [
         ...new Set([
           request.cards,
+          ...(request.scales ?? []).filter(
+            (cards) =>
+              cards !== 1000 ||
+              request.samplingProfile !== undefined ||
+              request.cards === cards ||
+              request.targets?.[cards] !== undefined,
+          ),
           ...(request.samplingProfile
             ? auditReferenceScales
             : [10000, 100000, 200000, 500000]),

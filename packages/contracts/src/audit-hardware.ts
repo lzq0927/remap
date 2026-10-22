@@ -4,6 +4,7 @@ import type {
   AuditArchitectureNode,
 } from "./audit-architecture";
 import { auditObjects, type AuditEventView } from "./audit-objects";
+import { supernodeCounts, topologyQuantityKeys } from "./audit-topology-config";
 
 const identifier = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/);
 const source = z.string().trim().min(1).max(2000);
@@ -36,6 +37,7 @@ export const hardwareNodeFields = {
     .object({
       totals: z.record(scaleKey, count),
       unitsPerParent: count.optional(),
+      topologyQuantity: z.enum(topologyQuantityKeys).optional(),
       source,
     })
     .strict()
@@ -75,6 +77,8 @@ export function hardwareCount(
     if (!n.parentId) return 1;
     if (n.inventory?.totals[String(cards)] !== undefined)
       return n.inventory.totals[String(cards)];
+    if (n.inventory?.topologyQuantity && a.topology)
+      return supernodeCounts(a.topology, cards)[n.inventory.topologyQuantity];
     if (n.inventory?.unitsPerParent === undefined) return null;
     const parent = visit(n.parentId);
     return parent === null ? null : parent * n.inventory.unitsPerParent;

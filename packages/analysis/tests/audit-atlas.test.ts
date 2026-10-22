@@ -103,7 +103,7 @@ describe("architecture atlas uses frozen ledger and explicit applicability", () 
     const pure = atlasSvg(a);
     expect(pure).not.toContain("FIT");
     expect(pure).not.toContain("CORE-hard");
-    expect(pure).toContain("节点互连");
+    expect(pure).toContain("板内 / 板间 / 柜间高速互联");
     const selected = atlasVisible(a, { query: "CORE-hard" });
     expect(selected.map((n) => n.id)).toContain("system");
     expect(selected.map((n) => n.id)).toContain("object-CORE");
@@ -153,6 +153,7 @@ describe("architecture atlas uses frozen ledger and explicit applicability", () 
     expect(a.nodes.find((n) => n.id === "object-CORE")!.domain).toBe("control");
     expect(a.mechanisms.some((m) => m.status === "selected")).toBe(true);
     const opt = r.architecture.nodes.find((n) => n.id === "object-OPT")!;
+    delete opt.inventory;
     opt.rateModel = {
       referenceCards: 10000,
       referenceCount: 100,

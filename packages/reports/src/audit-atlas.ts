@@ -14,6 +14,11 @@ import {
 import { faultTypeLabels } from "../../contracts/src/audit-objects";
 import { mechanismStages } from "../../contracts/src/audit-extensions";
 import { parameterLabels } from "./audit-labels";
+import {
+  supernodeSvg,
+  supernodeSummaryHtml,
+  supportsSupernodeDiagram,
+} from "./audit-supernode";
 
 export const atlasEscape = (v: unknown) =>
   String(v ?? "").replace(
@@ -41,9 +46,20 @@ export const atlasColors: Record<string, string> = {
   mixed: "#f6f9fb",
   overhead: "#f6e7db",
 };
-export type AtlasMetric = "structure" | "loss" | "gap" | "fit" | "improvement";
+export type AtlasMetric =
+  | "structure"
+  | "summary"
+  | "availability"
+  | "target"
+  | "loss"
+  | "gap"
+  | "fit"
+  | "improvement";
 export const atlasMetricNames = {
   structure: "纯架构",
+  summary: "数量・FIT・可用度",
+  availability: "分层当前可用度",
+  target: "分层目标可用度",
   loss: "已建模损失 / h",
   gap: "已建模超预算 / h",
   fit: "本规模NPU等效FIT",
@@ -65,6 +81,8 @@ export type AtlasViewOptions = {
   pitch?: number;
   spacing?: number;
   links?: boolean;
+  topology?: boolean;
+  idPrefix?: string;
 };
 export function atlasVisible(atlas: AuditAtlas, o: AtlasViewOptions = {}) {
   const root =
@@ -103,6 +121,10 @@ export function atlasVisible(atlas: AuditAtlas, o: AtlasViewOptions = {}) {
 }
 export function atlasValue(n: AtlasNode, metric: AtlasMetric) {
   if (metric === "structure") return null;
+  if (metric === "fit") return n.npuEquivalentFit;
+  if (metric === "target") return n.targetAvailability;
+  if (metric === "availability") return n.attributedAvailability;
+  if (metric === "summary") return n.measured?.excessHours ?? null;
   if (!n.measured || n.measured.dataStatus === "unknown") return null;
   if (metric === "loss") return n.actualHours;
   if (metric === "gap") return n.measured.excessHours;
@@ -122,8 +144,14 @@ function heat(
   n: AtlasNode,
 ) {
   if (metric === "structure") return atlasColors[n.domain];
+  if (metric === "target") return "#e4edf8";
   if (v === null || n.measured?.dataStatus !== "modeled") return "#e7ebef";
-  const good = metric === "improvement" ? v > 0 : metric === "gap" && v < 0;
+  const good =
+    metric === "improvement"
+      ? v > 0
+      : metric === "availability"
+        ? n.targetAvailability !== null && v >= n.targetAvailability
+        : ["gap", "summary"].includes(metric) && v <= 0;
   const target = good ? [44, 139, 114] : [209, 111, 50];
   const t = max > 0 ? Math.min(1, Math.abs(v) / max) * 0.72 : 0;
   return `rgb(${target.map((c) => Math.round(250 + (c - 250) * t)).join(",")})`;
@@ -253,6 +281,19 @@ function spatialLayout(nodes: AtlasNode[], o: AtlasViewOptions) {
   };
 }
 export function atlasSvg(atlas: AuditAtlas, o: AtlasViewOptions = {}) {
+  if (
+    o.topology &&
+    supportsSupernodeDiagram(atlas) &&
+    (o.depth === undefined || o.depth >= 10) &&
+    (!o.focus || !atlas.nodes.find((n) => n.id === o.focus)?.parentId) &&
+    !o.domain &&
+    !o.faultType &&
+    !o.stage &&
+    !o.capability &&
+    !o.status &&
+    ["structure", "summary"].includes(o.metric ?? "summary")
+  )
+    return supernodeSvg(atlas, o);
   const nodes = atlasVisible(atlas, o),
     metric = o.metric ?? "structure";
   const layout = o.spatial ? spatialLayout(nodes, o) : atlasLayout(nodes);
@@ -325,9 +366,11 @@ export function atlasSvg(atlas: AuditAtlas, o: AtlasViewOptions = {}) {
       }
       const label = `${atlasDomainNames[n.domain]}${n.hardwareLevel ? " · " + hardwareLevels[n.hardwareLevel] : ""}${qty !== null ? " · 数量 " + atlasNumber(qty) : ""}`;
       const info =
-        metric === "structure"
-          ? label
-          : `${atlasMetricNames[metric]} ${atlasNumber(v)}${n.measured?.dataStatus !== "modeled" ? " · 数据不完整" : ""}`;
+        metric === "summary"
+          ? `数量 ${atlasNumber(n.quantity)} · 等效FIT ${atlasNumber(n.npuEquivalentFit)}`
+          : metric === "structure"
+            ? label
+            : `${atlasMetricNames[metric]} ${metric === "availability" || metric === "target" ? (v === null ? "待评估" : (v * 100).toFixed(4) + "%") : atlasNumber(v)}${n.coverageStatus !== "modeled" ? " · 数据不完整" : ""}`;
       const title = pureName(n);
       const infoLines = info.match(/.{1,24}/gu) ?? [info];
       return `<g data-atlas-node="${atlasEscape(n.id)}" role="button" tabindex="0" aria-label="${atlasEscape(title)}">
@@ -341,7 +384,7 @@ export function atlasSvg(atlas: AuditAtlas, o: AtlasViewOptions = {}) {
             `<tspan x="${b.x + 14}" dy="${i ? 14 : 0}">${atlasEscape(line + (i === 1 && infoLines.length > 2 ? "…" : ""))}</tspan>`,
         )
         .join("")}</text>
-      ${o.spatial ? `<text x="${b.x + 14}" y="${b.y + 83}" font-size="12" fill="#526978">物理层级 ${n.depth} · ${atlasEscape(atlasDomainNames[n.domain])}</text>` : ""}
+      ${metric === "summary" ? `<text x="${b.x + 14}" y="${b.y + 88}" font-size="10" fill="#526978">可用度 ${n.attributedAvailability === null ? "待评估" : (n.attributedAvailability * 100).toFixed(4) + "%"} / 目标 ${n.targetAvailability === null ? "未分配" : (n.targetAvailability * 100).toFixed(4) + "%"}</text>` : o.spatial ? `<text x="${b.x + 14}" y="${b.y + 83}" font-size="12" fill="#526978">物理层级 ${n.depth} · ${atlasEscape(atlasDomainNames[n.domain])}</text>` : ""}
     </g>`;
     })
     .join("");
@@ -367,6 +410,7 @@ export function atlasDetailHtml(atlas: AuditAtlas, nodeId: string) {
   const ms = atlas.mechanisms.filter((m) => n.mechanismIds.includes(m.id));
   return `<h3>${atlasEscape(n.name)}</h3><p>${n.path.map((id) => atlasEscape(atlas.nodes.find((v) => v.id === id)?.name)).join(" → ")}</p>
     <p>功能域：${atlasDomainNames[n.domain]}（${n.domainBasis}）；当前损失 ${atlasNumber(n.actualHours)} h；对照 ${atlasNumber(n.baselineHours)} h；减少损失 ${atlasNumber(n.improvementHours)} h（${atlasEscape(atlas.comparisonBasis)}，无对象级置信区间）。</p>
+    <p>数量 ${atlasNumber(n.quantity)}；NPU等效FIT ${atlasNumber(n.npuEquivalentFit)}；区域总事件FIT ${atlasNumber(n.aggregateEventFit)}；分层目标 ${n.targetAvailability === null ? "未分配" : (n.targetAvailability * 100).toFixed(4) + "%"}；当前可用度 ${n.attributedAvailability === null ? "待评估" : (n.attributedAvailability * 100).toFixed(4) + "%"}（已建模损失责任投影）。</p>
     ${table(
       [
         "事件",
@@ -409,6 +453,7 @@ export function atlasReport(result: any) {
   return `<section class="atlas-report"><style>${atlasCss}</style><h3>架构—故障—机制全景</h3>
     <p>先看纯组成与连接，再按对象查阅实际事件账和机制参数。以下从本次保存结果派生，功能域不改变计算。</p>
     <div class="atlas-figure">${atlasSvg(a)}</div>
+    ${a.architecture.topology ? `<h4>超节点组网与量化诊断</h4><div class="atlas-figure">${supernodeSvg(a, { metric: "summary" })}</div>${supernodeSummaryHtml(a)}` : ""}
     <details><summary>全景损失热力图与前后对照</summary><div class="atlas-figure">${atlasSvg(a, { metric: "loss" })}</div>
     ${table(
       ["功能域（叶层互斥汇总）", "已建模损失 h", "分配预算 h", "数据状态"],
@@ -438,6 +483,7 @@ export function atlasReport(result: any) {
 export function atlasStandaloneHtml(atlas: AuditAtlas) {
   return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>ReMAP 架构全景交付</title><style>body{font-family:system-ui,sans-serif;margin:24px;color:#203745;background:#f8fafc}summary{cursor:pointer}button{padding:8px 14px} ${atlasCss}</style><main class="atlas-report"><h1>架构、故障与机制全景 · ${atlas.cards.toLocaleString()}卡</h1><p>本报告包含全部对象和来源；界面筛选不裁剪完整数据。浏览器打印可保存为PDF。</p>
     <div class="atlas-figure">${atlasSvg(atlas)}</div><h2>损失与差距</h2><div class="atlas-figure">${atlasSvg(atlas, { metric: "gap" })}</div>
+    ${atlas.architecture.topology ? `<h2>超节点组网与区域指标</h2><div class="atlas-figure">${supernodeSvg(atlas, { metric: "summary" })}</div>${supernodeSummaryHtml(atlas)}` : ""}
     ${`<h2>对象与故障损失矩阵</h2><div class="atlas-figure">${atlasMatrixSvg(
       atlas,
       "fault",
@@ -457,12 +503,21 @@ export function atlasMarkdown(result: any) {
   return (
     "\n\n### 架构—故障—机制全景\n\n" +
     a.notes.join("\n\n") +
-    "\n\n|对象|功能域|当前损失 h|对照损失 h|减少损失 h|故障ID|适用机制ID（含候选）|\n|---|---|---|---|---|---|---|\n" +
+    "\n\n|对象|功能域|数量|NPU等效FIT|区域总事件FIT|分层目标可用度|当前可用度（损失责任投影）|当前损失 h|对照损失 h|减少损失 h|故障ID|适用机制ID（含候选）|\n|---|---|---|---|---|---|---|---|---|---|---|---|\n" +
     a.nodes
       .map((n) =>
         [
           n.name,
           atlasDomainNames[n.domain],
+          atlasNumber(n.quantity),
+          atlasNumber(n.npuEquivalentFit),
+          atlasNumber(n.aggregateEventFit),
+          n.targetAvailability === null
+            ? "未分配"
+            : (n.targetAvailability * 100).toFixed(4) + "%",
+          n.attributedAvailability === null
+            ? "待评估"
+            : (n.attributedAvailability * 100).toFixed(4) + "%",
           atlasNumber(n.actualHours),
           atlasNumber(n.baselineHours),
           atlasNumber(n.improvementHours),

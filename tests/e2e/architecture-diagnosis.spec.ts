@@ -47,7 +47,7 @@ for (const width of [1440, 390])
       exact: true,
     });
     await expect(
-      structure.getByRole("img", { name: "架构全景图", exact: true }),
+      structure.getByRole("img", { name: /^(架构全景图|超节点组网拓扑)$/ }),
     ).toBeVisible();
     await structure.getByText("编辑层级、名称与依据", { exact: true }).click();
     await structure

@@ -39,6 +39,9 @@ function Inventory({
     n.rateModel?.referenceCount?.toString() ?? "",
   );
   const [rateSource, setRateSource] = useState(n.rateModel?.source ?? "");
+  const [useTopology, setUseTopology] = useState(
+    !!n.inventory?.topologyQuantity,
+  );
   const leaf = !a.nodes.some((c) => c.parentId === n.id);
   return (
     <div className="hardware-edit-form">
@@ -72,6 +75,17 @@ function Inventory({
       <p className="note">
         各规模总数量优先于上级数量比例；空白表示未知。规模方案彼此独立。仅记录数量不会改变故障率。
       </p>
+      {n.inventory?.topologyQuantity && (
+        <label className="arch-toggle">
+          <input
+            type="checkbox"
+            aria-label="沿用拓扑数量公式"
+            checked={useTopology}
+            onChange={(e) => setUseTopology(e.target.checked)}
+          />
+          沿用拓扑数量公式（显式规模数量优先）
+        </label>
+      )}
       <div className="table-wrap">
         <table>
           <thead>
@@ -181,6 +195,9 @@ function Inventory({
                     ...v,
                     hardwareLevel: level,
                     inventory: {
+                      ...(useTopology
+                        ? { topologyQuantity: n.inventory?.topologyQuantity }
+                        : {}),
                       totals: Object.fromEntries(
                         Object.entries(totals)
                           .filter(([, v]) => v !== "")

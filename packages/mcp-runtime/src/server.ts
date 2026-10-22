@@ -132,7 +132,7 @@ export const registry = [
   ],
   [
     "model_defaults",
-    "读取场景指标和参考模型参数；audit.architecture提供可编辑硬件模板。inventory记录各规模数量，rateModel显式启用参考FIT数量外推；propagations只记录传播证据，不自动生成收益",
+    "读取场景指标和参考模型参数；audit.architecture含可编辑超节点参考拓扑，密度为工程假设、未知BOM留空。inventory支持显式数量与topologyQuantity公式；rateModel显式启用参考FIT数量外推；propagations只记录传播证据，不自动生成收益",
     "GET",
     "/defaults",
   ],

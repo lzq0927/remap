@@ -65,6 +65,9 @@ export function changedAuditStage(previous: any, current: any): number {
       {
         architectureStructure: architecture && {
           version: architecture.version,
+          view: architecture.view,
+          topology: architecture.topology,
+          propagations: architecture.propagations,
           name: architecture.name,
           basis: architecture.basis,
           nodes: architecture.nodes.map(

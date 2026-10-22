@@ -12,6 +12,7 @@ import {
 } from "../../contracts/src/audit-architecture";
 import {
   hardwareCount,
+  hardwareAuditArchitecture,
   hardwareEventView,
   hardwareScaleEvents,
 } from "../../contracts/src/audit-hardware";
@@ -21,6 +22,7 @@ import { report } from "../../reports/src/render";
 
 function input(): AuditRequest {
   const r = getAuditDefaults();
+  r.architecture = hardwareAuditArchitecture(getAuditEvents());
   const node = r.architecture.nodes.find((n) => n.id === "object-OPT")!;
   node.inventory = {
     totals: { 10000: 100, 100000: 250, 200000: 600, 500000: 1000 },

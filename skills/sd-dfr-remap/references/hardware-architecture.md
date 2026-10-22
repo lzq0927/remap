@@ -4,7 +4,7 @@
 
 默认主视图为硬件架构，`architecture.view='hardware'`，仍兼容version='1'及原功能分组。模板名称/层级不等于已验证部署；尤其Pod、机柜、超节点的包含顺序、每板NPU数、网络连接和共享故障域必须来自当前设计。四个卡数是并列规模，不是四层硬件包含关系。
 
-节点可带hardwareLevel（component/chip/module/board/node/rack/supernode/pod/network/storage/facility/other）、inventory和rateModel。inventory={totals:{规模卡数:该类硬件总数量},unitsPerParent?,source}。显式总数量优先于每上级数量比例，空白为未知；不从规模猜光模块/交换机数量。根节点表示一个被评估集群。每个根故障唯一归属一个叶节点，上层自身新增故障另设叶节点；父层只汇总，不能同时累计整体FIT与内部FIT。
+节点可带hardwareLevel（component/chip/module/board/node/rack/supernode/pod/network/storage/facility/other）、inventory和rateModel。inventory={totals:{规模卡数:该类硬件总数量},topologyQuantity?,unitsPerParent?,source}。优先级为显式总数量、已配置拓扑公式、每上级数量比例；未知为null，不从规模猜光模块/交换机数量。新超节点模板与公式详见[supernode-topology.md](supernode-topology.md)。根节点表示一个被评估集群。每个根故障唯一归属一个叶节点，上层自身新增故障另设叶节点；父层只汇总，不能同时累计整体FIT与内部FIT。
 
 连接/共享故障域在dependencies保存，kind=dependency/connection/shared-domain；不从连线推断独立串并联、传播概率或冗余收益。propagations记录{eventId,path,manifestation,impact,containment,source}；path从故障归属叶节点开始，不能重复节点或引用未知节点。一个故障一条记录，可编辑路径及影响说明；传播记录不产生第二份损失账。
 

@@ -1,10 +1,17 @@
-import { auditArchitectureDiagnosis } from "./audit-architecture";
+import {
+  auditArchitectureDiagnosis,
+  architectureBudgets,
+} from "./audit-architecture";
 import {
   atlasNodeDomain,
   atlasMechanismDimensions,
   type AtlasDomain,
 } from "../../contracts/src/audit-atlas";
-import { hardwareScaleEvents } from "../../contracts/src/audit-hardware";
+import {
+  hardwareScaleEvents,
+  hardwareCount,
+} from "../../contracts/src/audit-hardware";
+import { supernodeCounts } from "../../contracts/src/audit-topology-config";
 import {
   eventLossHours,
   mechanismEventIds,
@@ -75,6 +82,21 @@ export function auditAtlas(input: AtlasInput, cards: number) {
     }
   }
   const sourceEvents = new Map(input.events.map((e) => [e.id, e]));
+  const referenceOnly = auditReferenceOnly(request, cards);
+  const target =
+    cards === request.cards
+      ? request.target
+      : (request.targets?.[cards] ??
+        (request.scales?.includes(cards) ? request.target : undefined));
+  const hours = request.hours;
+  const budget =
+    !referenceOnly &&
+    Number.isFinite(target) &&
+    Number.isFinite(hours) &&
+    a.budgetMethod !== "none"
+      ? (1 - target) * hours
+      : null;
+  const budgets = architectureBudgets(a, cards, hours, budget);
   const domain = new Map(a.nodes.map((n) => [n.id, atlasNodeDomain(a, n)]));
   const allDescendants = (id: string): string[] => [
     id,
@@ -187,6 +209,20 @@ export function auditAtlas(input: AtlasInput, cards: number) {
         m.eventIds.some((id) => eventIds.includes(id)) ||
         (overhead && ["fast", "C-ASYNC", "C-LOSSLESS"].includes(m.id)),
     );
+    const mappedEvents = events.filter((e) => eventIds.includes(e.id));
+    const missing = nested.some(
+      (v) =>
+        v.kind !== "overhead" &&
+        !a.nodes.some((c) => c.parentId === v.id) &&
+        !v.eventIds.length,
+    );
+    const quantity =
+      n.kind === "overhead" ? null : hardwareCount(a, n.id, cards);
+    const fit =
+      error || !mappedEvents.length
+        ? null
+        : mappedEvents.reduce((s, e) => s + e.fit, 0);
+    const allowedHours = observed?.allowedHours ?? budgets.get(n.id) ?? null;
     return {
       ...n,
       domain: domain.get(n.id)!,
@@ -194,6 +230,27 @@ export function auditAtlas(input: AtlasInput, cards: number) {
       path,
       depth: path.length - 1,
       leaf: !a.nodes.some((v) => v.parentId === n.id),
+      quantity,
+      npuEquivalentFit: fit,
+      aggregateEventFit: fit === null ? null : fit * cards,
+      perUnitEquivalentFit:
+        fit !== null && quantity && n.rateModel
+          ? (fit * cards) / quantity
+          : null,
+      coverageStatus: missing
+        ? mappedEvents.length || overhead
+          ? "partial"
+          : "unknown"
+        : "modeled",
+      allowedHours,
+      targetAvailability:
+        !n.parentId && !referenceOnly && Number.isFinite(target)
+          ? target
+          : allowedHours === null || !hours
+            ? null
+            : 1 - allowedHours / hours,
+      attributedAvailability:
+        actualHours === null || !hours ? null : 1 - actualHours / hours,
       eventIds,
       descendants,
       mechanismIds: attached.map((m) => m.id),
@@ -246,7 +303,8 @@ export function auditAtlas(input: AtlasInput, cards: number) {
   });
   return {
     version: "architecture-atlas.v1",
-    referenceOnly: auditReferenceOnly(request, cards),
+    referenceOnly,
+    topologySummary: a.topology ? supernodeCounts(a.topology, cards) : null,
     architecture: a,
     cards,
     scales: auditSummaryScales(

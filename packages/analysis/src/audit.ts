@@ -1,8 +1,6 @@
 import { auditPlanningModelKeys } from "../../contracts/src/audit-planning";
-import {
-  hardwareAuditArchitecture,
-  hardwareScaleEvents,
-} from "../../contracts/src/audit-hardware";
+import { hardwareScaleEvents } from "../../contracts/src/audit-hardware";
+import { supernodeAuditArchitecture } from "../../contracts/src/audit-supernode";
 import {
   resolveAuditArchitecture,
   type AuditArchitecture,
@@ -149,7 +147,7 @@ function numberIn(
 }
 export function getAuditDefaults() {
   return {
-    architecture: hardwareAuditArchitecture(getAuditEvents()),
+    architecture: supernodeAuditArchitecture(getAuditEvents()),
     cards: 500000,
     eventCatalogVersion: currentAuditCatalogVersion,
     hours: 720,

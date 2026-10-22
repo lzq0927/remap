@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { auditObjects, type AuditEventView } from "./audit-objects";
+import { supernodeTopologySchema } from "./audit-topology-config";
 import {
   hardwareNodeFields,
   propagationSchema,
@@ -18,7 +19,9 @@ const node = z
     importance: z.number().finite().gt(0).max(1),
     source: z.string().trim().min(1).max(2000),
     scaleWeights: z.record(z.number().finite().positive().max(1e6)).optional(),
-    functionalDomain: z.enum(["compute", "network", "storage", "facility", "control", "other"]).optional(),
+    functionalDomain: z
+      .enum(["compute", "network", "storage", "facility", "control", "other"])
+      .optional(),
     ...hardwareNodeFields,
   })
   .strict();
@@ -26,6 +29,7 @@ export const auditArchitectureSchema = z
   .object({
     version: z.literal("1"),
     view: z.enum(["functional", "hardware"]).optional(),
+    topology: supernodeTopologySchema.optional(),
     propagations: z.array(propagationSchema).max(2000).optional(),
     name: z.string().trim().min(1).max(120),
     basis: z.string().trim().min(1).max(2000),

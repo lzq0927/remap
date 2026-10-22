@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { auditAtlas } from "../../../packages/analysis/src/audit-atlas";
 import {
   atlasDomainNames,
@@ -48,7 +48,7 @@ export default function AuditAtlasExplorer({
   events,
   request,
   result,
-  cards,
+  cards: inputCards,
   onDomainChange,
 }: {
   architecture?: AuditArchitecture;
@@ -58,15 +58,42 @@ export default function AuditAtlasExplorer({
   cards: number;
   onDomainChange?: (id: string, value?: FunctionalDomain) => void;
 }) {
+  const svgId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const [cards, setCards] = useState(inputCards);
+  useEffect(() => setCards(inputCards), [inputCards]);
+  const viewScales: number[] = [
+    ...new Set<number>(
+      result
+        ? (result.rows ?? []).map((r: any) => r.cards)
+        : [
+            inputCards,
+            1000,
+            1024,
+            ...(request?.scales ?? []),
+            10000,
+            100000,
+            200000,
+            500000,
+          ],
+    ),
+  ].sort((a, b) => a - b);
   const atlas = useMemo(
     () => auditAtlas({ architecture, events, request, result }, cards),
     [architecture, events, request, result, cards],
   );
   const root = atlas.nodes.find((n) => !n.parentId)!;
+  const hasTopology = !!atlas.architecture.topology;
   const [selected, setSelected] = useState(root.id),
     [focus, setFocus] = useState(root.id);
-  const [view, setView] = useState("plan"),
+  const [view, setView] = useState(
+      architecture?.topology ||
+        result?.request?.architecture?.topology ||
+        request?.architecture?.topology
+        ? "topology"
+        : "plan",
+    ),
     [metric, setMetric] = useState<AtlasMetric>("structure");
+  useEffect(() => setView(hasTopology ? "topology" : "plan"), [hasTopology]);
   const [domain, setDomain] = useState(""),
     [query, setQuery] = useState(""),
     [fault, setFault] = useState("");
@@ -115,6 +142,8 @@ export default function AuditAtlasExplorer({
     pitch,
     spacing,
     links,
+    topology: view === "topology",
+    idPrefix: `atlas-${svgId}`,
   };
   const svg = useMemo(
     () => atlasSvg(atlas, options),
@@ -286,6 +315,7 @@ export default function AuditAtlasExplorer({
       )}
       <div className="atlas-views" role="group" aria-label="全景显示方式">
         {[
+          ...(atlas.architecture.topology ? [["topology", "超节点组网"]] : []),
           ["plan", "平面全景"],
           ["space", "分层空间"],
           ["matrix", "多维热力矩阵"],
@@ -314,7 +344,10 @@ export default function AuditAtlasExplorer({
               <option
                 key={id}
                 value={id}
-                disabled={id !== "structure" && !atlas.evaluated}
+                disabled={
+                  !["structure", "fit", "target", "summary"].includes(id) &&
+                  !atlas.evaluated
+                }
               >
                 {name}
               </option>
@@ -323,6 +356,25 @@ export default function AuditAtlasExplorer({
         </label>
       </div>
       <div className="atlas-filter-row">
+        <label>
+          查看规模
+          <select
+            aria-label="全景查看规模"
+            value={cards}
+            onChange={(e) => {
+              setCards(Number(e.target.value));
+              setFit(true);
+            }}
+          >
+            {[...new Set([...viewScales, inputCards])]
+              .sort((a, b) => a - b)
+              .map((c) => (
+                <option key={c} value={c}>
+                  {c.toLocaleString()}卡
+                </option>
+              ))}
+          </select>
+        </label>
         <label>
           定位对象
           <input
@@ -710,11 +762,13 @@ export default function AuditAtlasExplorer({
             </div>
           )}
           <p className="atlas-caption">
-            {view === "space"
-              ? "三维坐标投影：拖动旋转，或用滑块调节；标签保持正向并自动避让。可按层级隔离，避免遮挡。"
-              : view === "plan"
-                ? "拖动平移、按钮缩放；小屏保留可读字号，可左右滑动查看。点击或键盘选中模块查看关联明细。容器表示包含，连接依据见证据。"
-                : "行按同级或互斥叶层汇总，不叠加父子层。点击单元格联动右侧详情。"}
+            {view === "topology"
+              ? "超节点组网参考：代表性层级与区域汇总。板柜密度需项目确认；点击区域关联故障与机制。选择“数量・FIT・可用度”叠加指标查看量化结果；平面全景保留全部自定义连接。"
+              : view === "space"
+                ? "三维坐标投影：拖动旋转，或用滑块调节；标签保持正向并自动避让。可按层级隔离，避免遮挡。"
+                : view === "plan"
+                  ? "拖动平移、按钮缩放；小屏保留可读字号，可左右滑动查看。点击或键盘选中模块查看关联明细。容器表示包含，连接依据见证据。"
+                  : "行按同级或互斥叶层汇总，不叠加父子层。点击单元格联动右侧详情。"}
           </p>
           <div className="atlas-export" role="group" aria-label="全景导出">
             <button
@@ -813,7 +867,27 @@ export default function AuditAtlasExplorer({
                 </dd>
                 <dt>本规模数量</dt>
                 <dd>{atlasNumber(qty)}</dd>
+                <dt>NPU等效FIT / 区域总事件FIT</dt>
+                <dd>
+                  {atlasNumber(n.npuEquivalentFit)} /{" "}
+                  {atlasNumber(n.aggregateEventFit)}
+                </dd>
+                <dt>分层目标 / 当前可用度</dt>
+                <dd>
+                  {n.targetAvailability === null
+                    ? "未分配"
+                    : (n.targetAvailability * 100).toFixed(4) + "%"}{" "}
+                  /{" "}
+                  {n.attributedAvailability === null
+                    ? "待评估"
+                    : (n.attributedAvailability * 100).toFixed(4) + "%"}
+                </dd>
               </dl>
+              <p className="note">
+                区域总事件FIT = NPU等效FIT ×
+                实际评估卡数，包含多类故障；当前可用度是系统损失责任投影，非单器件稳态可用度。
+                {n.coverageStatus !== "modeled" ? "含未建模故障对象。" : ""}
+              </p>
               {onDomainChange && n.kind !== "overhead" && (
                 <label>
                   配置主功能域

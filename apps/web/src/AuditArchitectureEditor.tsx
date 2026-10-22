@@ -2,6 +2,8 @@ import AuditAtlasExplorer from "./AuditAtlasExplorer";
 import { auditSummaryScales } from "../../../packages/contracts/src/audit-presets";
 import { useState } from "react";
 import AuditHardwareEditor from "./AuditHardwareEditor";
+import AuditSupernodeEditor from "./AuditSupernodeEditor";
+import { supernodeAuditArchitecture } from "../../../packages/contracts/src/audit-supernode";
 import { hardwareAuditArchitecture } from "../../../packages/contracts/src/audit-hardware";
 import {
   defaultAuditArchitecture,
@@ -111,6 +113,14 @@ export default function AuditArchitectureEditor({
           onDomainChange={(id, functionalDomain) =>
             patch(id, { functionalDomain })
           }
+        />
+      )}
+      {architecture.topology && (
+        <AuditSupernodeEditor
+          key={JSON.stringify(architecture.topology)}
+          architecture={architecture}
+          scales={scales}
+          onChange={update}
         />
       )}
       {mode === "structure" && (
@@ -223,6 +233,12 @@ export default function AuditArchitectureEditor({
             : "编辑分层设计权重与重要度"}
         </summary>
         <div className="arch-editor-actions">
+          <button
+            type="button"
+            onClick={() => update(supernodeAuditArchitecture(events))}
+          >
+            载入超节点组网参考模板
+          </button>
           <button
             type="button"
             onClick={() => update(hardwareAuditArchitecture(events))}
