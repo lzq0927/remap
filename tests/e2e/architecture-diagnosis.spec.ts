@@ -117,6 +117,9 @@ for (const width of [1440, 390])
     await expect(diagnosis).toContainText("恢复停机 / 次（秒）");
     await expect(diagnosis).toContainText("不同规模的措施贡献排序");
     await diagnosis
+      .getByRole("button", { name: "02 故障薄弱点", exact: true })
+      .click();
+    await diagnosis
       .getByText("展开分层与对象差距矩阵", { exact: true })
       .click();
     await diagnosis.getByLabel("薄弱点对比层级").selectOption("leaf");
@@ -128,12 +131,18 @@ for (const width of [1440, 390])
     await page.screenshot({
       path: `artifacts/architecture-diagnosis/diagnosis-${width}.png`,
     });
+    await diagnosis
+      .getByText("补充查看完整层级与传播证据", { exact: true })
+      .click();
     await diagnosis.locator(".arch-tree").screenshot({
       path: `artifacts/architecture-diagnosis/diagram-${width}.png`,
     });
     await diagnosis.locator('[data-summary-chart="fault-gaps"]').screenshot({
       path: `artifacts/architecture-diagnosis/heatmap-${width}.png`,
     });
+    await diagnosis
+      .getByRole("button", { name: "04 机制贡献", exact: true })
+      .click();
     await diagnosis
       .locator('[data-summary-chart="contribution-ranks"]')
       .screenshot({

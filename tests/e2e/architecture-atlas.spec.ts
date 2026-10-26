@@ -49,6 +49,9 @@ for (const width of [1440, 390])
     await expect(atlas).toContainText("配置预览，尚未计算");
     await expect(atlas.locator(".atlas-svg")).not.toContainText("FIT");
     await atlas
+      .getByText("定位与筛选 · 对象、功能域、层级", { exact: true })
+      .click();
+    await atlas
       .getByLabel("全景查看层级", { exact: true })
       .selectOption("hardware-chip");
     await atlas.locator('[data-atlas-node="object-CORE"] > rect').click();
@@ -78,17 +81,33 @@ for (const width of [1440, 390])
     await atlas.getByRole("button", { name: "全屏大图", exact: true }).click();
     await atlas.getByLabel("全景叠加指标").selectOption("loss");
     await atlas
+      .getByText("定位与筛选 · 对象、功能域、层级", { exact: true })
+      .click();
+    await atlas
       .getByLabel("全景查看层级", { exact: true })
       .selectOption("hardware-chip");
     await atlas.locator('[data-atlas-node="object-CORE"] > rect').click();
     await expect(atlas.locator(".atlas-inspector h4")).toContainText("AI Core");
     await atlas.getByRole("button", { name: "机制", exact: true }).click();
     await expect(atlas.locator(".atlas-inspector")).toContainText("未选候选");
-    await atlas.getByRole("button", { name: "分层空间", exact: true }).click();
-    const before = await atlas.locator(".atlas-svg").innerHTML();
-    await atlas.getByLabel("空间旋转", { exact: true }).fill("30");
-    expect(await atlas.locator(".atlas-svg").innerHTML()).not.toBe(before);
-    await atlas.screenshot({ path: `${dir}/space-${width}.png` });
+    await atlas
+      .getByRole("button", { name: "交互分层拓扑", exact: true })
+      .click();
+    await expect(atlas.getByLabel("交互分层拓扑画布")).toBeVisible();
+    await expect(atlas.locator(".react-flow__minimap")).toBeVisible();
+    await atlas
+      .getByRole("button", { name: "关闭对象详情", exact: true })
+      .click();
+    await atlas.locator('.react-flow__node[data-id="object-CORE"]').click();
+    await expect(atlas.locator(".atlas-inspector h4")).toContainText("AI Core");
+    await atlas.getByRole("button", { name: "放大拓扑", exact: true }).click();
+    const controlIcon = await atlas
+      .getByRole("button", { name: "放大拓扑", exact: true })
+      .locator("svg")
+      .boundingBox();
+    expect(controlIcon!.width).toBeGreaterThanOrEqual(12);
+    await atlas.getByRole("button", { name: "适配拓扑", exact: true }).click();
+    await atlas.screenshot({ path: `${dir}/flow-${width}.png` });
     await atlas.getByRole("button", { name: "全系统", exact: true }).click();
     await atlas
       .getByRole("button", { name: "多维热力矩阵", exact: true })
@@ -98,6 +117,10 @@ for (const width of [1440, 390])
     await expect(atlas.locator(".atlas-matrix")).toContainText("10,000卡");
     await expect(atlas.locator(".atlas-matrix")).toContainText("500,000卡");
     await expect(atlas.locator(".atlas-matrix")).toContainText("待补充");
+    await atlas.getByLabel("全景矩阵维度").selectOption("gap");
+    await expect(atlas.locator(".atlas-matrix")).toContainText("差距 = 目标");
+    await atlas.screenshot({ path: `${dir}/gap-${width}.png` });
+    await atlas.getByLabel("全景矩阵维度").selectOption("scale");
     await atlas.screenshot({ path: `${dir}/matrix-${width}.png` });
     for (const [name, ext] of [
       ["导出当前视图SVG", "svg"],

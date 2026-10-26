@@ -18,6 +18,10 @@ import {
 } from "../../contracts/src/audit-hardware";
 import { auditExtensionCatalog } from "../../contracts/src/audit-extensions";
 import type { AuditArchitectureDiagnosis } from "../../analysis/src/audit-architecture";
+import {
+  architectureDecisionBrief,
+  decisionBriefCss,
+} from "./audit-decision-brief";
 import type { AuditArchitecture } from "../../contracts/src/audit-architecture";
 import { auditMechanismNames } from "../../contracts/src/audit-mechanism-view";
 import type { AuditSection } from "./audit";
@@ -119,7 +123,7 @@ export function architectureScaleDetail(
     )
     .join(
       "",
-    )}</tbody></table></div></details>${includeTree ? architectureTree(d.architecture, d, cards, expandObjects ? 10 : 1) : ""}<details class="arch-evidence"><summary>展开各层MTBF、恢复与损失明细</summary><div class="table-wrap" tabindex="0"><table><thead><tr><th>层级 / 对象</th><th>目标损失 / h</th><th>实际损失 / h</th><th>中断MTBF / h</th><th>亚健康间隔 / h</th><th>静默间隔 / h</th><th>恢复停机 / 次（秒）</th><th>等效损失 / 事件（秒）</th><th>薄弱环节与改善方向</th></tr></thead><tbody>${scale.nodes.map((n) => `<tr><td>${esc(n.name)}<small>${n.leaf ? "叶层" : "汇总层"} · FIT ${num(n.fit)}</small></td><td>${num(n.allowedHours)}</td><td>${num(n.actualHours)}<small>${n.excessHours === null ? "未分配" : (n.excessHours > 0 ? "超出 " : "余量 ") + num(Math.abs(n.excessHours)) + " h"}</small></td>${n.types.map((t) => `<td>${num(t.intervalHours)}<small>FIT ${num(t.fit)}</small></td>`).join("")}<td>${num(n.recoveryPauseSeconds)}</td><td>${num(n.equivalentLossSeconds)}</td><td>${esc(n.focus)}<small>${esc(n.action)}</small></td></tr>`).join("")}</tbody></table></div></details><details class="arch-evidence"><summary>展开故障、措施覆盖与参数依据</summary>${scale.nodes
+    )}</tbody></table></div></details>${includeTree ? architectureTree(d.architecture, d, cards, expandObjects ? 10 : 1) : ""}<details class="arch-evidence"><summary>展开各层MTBF、恢复与损失明细</summary><div class="table-wrap" tabindex="0"><table><thead><tr><th>层级 / 对象</th><th>目标损失 / h</th><th>实际损失 / h</th><th>中断事件间隔 / h</th><th>亚健康间隔 / h</th><th>静默间隔 / h</th><th>恢复停机 / 次（秒）</th><th>等效损失 / 事件（秒）</th><th>薄弱环节与改善方向</th></tr></thead><tbody>${scale.nodes.map((n) => `<tr><td>${esc(n.name)}<small>${n.leaf ? "叶层" : "汇总层"} · FIT ${num(n.fit)}</small></td><td>${num(n.allowedHours)}</td><td>${num(n.actualHours)}<small>${n.excessHours === null ? "未分配" : (n.excessHours > 0 ? "超出 " : "余量 ") + num(Math.abs(n.excessHours)) + " h"}</small></td>${n.types.map((t) => `<td>${num(t.intervalHours)}<small>FIT ${num(t.fit)}</small></td>`).join("")}<td>${num(n.recoveryPauseSeconds)}</td><td>${num(n.equivalentLossSeconds)}</td><td>${esc(n.focus)}<small>${esc(n.action)}</small></td></tr>`).join("")}</tbody></table></div></details><details class="arch-evidence"><summary>展开故障、措施覆盖与参数依据</summary>${scale.nodes
     .filter((n) => n.leaf)
     .map(
       (n) =>
@@ -135,7 +139,7 @@ export function architectureReport(result: any) {
   const primary =
     d.scales.find((s) => s.cards === result.request.cards) ??
     orderedDiagnosisScales(d, true)[0];
-  return `<div class="architecture-diagnosis scale-summary">${atlasReport(result)}<p class="note">${esc(d.architecture.basis)}</p><h3>系统架构 · ${primary.cards.toLocaleString()}卡</h3>${architectureTree(d.architecture, d, primary.cards, 1)}<details class="arch-evidence"><summary>展开完整系统架构</summary>${architectureTree(d.architecture, d, primary.cards, 10)}</details>${hardwareReport(d, primary.cards)}${architectureSummary(d)}${contributionHeatmap(d)}<details class="arch-evidence"><summary>子系统与故障对象差距矩阵</summary>${architectureHeatmap(d)}${architectureHeatmap(d, "leaf")}</details>${orderedDiagnosisScales(
+  return `<div class="architecture-diagnosis scale-summary">${atlasReport(result)}<p class="note">${esc(d.architecture.basis)}</p><details class="arch-evidence"><summary>展开完整系统架构与来源 · ${primary.cards.toLocaleString()}卡</summary>${architectureTree(d.architecture, d, primary.cards, 10)}</details>${hardwareReport(d, primary.cards)}${architectureSummary(d)}${contributionHeatmap(d)}<h3>各规模优先核对的薄弱点与改进路径</h3>${architectureDecisionBrief(d)}<details class="arch-evidence"><summary>子系统与故障对象差距矩阵</summary>${architectureHeatmap(d)}${architectureHeatmap(d, "leaf")}</details>${orderedDiagnosisScales(
     d,
     true,
   )
@@ -215,7 +219,7 @@ export function architectureMarkdown(result: any) {
               "允许损失 h",
               "实际损失 h",
               "超预算 h",
-              "中断MTBF h",
+              "中断事件间隔 h",
               "亚健康间隔 h",
               "静默间隔 h",
               "恢复停机/次 s",
@@ -247,6 +251,7 @@ export function architectureMarkdown(result: any) {
 
 export const architectureCss =
   scaleSummaryCss +
+  decisionBriefCss +
   hardwareCss +
   `
 .architecture-diagnosis,.audit-architecture-editor{min-width:0;scroll-margin-top:calc(var(--workflow-navigation-height,150px) + 15px)}.arch-tree{padding:18px 0}.arch-branch{min-width:0;text-align:center}.arch-node{padding:12px;border:1px solid #d2ded7;border-top:3px solid #387968;border-radius:8px;background:#f2f7f3;overflow-wrap:anywhere}.arch-node b,.arch-node span,.arch-node small{display:block}.arch-node b{font-size:14px}.arch-node span{font-size:12px;margin:6px 0}.arch-node small{font-size:11px;color:#526c61;line-height:1.7}.arch-arrow{display:block;color:#718e81;line-height:24px}.arch-children{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}.arch-children .arch-children{display:flex;flex-direction:column;gap:8px;border-left:1px solid #c9d8ce;padding-left:9px}.arch-node.gap{border-top-color:#c57f40;background:#fff7ec}.arch-node.within{border-top-color:#29826b}.arch-node.pending{border-top-color:#87958b}.arch-chart{margin:24px 0}.arch-heatmap{font-variant-numeric:tabular-nums}.arch-heatmap td,.arch-heatmap th{min-width:132px}.architecture-diagnosis td small,.architecture-diagnosis th small{display:block;font-weight:400;font-size:11px;margin-top:5px;line-height:1.7}.arch-heatmap td.gap{background:#fff2e0;color:#875219}.arch-heatmap td.within{background:#e8f4ee;color:#22624e}.arch-heatmap td.pending{background:#f0f2ee;color:#54655a}.arch-ranking-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.arch-ranking{padding:16px;border:1px solid #dce6df;border-radius:8px;background:#fafcf9}.arch-ranking h4{margin:0 0 12px}.arch-rank-row{display:grid;grid-template-columns:1fr auto;gap:5px 12px;margin:14px 0;font-size:12px}.arch-rank-row span{overflow-wrap:anywhere}.arch-rank-row b{font-variant-numeric:tabular-nums}.arch-track{grid-column:1/-1;height:7px;border-radius:4px;background:#e8eee8;overflow:hidden}.arch-track i{display:block;height:100%}.arch-rank-row small{grid-column:1/-1;color:#657b6d}.arch-conclusion{padding:16px;background:#edf5ef;border-left:3px solid #2d806b;border-radius:6px;margin:12px 0}.arch-conclusion p{font-size:13px;margin:8px 0}.arch-conclusion small{font-size:11px}.arch-scale-panel,.arch-evidence{border:1px solid #dde7df;border-radius:8px;padding:8px 14px;margin:14px 0}.arch-evidence p{font-size:12px;overflow-wrap:anywhere}.arch-evidence small{display:block}.arch-dependencies{border-left:2px dashed #86a08d;padding-left:14px;text-align:left}.arch-dependencies p{font-size:12px}.arch-dependencies small{display:block}.architecture-diagnosis .table-wrap table{min-width:1050px}.architecture-diagnosis .arch-heatmap{min-width:650px}.architecture-diagnosis td:last-child{min-width:190px}.arch-editor-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.arch-editor-table input,.arch-editor-table select{min-width:95px;max-width:220px}.arch-editor-table input[type=number]{width:95px}.arch-editor-table td{min-width:100px}.arch-editor-table label{font-size:12px}.arch-budget-table{min-width:650px}.arch-short-note{font-size:12px;color:#627568}.arch-toggle{display:flex!important;flex-direction:row!important;align-items:center;justify-content:flex-start;gap:8px;font-size:12px;margin:12px 0}.arch-toggle input[type=checkbox]{width:16px;height:16px;flex:0 0 16px;margin:0}.arch-brief{padding:12px 16px;background:#f2f6f1;border-radius:8px;font-size:13px}.arch-brief button{margin-top:8px}

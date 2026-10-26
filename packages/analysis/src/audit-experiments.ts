@@ -519,6 +519,9 @@ export function auditExperiment(
     ...result,
     events: scenarioEvents,
     architectureDiagnosis,
+    networkStudyResult: structuredClone(
+      source.result.networkStudyResult ?? null,
+    ),
     reviewChecks: architectureReviewChecks(architectureDiagnosis),
   };
 }

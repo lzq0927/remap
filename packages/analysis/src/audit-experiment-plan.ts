@@ -669,6 +669,9 @@ function guidedExperimentPlan(
     request,
     allocations,
     architectureDiagnosis,
+    networkStudyResult: structuredClone(
+      source.result.networkStudyResult ?? null,
+    ),
     decisions,
     configuration: chosen.configuration,
     factors: experimentFactors(source, chosen.configuration).map((factor) => ({

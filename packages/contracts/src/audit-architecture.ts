@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { auditObjects, type AuditEventView } from "./audit-objects";
 import { supernodeTopologySchema } from "./audit-topology-config";
+import { networkStudySchema } from "./audit-network-study";
 import {
   hardwareNodeFields,
   propagationSchema,
@@ -30,6 +31,7 @@ export const auditArchitectureSchema = z
     version: z.literal("1"),
     view: z.enum(["functional", "hardware"]).optional(),
     topology: supernodeTopologySchema.optional(),
+    networkStudy: networkStudySchema.optional(),
     propagations: z.array(propagationSchema).max(2000).optional(),
     name: z.string().trim().min(1).max(120),
     basis: z.string().trim().min(1).max(2000),

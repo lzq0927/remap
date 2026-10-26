@@ -93,7 +93,11 @@ export default function AllocationEditor({
               </th>
               <th>{availability ? "分配权重" : "复杂度 nᵢ（AGREE）"}</th>
               <th>
-                {availability ? "锁定目标（可留空）" : "任务重要度 Eᵢ（AGREE）"}
+                {availability
+                  ? "锁定目标（可留空）"
+                  : data.method === "agree.classical"
+                    ? "条件故障重要度 Eᵢ（0–1）"
+                    : "任务重要度 Eᵢ（AGREE）"}
               </th>
             </tr>
           </thead>
@@ -173,7 +177,9 @@ export default function AllocationEditor({
       <p className="note">
         {availability
           ? "缺少实测稳态可用度时显示未知，不能用 exp(−λT) 替代；独立串联假设需确认。"
-          : "Equal 均分总体故障率预算；ARINC 按基线故障率等比缩放；AGREE 分配加权任务可靠度（∏Rᵢ^Eᵢ），不等于普通串联。先分配指标，再用降低 FIT、检测与恢复等措施落实，最后正向验证和分析组合收益。"}
+          : data.method === "agree.classical"
+            ? "经典AGREE：Rᵢ=1−(1−R^(nᵢ/Σn))/Eᵢ。Eᵢ是子系统故障导致系统故障的条件重要度，不能直接填Shapley贡献。按∏[1−Eᵢ(1−Rᵢ)]复核设计目标；普通串联乘积不一定相等。"
+            : "Equal 均分总体故障率预算；ARINC 按基线故障率等比缩放；NASA近似AGREE使用∏Rᵢ^Eᵢ，与经典条件式有区别。检测、恢复的实际效果需正向模型验证，不能用分配结果直接宣称达标。"}
       </p>
     </div>
   );

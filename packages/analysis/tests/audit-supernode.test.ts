@@ -18,6 +18,7 @@ import {
   atlasSvg,
   atlasStandaloneHtml,
   atlasMarkdown,
+  matrixCell,
 } from "../../reports/src/audit-atlas";
 import { changedAuditStage } from "../../workflow/src/design-changes";
 import {
@@ -26,6 +27,46 @@ import {
 } from "../../contracts/src/audit-draft";
 
 describe("supernode topology: counts, evidence and ledger integration", () => {
+  it("derives the official 1024-module inventory without mixing residual fault FIT and physical redundancy", () => {
+    const t = defaultSupernodeTopology;
+    expect(supernodeCounts(t, 1024)).toMatchObject({
+      racks: 16,
+      interconnectRacks: 2,
+      l1Blades: 64,
+      l2Devices: 16,
+      ioBlades: 32,
+      ubNics: 256,
+      scaleUpSwitches: 80,
+      l1Ports: 2048,
+      l2Ports: 2048,
+    });
+    expect(supernodeCounts(t, 500000)).toMatchObject({
+      racks: 7813,
+      supernodes: 489,
+      interconnectRacks: 978,
+      l1Blades: 31252,
+      l2Devices: 7824,
+      ioBlades: 15626,
+      ubNics: 125008,
+    });
+    const a = supernodeAuditArchitecture(getAuditEvents());
+    expect(a.nodes.find((n) => n.id === "object-FABRIC")?.parentId).toBe(
+      "hardware-scaleup",
+    );
+    expect(a.nodes.find((n) => n.id === "object-BOXIO")?.parentId).toBe(
+      "hardware-io",
+    );
+    expect(hardwareScaleEvents(getAuditEvents(), a, 500000)).toEqual(
+      getAuditEvents(),
+    );
+    const partial = getAuditEvents().filter((e) => e.id.startsWith("CORE-"));
+    expect(() =>
+      resolveAuditArchitecture(supernodeAuditArchitecture(partial), partial),
+    ).not.toThrow();
+    const legacy = { ...t };
+    delete legacy.l2DevicesPerSupernode;
+    expect(supernodeCounts(legacy, 1024).scaleUpSwitches).toBe(64);
+  });
   it("retains a custom 1024-card evaluation without adding unrequested legacy reference targets", () => {
     const request = getAuditDefaults();
     const custom = {
@@ -184,10 +225,34 @@ describe("supernode topology: counts, evidence and ledger integration", () => {
         expect(svg).not.toMatch(/NaN|Infinity|undefined/);
         if (metric === "structure") expect(svg).not.toContain("FIT");
       }
+      const diag = root.measured.frequencyRecovery;
+      expect(diag.physicalFitReductionAssumed).toBe(false);
+      if (diag.requiredPauseSeconds !== null) {
+        expect(
+          diag.otherLossHours +
+            (diag.requiredPauseSeconds * root.measured.recoveries) / 3600,
+        ).toBeCloseTo(root.allowedHours!, 9);
+      }
+      if (diag.recoveryOnlyFeasible === false)
+        expect(diag.otherLossHours).toBeGreaterThan(root.allowedHours!);
+      const gap = matrixCell(a, root.id, "gap", String(cards), [a]);
+      if (root.allowedHours !== null)
+        expect(gap.value).toBeCloseTo(
+          (root.targetAvailability! - root.attributedAvailability!) * 100,
+          9,
+        );
+      else expect(gap.value).toBeNull();
+      const searched = atlasSvg(a, {
+        topology: true,
+        metric: "structure",
+        query: "CORE",
+      });
+      expect(searched).toContain('data-atlas-node="object-CORE"');
+      expect(searched).not.toContain('data-atlas-node="object-NIC"');
       const html = atlasStandaloneHtml(a);
       expect(html).toContain("区域总事件FIT");
-      expect(html).toContain("原页待核对");
-      expect(html).toContain("Scale-out");
+      expect(html).toContain("核对2026-10-25");
+      expect(html).toContain("跨超节点参数面");
       if (cards === 1000) expect(root.allowedHours).toBeNull();
     }
     const preview = auditAtlas({ request, events: getAuditEvents() }, 1024);

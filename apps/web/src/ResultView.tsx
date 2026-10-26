@@ -41,6 +41,7 @@ const methodNames: Record<string, string> = {
   arinc: "按基线故障率分配",
   agree: "AGREE 近似分配",
   "agree.nasa2016-rate": "AGREE 近似分配",
+  "agree.classical": "AGREE 经典条件分配",
   availability: "稳态可用度分配",
   rbd: "可靠性框图",
   fta: "故障树",

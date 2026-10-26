@@ -76,6 +76,7 @@ const methods: Record<string, string> = {
   arinc: "按基线故障率分配",
   agree: "AGREE 近似分配",
   "agree.nasa2016-rate": "AGREE 近似分配",
+  "agree.classical": "AGREE 经典条件分配",
   availability: "稳态可用度分配",
   rbd: "可靠性框图",
   fta: "故障树",
@@ -541,9 +542,11 @@ function core(r: any, run: Run): Section[] {
           r.method === "availability"
             ? "稳态可用度设计预算，使用相同指标的实测基线比较。"
             : "任务可靠度与故障率设计预算，实施后需在适用结构中正向验证。",
-          r.version === "agree.nasa2016-rate"
-            ? "AGREE 按 ∏Rᵢ^Eᵢ 回合成加权任务可靠度；普通串联乘积不一定等于总体目标。"
-            : "分配不代表模块工程能力已经达成。",
+          r.version === "agree.classical-conditional.v1"
+            ? "经典AGREE以条件故障重要度分配；按∏[1−Eᵢ(1−Rᵢ)]核对设计目标。Eᵢ不能由Shapley贡献直接充当，实际结构仍需正向验证。"
+            : r.version === "agree.nasa2016-rate"
+              ? "AGREE 按 ∏Rᵢ^Eᵢ 回合成加权任务可靠度；普通串联乘积不一定等于总体目标。"
+              : "分配不代表模块工程能力已经达成。",
           r.recomposition
             ? "回合成：" +
               r.recomposition.formula +

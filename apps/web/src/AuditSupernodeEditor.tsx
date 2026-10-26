@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AuditArchitecture } from "../../../packages/contracts/src/audit-architecture";
+import { atlas950LayoutConflict } from "../../../packages/contracts/src/atlas950-evidence";
 import {
   supernodeCounts,
   supernodeTopologySchema,
@@ -11,8 +12,15 @@ const fields = {
   cardsPerRack: "每机柜卡数",
   cardsPerNode: "每计算节点卡数",
   cardsPerBoard: "每计算板卡数",
-  supernodesPerPod: "每Pod最大超节点数",
-  scaleUpSwitchesPerRack: "每机柜高速互联交换机数",
+  supernodesPerPod: "每集群分组最大超节点数",
+  scaleUpSwitchesPerRack: "每计算柜L1互联刀片数",
+  interconnectRacksPerSupernode: "每超节点互联柜数",
+  l2DevicesPerSupernode: "每超节点L2互联设备数",
+  planesPerSupernode: "每超节点互联平面数",
+  portsPerL1: "每L1刀片端口数",
+  portsPerL2: "每L2设备端口数",
+  ioBladesPerRack: "每计算柜IO刀片数",
+  ubNicsPerIoBlade: "每IO刀片UB网卡数",
   scaleOutLeavesPerSupernode: "每超节点跨域Leaf数",
   scaleOutSpinesPerPod: "每Pod跨域Spine数",
   opticalLinksPerNode: "每计算节点光链路数",
@@ -42,8 +50,34 @@ export default function AuditSupernodeEditor({
     <details className="supernode-editor">
       <summary>超节点密度、网络数量与跨规模推导</summary>
       <p className="note">
-        1024卡是参考组网单元；实际评估卡数不强制取1024的整数倍。板、柜、节点密度是工程假设；交换机和光链路空白表示未知。显式填写的各规模数量优先于公式。
+        1024卡是参考组网单元；实际评估卡数不强制取1024的整数倍。64模组/计算柜及L1/L2来自指定华为页面；板、节点密度和集群分组仍是工程假设；交换机和光链路空白表示未知。显式填写的各规模数量优先于公式。
       </p>
+      <div className="topology-evidence-choice">
+        <strong>互联柜部署参照</strong>
+        <p>{atlas950LayoutConflict}</p>
+        {[2, 4].map((count) => (
+          <button
+            type="button"
+            key={count}
+            onClick={() => {
+              setValues({
+                ...values,
+                interconnectRacksPerSupernode: String(count),
+                l2DevicesPerSupernode: "16",
+              });
+              setSource(
+                t.source +
+                  `；本次选择${count === 2 ? "正文2柜×8台L2" : "PDF图1的4柜×4台L2"}部署参照；原资料存在差异，待项目BOM确认。`,
+              );
+            }}
+          >
+            {count === 2 ? "采用正文：2柜 × 8台L2" : "采用图示：4柜 × 4台L2"}
+          </button>
+        ))}
+        <small>
+          只更新下方待保存配置；不改变源事件FIT。保存后按实际部署共同故障域验证。
+        </small>
+      </div>
       <div className="fields">
         {Object.entries(fields).map(([id, name]) => (
           <label key={id}>
@@ -79,7 +113,11 @@ export default function AuditSupernodeEditor({
             ...Object.fromEntries(
               Object.entries(values).map(([k, v]) => [
                 k,
-                v === "" ? null : Number(v),
+                v === ""
+                  ? t[k as keyof typeof t] === undefined
+                    ? undefined
+                    : null
+                  : Number(v),
               ]),
             ),
           });
@@ -101,8 +139,10 @@ export default function AuditSupernodeEditor({
               <th>评估规模</th>
               <th>节点 / 板</th>
               <th>使用中机柜</th>
-              <th>超节点 / Pod</th>
+              <th>超节点 / 集群分组</th>
               <th>整超节点预留容量</th>
+              <th>L1 / L2 / 互联柜</th>
+              <th>IO刀片 / UB网卡</th>
             </tr>
           </thead>
           <tbody>
@@ -135,6 +175,13 @@ function CountRow({ t, cards }: { t: SupernodeTopology; cards: number }) {
       <td>
         {q.provisionedCards.toLocaleString()}卡
         {q.tailCards > 0 && <small>末超节点使用{q.tailCards}卡</small>}
+      </td>
+      <td>
+        {q.l1Blades ?? "待补"} / {q.l2Devices ?? "待补"} /{" "}
+        {q.interconnectRacks ?? "待补"}
+      </td>
+      <td>
+        {q.ioBlades ?? "待补"} / {q.ubNics ?? "待补"}
       </td>
     </tr>
   );

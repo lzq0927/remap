@@ -271,6 +271,29 @@ export function auditArchitectureDiagnosis(result: any) {
         targetAvailability:
           allowedHours === null ? null : 1 - allowedHours / hours,
         attributedAvailability: 1 - actualHours / hours,
+        frequencyRecovery: {
+          hardEventIntervalHours:
+            types.find((t) => t.type === "hard")?.intervalHours ?? null,
+          physicalFitReductionAssumed: false,
+          otherLossHours: actualHours - loss.downtime,
+          recoveryOnlyFeasible:
+            allowedHours === null
+              ? null
+              : actualHours - loss.downtime <= allowedHours,
+          requiredPauseSeconds:
+            allowedHours === null ||
+            recoveries <= 0 ||
+            actualHours - loss.downtime > allowedHours
+              ? null
+              : (Math.max(0, allowedHours - (actualHours - loss.downtime)) /
+                  recoveries) *
+                3600,
+          basis:
+            "固定本轮恢复次数及其他损失的单侧诊断，非独立MTTR分配或正向复评；硬中断事件间隔不等于业务中断MTBF。",
+          frequencyAction: n.rateModel
+            ? "可比较设备数量方案；保持单件故障依据，核查容量、带宽、冗余和共因后独立复评"
+            : "源FIT保持现有证据；需先建立设备数量与事件暴露映射，再评估减少器件的组网方案",
+        },
         businessMtbfHours: null,
         propagationRecords: (architecture.propagations ?? []).filter((p) =>
           eventSet.has(p.eventId),
@@ -362,7 +385,7 @@ export function auditArchitectureDiagnosis(result: any) {
       "架构目标和现状百分比为折算至业务口径的损失责任；未知故障对象不代表零风险。图中连接、共享故障域及传播路径是证据记录，不自动改变传播概率或引入冗余收益。",
       "业务中断MTBF需要中断定义及独立计数，当前不由硬件FIT冒充。快速倒换可缩短恢复；只有符合业务连续性条件才可归为提高业务MTBF，同一收益不重复计算。",
       "分层目标是系统损失责任预算；父层汇总子层，不是各模块自身运行可用度，也不直接连乘。",
-      "FIT为NPU等效业务影响事件率，按评估卡数换算一次；故障时钟按非全局停机暴露运行，hard为中断MTBF，slow与sdc显示事件间隔。",
+      "FIT为NPU等效业务影响事件率，按评估卡数换算一次；故障时钟按非全局停机暴露运行，hard、slow与sdc均显示输入事件间隔；业务中断MTBF需独立观测。",
       "恢复停机/次来自仿真事件账，包含检测、失败回退及窗口截断，不代表完整物理修复MTTR；局部损失另计。",
       "未观察到事件时恢复时间留空；公共保存与检测开销独立计账，共同依赖仅作架构关系展示，不自动增加故障或收益。",
       "分层差距与排名基于本次样本均值，未提供分层置信区间；总指标区间仅反映抽样误差，不代表参数与故障归属已验证。",

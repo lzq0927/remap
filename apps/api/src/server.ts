@@ -479,7 +479,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       );
     const methods =
       metric === "task-reliability"
-        ? ["equal", "arinc", "agree"]
+        ? ["equal", "arinc", "agree.classical", "agree"]
         : ["availability"];
     const inputs = methods.map((method) => ({
       ...req.body,

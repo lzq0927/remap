@@ -1,4 +1,5 @@
 import { auditPlanningModelKeys } from "../../contracts/src/audit-planning";
+import { networkStudySnapshot } from "./audit-network-study";
 import { hardwareScaleEvents } from "../../contracts/src/audit-hardware";
 import { supernodeAuditArchitecture } from "../../contracts/src/audit-supernode";
 import {
@@ -1134,6 +1135,10 @@ function auditOneRound(
   return {
     ...result,
     architectureDiagnosis,
+    networkStudyResult: networkStudySnapshot(
+      architectureDiagnosis.architecture,
+      result.request.cards,
+    ),
     reviewChecks: [
       ...result.reviewChecks,
       ...architectureReviewChecks(architectureDiagnosis),

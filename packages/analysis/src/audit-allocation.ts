@@ -102,6 +102,7 @@ export function agreeLossAllocation(
     !Number.isFinite(allowedHours) ||
     allowedHours < 0 ||
     !(horizonHours > 0) ||
+    !Number.isFinite(horizonHours) ||
     allowedHours > horizonHours ||
     !items.length ||
     new Set(items.map((i) => i.id)).size !== items.length ||
@@ -141,7 +142,7 @@ export function agreeLossAllocation(
     interpretation:
       "R*=exp(−B/T) 是损失预算映射，不是训练可用度；重要度越高，允许损失越少。Shapley仅生成可编辑工程建议，最终需正向仿真。",
     source:
-      "HAC-D@5ddfd65 · user manual §7 / allocation/index.ts；有限窗口损失预算适配",
+      "HAC-D@b618d35 · user manual §7 / allocation/index.ts 的经典条件式形状；ReMAP有限窗口损失预算适配，未使用HAC-D策略权重n×E的另一种分配",
     allowedHours,
     proxyReliability,
     items: rows,

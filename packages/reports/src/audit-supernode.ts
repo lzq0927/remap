@@ -1,3 +1,4 @@
+import { ascendTopologySvg } from "./audit-ascend-diagram";
 import type { AuditAtlas, AtlasNode } from "../../analysis/src/audit-atlas";
 import type { AtlasViewOptions } from "./audit-atlas";
 
@@ -18,7 +19,7 @@ const pct = (n: number | null | undefined) =>
 
 /** A reference projection must not misrepresent a user-edited containment tree. */
 export function supportsSupernodeDiagram(a: AuditAtlas) {
-  const expected = {
+  const expected: Record<string, string> = {
     "hardware-supernode": "hardware-pod",
     "hardware-rack": "hardware-supernode",
     "hardware-node": "hardware-rack",
@@ -28,10 +29,25 @@ export function supportsSupernodeDiagram(a: AuditAtlas) {
     "hardware-scaleup": "hardware-network",
     "hardware-scaleout": "hardware-network",
     "hardware-optics": "hardware-network",
-    "object-BOXIO": "hardware-scaleup",
-    "object-FABRIC": "hardware-scaleout",
+    "object-BOXIO":
+      a.architecture.topology?.l2DevicesPerSupernode === undefined
+        ? "hardware-scaleup"
+        : "hardware-io",
+    "object-FABRIC":
+      a.architecture.topology?.l2DevicesPerSupernode === undefined
+        ? "hardware-scaleout"
+        : "hardware-scaleup",
     "object-OPT": "hardware-optics",
   };
+  if (a.architecture.topology?.l2DevicesPerSupernode !== undefined)
+    Object.assign(expected, {
+      "hardware-l1": "hardware-scaleup",
+      "hardware-l2": "hardware-scaleup",
+      "hardware-io": "hardware-scaleout",
+      "hardware-ubnic": "hardware-io",
+      "hardware-spine-extra": "hardware-scaleout",
+      "hardware-leaf-extra": "hardware-scaleout",
+    });
   return (
     !!a.architecture.topology &&
     Object.entries(expected).every(
@@ -57,6 +73,11 @@ export function supernodeSvg(a: AuditAtlas, options: AtlasViewOptions = {}) {
   const t = a.architecture.topology,
     q = a.topologySummary;
   if (!t || !q || !supportsSupernodeDiagram(a)) return "";
+  if (
+    t.l2DevicesPerSupernode !== undefined &&
+    a.nodes.some((n) => n.id === "hardware-l2")
+  )
+    return ascendTopologySvg(a, options);
   const pure = options.metric === "structure";
   const markerId =
     `${options.idPrefix ?? `supernode-${a.cards}-${options.metric ?? "summary"}`}-arrow`.replace(
@@ -165,6 +186,10 @@ export function supernodeSummaryHtml(a: AuditAtlas) {
     "system",
     "domain-1",
     "hardware-scaleup",
+    "object-BOXIO",
+    "hardware-l2",
+    "hardware-io",
+    "hardware-ubnic",
     "hardware-scaleout",
     "hardware-optics",
     "hardware-storage",
@@ -175,5 +200,5 @@ export function supernodeSummaryHtml(a: AuditAtlas) {
   const rows = regions
     .map((id) => a.nodes.find((n) => n.id === id))
     .filter((n): n is AtlasNode => !!n);
-  return `<section data-supernode="summary"><h4>区域数量、FIT与可用度对应</h4><p>区域总事件FIT为输入事件强度，不是单器件物理FIT；可用度为已建模损失责任投影。未知故障不视为零风险，父子区域不重复相加。</p><div class="atlas-table-wrap"><table><thead><tr><th>区域</th><th>数量</th><th>NPU等效FIT</th><th>区域总事件FIT</th><th>分层目标</th><th>当前可用度</th><th>故障/机制</th></tr></thead><tbody>${rows.map((n) => `<tr><td>${esc(n.name)}</td><td>${num(n.quantity)}</td><td>${num(n.npuEquivalentFit)}</td><td>${num(n.aggregateEventFit)}</td><td>${pct(n.targetAvailability)}</td><td>${pct(n.attributedAvailability)}${n.coverageStatus !== "modeled" ? "（数据不完整）" : ""}</td><td>${n.eventIds.length} / ${n.mechanismIds.length}（含候选）</td></tr>`).join("")}</tbody></table></div><details><summary>超节点参考配置与数量来源</summary><p>${esc(a.architecture.topology.source)}</p><p>数量显式覆盖优先，随后按拓扑公式推导；闲置整超节点容量与实际使用数量分开，不自动增加故障率。光模块数=2×（节点数×已填每节点光链路+超节点数×已填跨域光链路），其他链路需按清单另补。</p></details></section>`;
+  return `<section data-supernode="summary"><h4>区域数量、FIT与可用度对应</h4><p>区域总事件FIT为输入事件强度，不是单器件物理FIT；中断事件间隔不等于业务中断MTBF。恢复要求固定本轮次数及其他损失，仅作单侧诊断，需完整复评；可用度为已建模损失责任投影。未知故障不视为零风险，父子区域不重复相加。</p><div class="atlas-table-wrap"><table><thead><tr><th>区域</th><th>数量</th><th>NPU等效FIT</th><th>区域总事件FIT</th><th>分层目标</th><th>当前可用度</th><th>中断事件间隔 / h</th><th>恢复暂停 / s</th><th>仅恢复达标所需 / s</th><th>机制建议路径</th><th>故障/机制</th></tr></thead><tbody>${rows.map((n) => `<tr><td>${esc(n.name)}</td><td>${num(n.quantity)}</td><td>${num(n.npuEquivalentFit)}</td><td>${num(n.aggregateEventFit)}</td><td>${pct(n.targetAvailability)}</td><td>${pct(n.attributedAvailability)}${n.coverageStatus !== "modeled" ? "（数据不完整）" : ""}</td><td>${num(n.measured?.types.find((t: any) => t.type === "hard")?.intervalHours)}</td><td>${num(n.measured?.recoveryPauseSeconds)}</td><td>${n.measured?.frequencyRecovery?.recoveryOnlyFeasible === false ? "其他损失超预算" : num(n.measured?.frequencyRecovery?.requiredPauseSeconds)}</td><td>${esc(n.measured?.action ?? "待计算")}</td><td>${n.eventIds.length} / ${n.mechanismIds.length}（含候选）</td></tr>`).join("")}</tbody></table></div><details><summary>超节点参考配置与数量来源</summary><p>${esc(a.architecture.topology.source)}</p><p>数量显式覆盖优先，随后按拓扑公式推导；闲置整超节点容量与实际使用数量分开，不自动增加故障率。光模块数=2×（节点数×已填每节点光链路+超节点数×已填跨域光链路），其他链路需按清单另补。</p></details></section>`;
 }

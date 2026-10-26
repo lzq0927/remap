@@ -306,6 +306,7 @@ export function auditAtlas(input: AtlasInput, cards: number) {
     referenceOnly,
     topologySummary: a.topology ? supernodeCounts(a.topology, cards) : null,
     architecture: a,
+    networkStudyResult: result?.networkStudyResult ?? null,
     cards,
     scales: auditSummaryScales(
       request,
@@ -350,7 +351,7 @@ export function auditAtlas(input: AtlasInput, cards: number) {
       "图中损失来自保存的逐事件账；父层汇总子层，不将父子层重复相加。功能域按叶层唯一归属汇总，公共开销单列。",
       "前后差值是对象级损失账差值，未提供对象级置信区间；仅总可用度区间来自原采样。未观察到损失不代表无风险。",
       "机制映射表示适用范围；未选候选不计入本轮收益。Shapley只展示原始全局归因，不按故障率拆成局部贡献。",
-      "筛选和旋转不改变评估；分层空间是可交互的三维坐标投影，不是实物数字孪生。",
+      "筛选和分层浏览不改变评估；包含关系与连接分别展示，不是实物数字孪生。组网辅助验证读取正式运行快照，不替代主流程指标。",
     ],
   };
 }

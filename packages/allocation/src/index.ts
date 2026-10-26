@@ -11,7 +11,13 @@ export interface AllocationItem {
   bounds?: { min?: number; max?: number };
 }
 export interface AllocationRequest {
-  method: "equal" | "arinc" | "agree" | "agree.nasa2016-rate" | "availability";
+  method:
+    | "equal"
+    | "arinc"
+    | "agree"
+    | "agree.nasa2016-rate"
+    | "agree.classical"
+    | "availability";
   target: number;
   hours: number;
   items: AllocationItem[];
@@ -118,6 +124,7 @@ export function allocate(req: AllocationRequest) {
       "arinc",
       "agree",
       "agree.nasa2016-rate",
+      "agree.classical",
       "availability",
     ].includes(method)
   )
@@ -177,8 +184,9 @@ export function allocate(req: AllocationRequest) {
   )
     throw new Error("Unsupported allocation constraints for " + method);
   const agree = method === "agree" || method === "agree.nasa2016-rate";
+  const classical = method === "agree.classical";
   if (
-    agree &&
+    (agree || classical) &&
     items.some(
       (i) => (i.importance ?? 1) <= 0 || (i.operatingHours ?? hours) <= 0,
     )
@@ -186,6 +194,8 @@ export function allocate(req: AllocationRequest) {
     throw new Error(
       "AGREE requires positive importance E_i and operating time t_i",
     );
+  if (classical && items.some((i) => (i.importance ?? 1) > 1))
+    throw new Error("Classical AGREE conditional importance must be in (0,1]");
   const budget = -Math.log(target) / hours;
   let raw = items.map(() => 1),
     warnings: string[] = [],
@@ -204,11 +214,22 @@ export function allocate(req: AllocationRequest) {
       "Locked values deducted from log-budget; free targets use bounded weighted log allocation",
     ];
   }
-  if (agree) {
+  if (agree || classical) {
     raw = items.map((i) => i.complexity ?? 1);
-    warnings = [
-      "NASA 2016 approximate rate formula: lambda_i=n_i*(-ln R)/(N*E_i*t_i), N=sum n_i; importance changes task-rate interpretation",
-    ];
+    warnings = classical
+      ? [
+          "Classical AGREE uses conditional failure importance E_i, not Shapley gain or an arbitrary priority score; unweighted series product need not equal system target",
+        ]
+      : [
+          "NASA 2016 approximate rate formula: lambda_i=n_i*(-ln R)/(N*E_i*t_i), N=sum n_i; importance changes task-rate interpretation",
+        ];
+    assumptions = classical
+      ? [
+          "Classical conditional-failure allocation: R_i=1-(1-R^(n_i/N))/E_i",
+          "System design surrogate R=product(1-E_i*(1-R_i)); forward topology and mission validation still required",
+          "Constant exponential rates are used only to translate module mission reliability to FIT",
+        ]
+      : assumptions;
   }
   const rawScale = Math.max(...raw);
   if (rawScale > 0) raw = raw.map((value) => value / rawScale);
@@ -219,18 +240,29 @@ export function allocate(req: AllocationRequest) {
     method === "availability" ? availabilityTargets(items, target) : null;
   const result = {
     method,
-    version: agree
-      ? "agree.nasa2016-rate"
-      : method === "availability"
-        ? "availability.log-budget.v1"
-        : method + ".rate.v1",
+    version: classical
+      ? "agree.classical-conditional.v1"
+      : agree
+        ? "agree.nasa2016-rate"
+        : method === "availability"
+          ? "availability.log-budget.v1"
+          : method + ".rate.v1",
     metricId:
       method === "availability"
         ? "steady-state-availability"
         : "task-reliability",
     items: items.map((i, j) => {
-      const weight = sum > 0 ? raw[j] / sum : 0,
-        rate = agree
+      const weight = sum > 0 ? raw[j] / sum : 0;
+      const classicalFailure =
+        -Math.expm1(Math.log(target) * weight) / (i.importance ?? 1);
+      if (classical && classicalFailure >= 1)
+        throw new Error(
+          "Classical AGREE infeasible: importance too small for allocated mission failure budget",
+        );
+      const rate = classical
+        ? Math.max(0, -Math.log1p(-classicalFailure)) /
+          (i.operatingHours ?? hours)
+        : agree
           ? (weight * -Math.log(target)) /
             (i.importance ?? 1) /
             (i.operatingHours ?? hours)
@@ -261,21 +293,29 @@ export function allocate(req: AllocationRequest) {
     (product, item) => product * item.target,
     1,
   );
-  const recomposed = agree
+  const recomposed = classical
     ? result.items.reduce(
         (product, item) =>
-          product * Math.pow(item.target, item.importance ?? 1),
+          product * (1 - (item.importance ?? 1) * (1 - item.target)),
         1,
       )
-    : ordinaryProduct;
+    : agree
+      ? result.items.reduce(
+          (product, item) =>
+            product * Math.pow(item.target, item.importance ?? 1),
+          1,
+        )
+      : ordinaryProduct;
   return {
     ...result,
     recomposition: {
-      formula: agree
-        ? "R = product(R_i ^ E_i)"
-        : method === "availability"
-          ? "A = product(A_i)"
-          : "R = product(R_i)",
+      formula: classical
+        ? "R = product(1 - E_i * (1 - R_i))"
+        : agree
+          ? "R = product(R_i ^ E_i)"
+          : method === "availability"
+            ? "A = product(A_i)"
+            : "R = product(R_i)",
       target,
       achieved: recomposed,
       residual: recomposed - target,

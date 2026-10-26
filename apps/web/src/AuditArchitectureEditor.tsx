@@ -110,6 +110,9 @@ export default function AuditArchitectureEditor({
           events={events}
           request={request}
           cards={request.cards}
+          onNetworkChange={(networkStudy) =>
+            update({ ...architecture, networkStudy })
+          }
           onDomainChange={(id, functionalDomain) =>
             patch(id, { functionalDomain })
           }

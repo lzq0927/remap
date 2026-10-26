@@ -64,7 +64,7 @@ it("exports architecture, cross-scale gaps, rankings, recovery semantics and esc
     "md",
   );
   expect(md.includes("恢复停机/次 s")).toBe(true);
-  expect(md.includes("中断MTBF h")).toBe(true);
+  expect(md.includes("中断事件间隔 h")).toBe(true);
 });
 it("keeps old snapshots without inventing a confirmed architecture", () => {
   expect(architectureReport({ request: { cards: 500000 } })).toContain(

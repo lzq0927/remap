@@ -2,13 +2,13 @@
 
 ## 架构与证据
 
-新任务默认`architecture.topology.kind='supernode-reference'`；这是可校准参考模板，历史快照和原硬件/功能模板仍按原样解释。用户提供的1024卡组网页面作为待核对来源；补充华为官方资料验证了板内/板间/柜间互联及多种超节点产品，但不同型号的板柜密度不能混用。默认64卡/柜、8卡/节点与板、32超节点/Pod是工程假设，不是已确认A5 BOM。
+新任务默认`architecture.topology.kind='supernode-reference'`，历史快照仍按原样解释。2026-10-25读取指定[华为文档](https://support.huaweicloud.com/resmgmt-modelarts/resmgmt-a5_0003.html)正文，并通过用户提供的同页PDF实际查看原图。1024指NPU模组，16计算柜×64；公式为64个L1刀片×32口、16台L2×128口、8平面，每计算柜2个IO刀片、图1每IO8张UB网卡（亦可16）。**原资料存在差异：正文2互联柜×8台L2，PDF图1编号到互联柜4、每柜画4台L2。**默认沿正文，编辑器可选择图示参照并记录依据；共同故障域须按项目BOM确认，不能宣称已核实唯一部署。板/节点8模组与每集群分组32超节点是工程假设；平台分组不是原图PoD。
 
-主图区分计算组成、超节点内高速互联、超节点间扩展网络、光链路、存储、供电/冷却/管理、软件与公共开销。原BOXIO、FABRIC等粗粒度故障组的映射是可编辑归属，不能将其称为已拆分的逐交换机故障。Leaf新增故障未知，不能从原FABRIC复制一份FIT。组成层级修改后自动使用通用包含图，避免用固定参考布局误示已修改的包含关系。所有自定义连接见平面全景及证据。
+主图区分计算组成、超节点内高速互联、超节点间扩展网络、光链路、存储、供电/冷却/管理、软件与公共开销。新模板BOXIO归属IO转换，FABRIC归属超节点内L1/L2残余故障，NIC归属UB网卡；这些粗粒度故障组的映射是可编辑归属，不能将其称为已拆分的逐交换机故障。L1/L2逐器件及Leaf新增故障未知，不能从原FABRIC复制一份FIT。组成层级修改后自动使用通用包含图，避免用固定参考布局误示已修改的包含关系。所有自定义连接见平面全景及证据。
 
 ## 数量
 
-`topology`记录cardsPerSupernode/cardsPerRack/cardsPerNode/cardsPerBoard/supernodesPerPod；容量逐层整除。交换设备参数为scaleUpSwitchesPerRack、scaleOutLeavesPerSupernode、scaleOutSpinesPerPod；光链路为opticalLinksPerNode、opticalLinksPerSupernode。后五项null表示未知，0表示明确不存在。必须记录source。
+`topology`记录cardsPerSupernode/cardsPerRack/cardsPerNode/cardsPerBoard/supernodesPerPod；容量逐层整除。交换设备参数为scaleUpSwitchesPerRack、scaleOutLeavesPerSupernode、scaleOutSpinesPerPod；光链路为opticalLinksPerNode、opticalLinksPerSupernode。数量参数null表示未知，0表示明确不存在。必须记录source。
 
 `inventory.topologyQuantity`引用cards/boards/nodes/racks/supernodes/pods/scaleUpSwitches/scaleOutLeaves/scaleOutSpines/scaleOutSwitches/opticalModules。优先级：各规模显式totals → 配置的拓扑公式 → 每上级组成比例。使用公式的节点保存时保留该字段，用户可关闭公式。千卡1000与参考单元1024是两个不同规模。图中各层汇总数量，不将父子层相加。
 
@@ -23,3 +23,15 @@
 从该架构继续确认分层预算（均分/权重/AGREE有限窗口适配），沿故障唯一归属查频率、恢复及其他损失；机制按对象/功能域/故障类型/阶段/能力/参数匹配。第一轮全局Shapley形成初始重要度，再做AGREE责任分配与参数候选，用户启动后独立复评；不从图形或高FIT臆造局部Shapley或冗余收益。输入拓扑/数量/传播修改从第二阶段复核，预算修改从第三阶段；冻结第一轮不被改写。
 
 SVG/PNG可导出当前视图；JSON/HTML保留完整关联和来源，正式HTML/Markdown报告保留数量、两类FIT与可用度口径。图中的仿真值与规划参数需按各轮独立说明，测试/快速采样不是实测或达标证明。
+
+## 当前交互与双路径诊断
+
+交互分层拓扑采用React Flow，一次显示当前层和直接子层，以面包屑逐层下钻，支持平移、缩放、小地图、键盘选择与侧栏联动；替换旧空间投影入口。多维矩阵增加“对象×规模可用度差距”，正值表示目标减现状后的缺口，单位百分点；缺失预算不假装为零，部分建模仍标记未知覆盖。导出使用完整包含图保留所选范围。
+
+frequencyRecovery固定本轮恢复次数和非停机损失，计算剩余恢复预算/次。其他损失已超预算时，单纯缩短恢复不足以达标；仅作诊断，不替代AGREE、参数优化或独立复评。提高MTBF与降低MTTR方向需正确，源FIT与业务中断率分开。FABRIC原数据为保护后残余事件，不能再套一次八平面/2+2可靠性收益。
+
+组网辅助验证现已可运行：`architecture.networkStudy`保存L2原始FIT/维修、机柜共同原因FIT/恢复、平面数/所需数、柜数、抽样数、种子、证据与来源。比较单L2、双L2同柜、双L2跨柜；BDD共享机柜事件，不把共因当独立。蒙特卡洛是同一成功门的稳态快照抽样，输出Wilson区间；零失败不证明100%。字段为空时不产生预测，可显式载入方法演示，但不能声称是厂家数据。
+
+这是有边界的L2容量子模型，不是任意拓扑连通性自动求解。L1、光模块、带宽竞争、倒换与跨域共因未包含；所需平面数及单路径剩余容量须确认。训练可用度仍由原事件仿真计算。网络结果不自动改写残余FABRIC或宣称主目标达标。Agent没有新增独立网络MCP入口，不能编造工具名；通过保存的架构输入和正式报告读取可追溯结果。
+
+正式运行将辅助结果存入`networkStudyResult`，规划和改进轮沿用未变的结构快照；报告不重新抽样。历史只有配置而无结果时明确标为未记录。跨规模独立连乘是从冻结单超节点结果派生，不是新增仿真。

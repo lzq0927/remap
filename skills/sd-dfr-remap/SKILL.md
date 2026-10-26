@@ -11,7 +11,7 @@ description: Help users set reliability goals, assess current mechanisms, alloca
 
 平台目标是帮助用户回答：现状能否达到可用度要求、主要损失在哪里、应改善哪些能力到什么参数、组合效果如何、哪些结论仍需工程验证。解释目标、故障、措施、结果与证据之间的关系；优先解决当前问题，使用真实工具结果，不凭排名或示例承诺产品达标。
 
-架构—故障—机制联动全景、六维机制映射、空间投影、热力矩阵与导出口径见[全景关联](references/architecture-atlas.md)。图表从已保存结果派生，不重新计算或按 FIT 分摊局部 Shapley。
+架构—故障—机制联动全景、六维机制映射、交互分层拓扑、热力矩阵与导出口径见[全景关联](references/architecture-atlas.md)。图表从已保存结果派生，不重新计算或按 FIT 分摊局部 Shapley。
 
 ## 先读取任务，再按用户意图行动
 
@@ -62,7 +62,7 @@ AI训练集群默认数据与目标见[references/ai-cluster-example.md](referen
 
 ## 子模型方法与条件分析
 
-对新设计确实需要从总指标分解子模型时，使用submodelAllocation，明确metricId/hours/items及适用方法：task-reliability支持Equal/ARINC/AGREE，steady-state-availability使用Availability。AGREE复杂度n、重要度E、运行时长t，按∏Rᵢ^Eᵢ回合成；baselineRate单位/h。不能将主流程可用度直接代入任务可靠度再串联相乘。第一轮固定现状无需先分配改造指标。互斥损失预算lossBudgetMethod支持none/equal/baseline-proportional/custom，custom权重合计1，只是设计约束，回代完整模型才有结果。
+对新设计确实需要从总指标分解子模型时，使用submodelAllocation，明确metricId/hours/items及适用方法：task-reliability支持Equal/ARINC/AGREE，steady-state-availability使用Availability。AGREE必须说明版本：旧agree/agree.nasa2016-rate为NASA近似率式，按∏Rᵢ^Eᵢ回合成；agree.classical为经典条件式Rᵢ=1−(1−R^(nᵢ/Σn))/Eᵢ，E为(0,1]条件重要度，按∏[1−Eᵢ(1−Rᵢ)]核对。不能把Shapley直接填成经典条件概率。两种子模型方法均不同于主流程工程损失预算适配；baselineRate单位/h。不能将主流程可用度直接代入任务可靠度再串联相乘。第一轮固定现状无需先分配改造指标。互斥损失预算lossBudgetMethod支持none/equal/baseline-proportional/custom，custom权重合计1，只是设计约束，回代完整模型才有结果。
 
 “已解决某故障”先澄清是事件消除还是措施已部署。audit.baseline.mechanisms固定已部署机制，baseline.resolvedEventIds只在本次假设将指定事件FIT置零，note保留依据。未完全消除用实际剩余FIT或覆盖/成功率，不能冒充零故障。条件改变保存新输入重算；rankings.single是A(B+i)−A(B)，shapley为固定B下剩余候选增量，已部署项不再领取新增收益。不要重排旧贡献代替条件求解。
 
@@ -85,3 +85,7 @@ eventOverrides只改明确事件并保留source/evidence/rateBasis。缺少的�
 每轮报告包含总体与分层目标、架构/故障归属、各规模薄弱点热力图与贡献对比、冻结参数/故障与来源、机制/适用范围、损失账本、均值与95%区间、各规模达标结论、贡献排名与待验证项；比较报告有参数对照、曲线和每轮独立结论。按实际字段报告P05/P50/P95及窗口达标比例，历史未记录的不补造。`report_export({id,query:{format:'html'}})`读取HTML；format=manifest/zip返回下载描述，离线包含HTML/Markdown/JSON与摘要。反馈用feedback_record记录采纳理由。
 
 解释：输入→故障损失→现有机制→实际缺口→分配→改进要求→复评与权衡→验证交付。置信区间只含采样误差，模型与参数仍需工程校准；报告明确未达标规模、不利结果和未验证要求。结论依据实际run_status，不把规划预期、示例回归或代码测试称产品已达标。
+
+指定昇腾模板依据与当前交互见 [supernode-topology](references/supernode-topology.md)。FABRIC为保护后残余故障，防止重复扣除冗余收益；MTBF/MTTR单侧差距诊断须同时保留非停机损失。
+
+原网页正文与用户PDF原图的互联柜配置存在差异，解释时必须保留来源选择；网络辅助验证只计算已定义L2平面成功门与共享机柜事件。结果中的BDD精确值、蒙特卡洛Wilson区间与主流程训练可用度不可互相替代，具体见[组网辅助验证边界](references/supernode-topology.md)。

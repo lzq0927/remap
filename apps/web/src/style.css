@@ -2580,3 +2580,57 @@ main > header {
 .parameter-adjustment button {
   justify-self: start;
 }
+/* Keep the six-stage controls visible without repeating the current step's heading. */
+@container workspace (min-width: 1000px) {
+  .workflow-dock {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .workflow-controls {
+    padding: 8px;
+    border: 0;
+    background: transparent;
+  }
+  .workflow-current {
+    display: none;
+  }
+  .workflow-step > button {
+    padding: 7px 5px;
+    gap: 5px;
+  }
+  .workflow-step .step-label strong {
+    font-size: 11px;
+  }
+  .workflow-step .step-label small {
+    font-size: 9px;
+  }
+  .workflow-step .step-number {
+    flex-basis: 19px;
+    height: 19px;
+  }
+  .workflow-step .step-connector {
+    width: 10px;
+    margin: 0;
+  }
+  .workflow-change-note,
+  .workflow-inline-error {
+    grid-column: 1/-1;
+    margin: 0;
+    padding: 5px 12px;
+    font-size: 10px;
+  }
+}
+@container workspace (max-width: 999px) {
+  .workflow-current p {
+    display: none;
+  }
+  .workflow-controls {
+    padding: 6px 9px;
+  }
+  .workflow-change-note {
+    font-size: 10px;
+    padding: 5px 9px;
+    margin: 0;
+  }
+}

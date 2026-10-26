@@ -231,7 +231,7 @@ export function auditSections(r: any): AuditSection[] {
           heads: [
             "单作业规模",
             "可用度目标",
-            "中断 MTBF / h",
+            "中断事件间隔 / h",
             "基线运行可用度",
             "组合运行可用度",
             "组合可用度",

@@ -1,3 +1,5 @@
+import { networkStudyHtml } from "./audit-network-study";
+import { atlas950Evidence } from "../../contracts/src/atlas950-evidence";
 import {
   auditAtlas,
   type AuditAtlas,
@@ -287,6 +289,7 @@ export function atlasSvg(atlas: AuditAtlas, o: AtlasViewOptions = {}) {
     (o.depth === undefined || o.depth >= 10) &&
     (!o.focus || !atlas.nodes.find((n) => n.id === o.focus)?.parentId) &&
     !o.domain &&
+    !o.query &&
     !o.faultType &&
     !o.stage &&
     !o.capability &&
@@ -402,7 +405,7 @@ export function atlasSvg(atlas: AuditAtlas, o: AtlasViewOptions = {}) {
 function table(heads: string[], rows: unknown[][]) {
   return `<div class="atlas-table-wrap"><table><thead><tr>${heads.map((h) => `<th>${atlasEscape(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((v) => `<td>${atlasEscape(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
-export const atlasCss = `.atlas-report{margin:20px 0}.atlas-report h3{color:#204b59}.atlas-report .atlas-figure{max-height:700px;overflow:auto;border:1px solid #cedde5;border-radius:12px}.atlas-report svg{display:block;width:100%;height:auto;min-width:700px}.atlas-table-wrap{overflow:auto;max-width:100%}.atlas-table-wrap table{border-collapse:collapse;width:100%;min-width:650px}.atlas-table-wrap th,.atlas-table-wrap td{border-bottom:1px solid #dbe3e9;padding:10px;vertical-align:top;text-align:left}.atlas-table-wrap th{background:#edf3f7}.atlas-report details{margin:12px 0}.atlas-report pre{white-space:pre-wrap;overflow-wrap:anywhere}@media print{.atlas-report .atlas-figure{max-height:none}.atlas-report svg{min-width:0}.atlas-table-wrap{overflow:visible}}`;
+export const atlasCss = `\n.network-study-result table{width:100%;border-collapse:collapse;min-width:720px}.network-study-result th,.network-study-result td{padding:10px;border-bottom:1px solid #dde5ee;text-align:left}.network-study-result small{display:block;color:#667b90}.network-study-result p{font-size:12px}.atlas-report .atlas-table-wrap{overflow:auto}@media print{.atlas-report .atlas-figure{break-inside:avoid}.atlas-report table{font-size:9px}}\n.atlas-report{margin:20px 0}.atlas-report h3{color:#204b59}.atlas-report .atlas-figure{max-height:700px;overflow:auto;border:1px solid #cedde5;border-radius:12px}.atlas-report svg{display:block;width:100%;height:auto;min-width:700px}.atlas-table-wrap{overflow:auto;max-width:100%}.atlas-table-wrap table{border-collapse:collapse;width:100%;min-width:650px}.atlas-table-wrap th,.atlas-table-wrap td{border-bottom:1px solid #dbe3e9;padding:10px;vertical-align:top;text-align:left}.atlas-table-wrap th{background:#edf3f7}.atlas-report details{margin:12px 0}.atlas-report pre{white-space:pre-wrap;overflow-wrap:anywhere}@media print{.atlas-report .atlas-figure{max-height:none}.atlas-report svg{min-width:0}.atlas-table-wrap{overflow:visible}}`;
 export function atlasDetailHtml(atlas: AuditAtlas, nodeId: string) {
   const n = atlas.nodes.find((v) => v.id === nodeId);
   if (!n) return "";
@@ -418,17 +421,18 @@ export function atlasDetailHtml(atlas: AuditAtlas, nodeId: string) {
         "本规模等效FIT",
         "事件率 / h",
         "当前 / 对照损失 h",
-        "来源",
+        "证据索引",
       ],
-      es.map((e) => [
+      es.map((e, i) => [
         e.id,
         faultTypeLabels[e.type] ?? e.type,
         atlasNumber(e.fit),
         atlasNumber(e.rate),
         `${atlasNumber(e.actualLossHours)} / ${atlasNumber(e.baselineLossHours)}`,
-        e.source,
+        `[${i + 1}]`,
       ]),
     )}
+    <details><summary>本对象故障数据来源</summary><ol>${es.map((e) => `<li><b>${atlasEscape(e.id)}</b>：${atlasEscape(e.source ?? "来源待补充")}</li>`).join("")}</ol></details>
     <h4>机制适用范围与参数</h4>${ms
       .map(
         (
@@ -447,13 +451,39 @@ export function atlasDetailHtml(atlas: AuditAtlas, nodeId: string) {
       )
       .join("")}`;
 }
+function atlasEvidence(a: AuditAtlas) {
+  if (!a.architecture.topology) return "";
+  return `<details><summary>架构来源与需要确认的参数</summary>${table(
+    ["项目", "采用事实与边界", "依据与状态"],
+    atlas950Evidence.map((e) => [e.item, e.value, e.basis + " · " + e.status]),
+  )}</details>`;
+}
+function atlasNetworkReport(a: AuditAtlas) {
+  const config = a.architecture.networkStudy;
+  if (!config) return "";
+  if (!a.networkStudyResult)
+    return "<p>本次保存了组网验证配置，但尚无冻结结果；正式评估后再查看。导出不自动补算历史结果。</p>";
+  const supernodes =
+    a.topologySummary?.supernodes ?? a.networkStudyResult.supernodes;
+  return networkStudyHtml({
+    ...a.networkStudyResult,
+    supernodes,
+    rows: a.networkStudyResult.rows.map((r: any) => ({
+      ...r,
+      independentFleetAvailability: Math.pow(r.availability, supernodes),
+    })),
+  });
+}
 export function atlasReport(result: any) {
   if (!result?.events || !result?.architectureDiagnosis) return "";
   const a = auditAtlas({ result, events: result.events }, result.request.cards);
+  const scaleAtlases = a.scales.map((cards) =>
+    auditAtlas({ result, events: result.events }, cards),
+  );
   return `<section class="atlas-report"><style>${atlasCss}</style><h3>架构—故障—机制全景</h3>
     <p>先看纯组成与连接，再按对象查阅实际事件账和机制参数。以下从本次保存结果派生，功能域不改变计算。</p>
-    <div class="atlas-figure">${atlasSvg(a)}</div>
-    ${a.architecture.topology ? `<h4>超节点组网与量化诊断</h4><div class="atlas-figure">${supernodeSvg(a, { metric: "summary" })}</div>${supernodeSummaryHtml(a)}` : ""}
+    <div class="atlas-figure">${a.architecture.topology ? supernodeSvg(a, { metric: "structure" }) : atlasSvg(a)}</div>
+    ${a.architecture.topology ? `<h4>超节点组网与量化诊断</h4>${supernodeSummaryHtml(a)}${atlasEvidence(a)}${atlasNetworkReport(a)}` : ""}
     <details><summary>全景损失热力图与前后对照</summary><div class="atlas-figure">${atlasSvg(a, { metric: "loss" })}</div>
     ${table(
       ["功能域（叶层互斥汇总）", "已建模损失 h", "分配预算 h", "数据状态"],
@@ -470,7 +500,16 @@ export function atlasReport(result: any) {
       a.nodes.filter((n) => n.leaf),
       Object.entries(faultTypeLabels),
     )}</div></details>
-    <details><summary>分层空间全景（标签避让投影）</summary><div class="atlas-figure">${atlasSvg(a, { spatial: true, depth: 3 })}</div></details>
+    <details><summary>各层 × 各规模可用度差距（百分点）</summary><div class="atlas-figure">${atlasMatrixSvg(
+      a,
+      "gap",
+      a.nodes.filter((n) => n.leaf),
+      scaleAtlases.map((s) => [
+        String(s.cards),
+        `${s.cards.toLocaleString()}卡`,
+      ]),
+      scaleAtlases,
+    )}</div></details>
     <details><summary>逐对象完整故障与可靠性机制映射（含参数和来源）</summary>${a.nodes
       .filter((n) => n.leaf)
       .map(
@@ -481,9 +520,9 @@ export function atlasReport(result: any) {
     <details><summary>全景数据与方法追溯</summary>${a.notes.map((n) => `<p>${atlasEscape(n)}</p>`).join("")}<pre>${atlasEscape(JSON.stringify(a.provenance, null, 2))}</pre></details></section>`;
 }
 export function atlasStandaloneHtml(atlas: AuditAtlas) {
-  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>ReMAP 架构全景交付</title><style>body{font-family:system-ui,sans-serif;margin:24px;color:#203745;background:#f8fafc}summary{cursor:pointer}button{padding:8px 14px} ${atlasCss}</style><main class="atlas-report"><h1>架构、故障与机制全景 · ${atlas.cards.toLocaleString()}卡</h1><p>本报告包含全部对象和来源；界面筛选不裁剪完整数据。浏览器打印可保存为PDF。</p>
-    <div class="atlas-figure">${atlasSvg(atlas)}</div><h2>损失与差距</h2><div class="atlas-figure">${atlasSvg(atlas, { metric: "gap" })}</div>
-    ${atlas.architecture.topology ? `<h2>超节点组网与区域指标</h2><div class="atlas-figure">${supernodeSvg(atlas, { metric: "summary" })}</div>${supernodeSummaryHtml(atlas)}` : ""}
+  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>ReMAP 架构全景交付</title><style>body{font-family:system-ui,sans-serif;margin:0 auto;padding:32px;max-width:1280px;line-height:1.7;color:#203745;background:#fff}summary{cursor:pointer}button{padding:8px 14px} ${atlasCss}</style><main class="atlas-report"><h1>架构、故障与机制全景 · ${atlas.cards.toLocaleString()}卡</h1><p>本报告包含全部对象和来源；界面筛选不裁剪完整数据。浏览器打印可保存为PDF。</p>
+    <div class="atlas-figure">${atlas.architecture.topology ? supernodeSvg(atlas, { metric: "structure" }) : atlasSvg(atlas)}</div><details><summary>损失与差距全景</summary><div class="atlas-figure">${atlasSvg(atlas, { metric: "gap" })}</div></details>
+    ${atlas.architecture.topology ? `<h2>超节点组网与区域指标</h2>${supernodeSummaryHtml(atlas)}${atlasEvidence(atlas)}${atlasNetworkReport(atlas)}` : ""}
     ${`<h2>对象与故障损失矩阵</h2><div class="atlas-figure">${atlasMatrixSvg(
       atlas,
       "fault",
@@ -492,6 +531,32 @@ export function atlasStandaloneHtml(atlas: AuditAtlas) {
     )}</div>`}
     ${atlas.nodes.map((n) => `<details><summary>${atlasEscape(n.name)} · ${atlasDomainNames[n.domain]}</summary>${atlasDetailHtml(atlas, n.id)}</details>`).join("")}
     <h2>计算口径</h2>${atlas.notes.map((n) => `<p>${atlasEscape(n)}</p>`).join("")}<details><summary>完整关联数据JSON</summary><pre>${atlasEscape(JSON.stringify(atlas, null, 2))}</pre></details></main></html>`;
+}
+function networkMarkdown(a: AuditAtlas) {
+  const r = a.networkStudyResult;
+  if (!r)
+    return a.architecture.networkStudy
+      ? "\n\n组网验证配置尚无冻结结果；导出不补算。\n"
+      : "";
+  const cell = (v: unknown) =>
+    atlasEscape(v)
+      .replaceAll("|", "／")
+      .replace(/[\r\n]/g, " ");
+  return (
+    "\n\n### L2平面组网辅助验证（结构稳态指标）\n\n" +
+    cell(r.config.source) +
+    "\n\n|方案|L2数|BDD|蒙特卡洛|95% Wilson区间|\n|---|---|---|---|---|\n" +
+    r.rows
+      .map(
+        (v: any) =>
+          `|${cell(v.name)}|${v.deviceCount}|${(v.availability * 100).toFixed(5)}%|${(v.sample.availability * 100).toFixed(5)}%|${v.sample.interval95.map((p: number) => (p * 100).toFixed(5) + "%").join(" – ")}|`,
+      )
+      .join("\n") +
+    "\n\n" +
+    r.assumptions.map(cell).join("\n\n") +
+    "\n\n方法：" +
+    r.method
+  );
 }
 export function atlasMarkdown(result: any) {
   if (!result?.architectureDiagnosis || !result.events) return "";
@@ -528,7 +593,8 @@ export function atlasMarkdown(result: any) {
           .join(" | "),
       )
       .map((r) => "| " + r + " |")
-      .join("\n")
+      .join("\n") +
+    networkMarkdown(a)
   );
 }
 
@@ -561,12 +627,11 @@ export function matrixCell(
       state: matched ? m?.status : "empty",
     };
   }
-  const value =
-    axis === "scale"
-      ? scales
-          .find((s) => s.cards === Number(key))
-          ?.nodes.find((v) => v.id === id)
-      : n;
+  const value = ["scale", "gap"].includes(axis)
+    ? scales
+        .find((s) => s.cards === Number(key))
+        ?.nodes.find((v) => v.id === id)
+    : n;
   if (!value?.measured || value.measured.dataStatus === "unknown")
     return {
       text: "待补充",
@@ -574,14 +639,24 @@ export function matrixCell(
       title: "未计算或缺少故障数据",
       state: "unknown",
     };
+  if (axis === "gap" && value.measured.allowedHours == null)
+    return {
+      text: "未分配",
+      value: null,
+      title: "尚未分配分层预算",
+      state: "unknown",
+    };
   const amount =
-    axis === "fault"
-      ? (value.measured.types.find((t: any) => t.type === key)?.lossHours ?? 0)
-      : value.actualHours;
+    axis === "gap"
+      ? (value.targetAvailability! - value.attributedAvailability!) * 100
+      : axis === "fault"
+        ? (value.measured.types.find((t: any) => t.type === key)?.lossHours ??
+          0)
+        : value.actualHours;
   return {
     text: atlasNumber(amount),
     value: amount as number | null,
-    title: `已建模损失 h；预算 ${atlasNumber(value.measured.allowedHours)} h；${value.measured.dataStatus === "partial" ? "含未知对象" : "已建模"}`,
+    title: `${axis === "gap" ? "目标−当前可用度，单位百分点" : "已建模损失 h"}；预算 ${atlasNumber(value.measured.allowedHours)} h；${value.measured.dataStatus === "partial" ? "含未知对象" : "已建模"}`,
     state: value.measured.dataStatus,
   };
 }
@@ -604,8 +679,8 @@ export function atlasMatrixSvg(
   const width = Math.max(1100, 270 + columns.length * 155),
     height = 160 + rows.length * 58;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="多维热力矩阵" style="font-family:'Noto Sans CJK SC','Microsoft YaHei',sans-serif"><rect width="100%" height="100%" fill="#f8fafc"/>
-  <text x="22" y="30" font-size="20" fill="#244d5c">对象 × ${axis === "fault" ? "故障类型损失" : axis === "scale" ? "规模损失" : "机制适用关系"} · ${a.cards.toLocaleString()}卡</text>
-  <text x="22" y="58" font-size="12" fill="#56717e">${axis === "mechanism" ? "绿色：已选 / 固定部署；浅蓝：未选候选；仅表示适用关系，不代表覆盖成功或局部贡献。" : `损失单位 h · 共用线性色标 0～${atlasNumber(max)} · 灰色：未计算或数据不完整 · 父子层不得重复相加`}</text>
+  <text x="22" y="30" font-size="20" fill="#244d5c">对象 × ${axis === "fault" ? "故障类型损失" : axis === "scale" ? "规模损失" : axis === "gap" ? "规模可用度差距" : "机制适用关系"} · ${a.cards.toLocaleString()}卡</text>
+  <text x="22" y="58" font-size="12" fill="#56717e">${axis === "mechanism" ? "绿色：已选 / 固定部署；浅蓝：未选候选；仅表示适用关系，不代表覆盖成功或局部贡献。" : `${axis === "gap" ? "差距单位百分点（目标−当前）；正值超预算" : "损失单位 h"} · 共用线性色标 0～${atlasNumber(max)} · 灰色：未计算或数据不完整 · 父子层不得重复相加`}</text>
   ${columns.map(([, name], i) => `<text x="${270 + i * 155}" y="96" font-size="11" fill="#244d5c">${atlasEscape(name.slice(0, 13))}<title>${atlasEscape(name)}</title></text>`).join("")}
   ${rows
     .map(
@@ -621,7 +696,9 @@ export function atlasMatrixSvg(
                   ? c.state === "selected" || c.state === "deployed"
                     ? "#c4e2d9"
                     : "#eef3fa"
-                  : `rgb(247,${Math.round(247 - (max ? (90 * (c.value ?? 0)) / max : 0))},${Math.round(247 - (max ? (150 * (c.value ?? 0)) / max : 0))})`;
+                  : axis === "gap" && (c.value ?? 0) <= 0
+                    ? `rgb(${Math.round(247 - (max ? (150 * Math.abs(c.value ?? 0)) / max : 0))},247,${Math.round(247 - (max ? (100 * Math.abs(c.value ?? 0)) / max : 0))})`
+                    : `rgb(247,${Math.round(247 - (max ? (90 * Math.abs(c.value ?? 0)) / max : 0))},${Math.round(247 - (max ? (150 * Math.abs(c.value ?? 0)) / max : 0))})`;
             return `<g><rect x="${260 + j * 155}" y="${110 + i * 58}" width="148" height="50" rx="5" fill="${color}"/><title>${atlasEscape(r.name + "；" + c.title)}</title><text x="${274 + j * 155}" y="${140 + i * 58}" font-size="13" fill="#244d5c">${atlasEscape(c.text)}</text></g>`;
           })
           .join(""),

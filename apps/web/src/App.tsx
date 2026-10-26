@@ -95,7 +95,7 @@ const toolNames: Record<string, string> = {
   training: "历史模型 V4 评估",
   audit: "第一轮现状评估",
   "audit-plan": "AGREE分配建议",
-  "audit-plan-scales":"各规模改进分配",
+  "audit-plan-scales": "各规模改进分配",
   "audit-experiment": "改进方案独立评估",
   "audit-compare": "多次评估横向比较",
   allocate: "指标分配",
@@ -2348,40 +2348,42 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   </p>
                   <AllocationEditor value={toolJson} onChange={setToolJson} />
                   <div className="tabs">
-                    {["equal", "arinc", "agree", "availability"].map(
-                      (method) => (
-                        <button
-                          key={method}
-                          onClick={() =>
-                            attempt(async () => {
-                              const d = JSON.parse(toolJson);
-                              setToolJson(
-                                pretty({
-                                  ...d,
-                                  method,
-                                  metricId:
-                                    method === "availability"
-                                      ? "steady-state-availability"
-                                      : "task-reliability",
-                                  items: d.items.map((i: any) => {
-                                    const {
-                                      locked: _l,
-                                      bounds: _b,
-                                      ...rest
-                                    } = i;
-                                    return method === "availability" ? i : rest;
-                                  }),
+                    {[
+                      "equal",
+                      "arinc",
+                      "agree.classical",
+                      "agree",
+                      "availability",
+                    ].map((method) => (
+                      <button
+                        key={method}
+                        onClick={() =>
+                          attempt(async () => {
+                            const d = JSON.parse(toolJson);
+                            setToolJson(
+                              pretty({
+                                ...d,
+                                method,
+                                metricId:
+                                  method === "availability"
+                                    ? "steady-state-availability"
+                                    : "task-reliability",
+                                items: d.items.map((i: any) => {
+                                  const { locked: _l, bounds: _b, ...rest } = i;
+                                  return method === "availability" ? i : rest;
                                 }),
-                              );
-                            })
-                          }
-                        >
-                          {method === "agree"
+                              }),
+                            );
+                          })
+                        }
+                      >
+                        {method === "agree.classical"
+                          ? "AGREE · 经典条件式"
+                          : method === "agree"
                             ? "AGREE · NASA 2016"
                             : method.toUpperCase()}
-                        </button>
-                      ),
-                    )}
+                      </button>
+                    ))}
                     <button
                       disabled={busy}
                       onClick={() =>

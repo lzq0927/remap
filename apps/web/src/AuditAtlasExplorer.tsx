@@ -1,4 +1,12 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { auditAtlas } from "../../../packages/analysis/src/audit-atlas";
 import {
   atlasDomainNames,
@@ -26,6 +34,14 @@ import {
 } from "../../../packages/reports/src/audit-atlas";
 import { parameterLabels } from "../../../packages/reports/src/audit-labels";
 import "./audit-atlas.css";
+import AuditNetworkStudy from "./AuditNetworkStudy";
+import type { NetworkStudy } from "../../../packages/contracts/src/audit-network-study";
+import {
+  atlas950Evidence,
+  atlas950LayoutConflict,
+} from "../../../packages/contracts/src/atlas950-evidence";
+
+const AuditAtlasFlow = lazy(() => import("./AuditAtlasFlow"));
 
 const statusNames: Record<string, string> = {
   selected: "本轮已选",
@@ -50,6 +66,7 @@ export default function AuditAtlasExplorer({
   result,
   cards: inputCards,
   onDomainChange,
+  onNetworkChange,
 }: {
   architecture?: AuditArchitecture;
   events: AuditEventView[];
@@ -57,6 +74,7 @@ export default function AuditAtlasExplorer({
   result?: any;
   cards: number;
   onDomainChange?: (id: string, value?: FunctionalDomain) => void;
+  onNetworkChange?: (config?: NetworkStudy) => void;
 }) {
   const svgId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const [cards, setCards] = useState(inputCards);
@@ -83,8 +101,13 @@ export default function AuditAtlasExplorer({
   );
   const root = atlas.nodes.find((n) => !n.parentId)!;
   const hasTopology = !!atlas.architecture.topology;
-  const [selected, setSelected] = useState(root.id),
+  const [selected, setSelectedId] = useState(root.id),
     [focus, setFocus] = useState(root.id);
+  const [inspector, setInspector] = useState(false);
+  const setSelected = (id: string) => {
+    setSelectedId(id);
+    setInspector(true);
+  };
   const [view, setView] = useState(
       architecture?.topology ||
         result?.request?.architecture?.topology ||
@@ -103,9 +126,10 @@ export default function AuditAtlasExplorer({
   const [depth, setDepth] = useState(10),
     [links, setLinks] = useState(true),
     [full, setFull] = useState(false);
-  const [yaw, setYaw] = useState(-22),
-    [pitch, setPitch] = useState(38),
-    [spacing, setSpacing] = useState(160);
+  const [fullTools, setFullTools] = useState(false);
+  const yaw = -22,
+    pitch = 38,
+    spacing = 160;
   const [tab, setTab] = useState("object"),
     [axis, setAxis] = useState("fault"),
     [leaves, setLeaves] = useState(false);
@@ -181,7 +205,7 @@ export default function AuditAtlasExplorer({
   );
   const scales = useMemo(
     () =>
-      view === "matrix" && axis === "scale" && result
+      view === "matrix" && ["scale", "gap"].includes(axis) && result
         ? atlas.scales.map((c) => auditAtlas({ result, events }, c))
         : [atlas],
     [view, axis, result, events, atlas],
@@ -195,7 +219,7 @@ export default function AuditAtlasExplorer({
   const columns =
     axis === "fault"
       ? Object.entries(faultTypeLabels)
-      : axis === "scale"
+      : ["scale", "gap"].includes(axis)
         ? scales.map((s) => [
             String(s.cards),
             s.cards.toLocaleString() +
@@ -217,7 +241,7 @@ export default function AuditAtlasExplorer({
     const measure = () =>
       setZoom(
         Math.max(
-          el.clientWidth < 500 ? 0.75 : 0.4,
+          el.clientWidth < 500 ? 0.8 : 0.55,
           Math.min(1.2, (el.clientWidth - 24) / svgWidth),
         ),
       );
@@ -292,70 +316,40 @@ export default function AuditAtlasExplorer({
   }
   return (
     <section
-      className={`audit-atlas ${full ? "atlas-full" : ""}`}
+      className={`audit-atlas ${full ? "atlas-full" : ""} ${fullTools ? "atlas-show-tools" : ""}`}
       aria-label="架构故障机制全景"
     >
       <header className="atlas-heading">
         <div>
-          <h3>架构 · 故障 · 可靠性机制</h3>
+          <span className="workbench-eyebrow">ARCHITECTURE & RELIABILITY</span>
+          <h3>架构与可靠性工作台</h3>
           <p>
             {cards.toLocaleString()}卡 ·{" "}
             {atlas.evaluated ? "已保存计算结果" : "配置预览，尚未计算"} ·
             同一对象逐层对应
           </p>
         </div>
-        <button type="button" onClick={() => setFull(!full)}>
-          {full ? "退出大屏（Esc）" : "全屏大图"}
-        </button>
+        <div className="atlas-head-actions">
+          {full && (
+            <button
+              type="button"
+              aria-expanded={fullTools}
+              onClick={() => setFullTools(!fullTools)}
+            >
+              筛选与依据
+            </button>
+          )}
+          <button type="button" onClick={() => setFull(!full)}>
+            {full ? "退出大屏（Esc）" : "全屏大图"}
+          </button>
+        </div>
       </header>
       {atlas.error && (
         <p role="alert">
           {atlas.error}；当前FIT为参考输入，完成数量配置后才可计算。
         </p>
       )}
-      <div className="atlas-views" role="group" aria-label="全景显示方式">
-        {[
-          ...(atlas.architecture.topology ? [["topology", "超节点组网"]] : []),
-          ["plan", "平面全景"],
-          ["space", "分层空间"],
-          ["matrix", "多维热力矩阵"],
-        ].map(([id, name]) => (
-          <button
-            type="button"
-            aria-pressed={view === id}
-            key={id}
-            onClick={() => {
-              setView(id);
-              setFit(true);
-            }}
-          >
-            {name}
-          </button>
-        ))}
-        <label>
-          叠加指标
-          <select
-            disabled={view === "matrix"}
-            aria-label="全景叠加指标"
-            value={metric}
-            onChange={(e) => setMetric(e.target.value as AtlasMetric)}
-          >
-            {Object.entries(atlasMetricNames).map(([id, name]) => (
-              <option
-                key={id}
-                value={id}
-                disabled={
-                  !["structure", "fit", "target", "summary"].includes(id) &&
-                  !atlas.evaluated
-                }
-              >
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="atlas-filter-row">
+      <div className="workbench-kpis">
         <label>
           查看规模
           <select
@@ -375,69 +369,165 @@ export default function AuditAtlasExplorer({
               ))}
           </select>
         </label>
-        <label>
-          定位对象
-          <input
-            aria-label="全景搜索对象"
-            placeholder="名称 / 对象ID / 故障ID"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-        <label>
-          功能域
-          <select
-            aria-label="全景功能域"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
+        <div>
+          <small>当前可用度</small>
+          <strong>
+            {root.attributedAvailability == null
+              ? "待评估"
+              : (root.attributedAvailability * 100).toFixed(3) + "%"}
+          </strong>
+          <span>
+            {atlas.provenance.statistics
+              ? `95%区间 ${(atlas.provenance.statistics.ciLow * 100).toFixed(3)}–${(atlas.provenance.statistics.ciHigh * 100).toFixed(3)}%`
+              : "由故障与机制正向计算"}
+          </span>
+        </div>
+        <div>
+          <small>可用度目标</small>
+          <strong>
+            {root.targetAvailability == null
+              ? "未设置"
+              : (root.targetAvailability * 100).toFixed(3) + "%"}
+          </strong>
+          <span>{atlas.referenceOnly ? "架构参考点" : "本规模独立目标"}</span>
+        </div>
+        <div>
+          <small>距离目标</small>
+          <strong>
+            {root.attributedAvailability == null ||
+            root.targetAvailability == null
+              ? "—"
+              : Math.max(
+                  0,
+                  (root.targetAvailability - root.attributedAvailability) * 100,
+                ).toFixed(3) + " pp"}
+          </strong>
+          <span>百分点 · 分层查看责任缺口</span>
+        </div>
+        <div>
+          <small>建模覆盖</small>
+          <strong>{atlas.events.length} 类故障</strong>
+          <span>
+            {
+              atlas.nodes.filter(
+                (n) => n.leaf && n.coverageStatus === "unknown",
+              ).length
+            }{" "}
+            个对象待补数据
+          </span>
+        </div>
+      </div>
+      <div className="atlas-views" role="group" aria-label="全景显示方式">
+        {[
+          ...(atlas.architecture.topology ? [["topology", "超节点组网"]] : []),
+          ["plan", "平面全景"],
+          ["flow", "交互分层拓扑"],
+          ["matrix", "多维热力矩阵"],
+          ...(hasTopology ? [["network", "组网辅助验证"]] : []),
+        ].map(([id, name]) => (
+          <button
+            type="button"
+            aria-pressed={view === id}
+            key={id}
+            onClick={() => {
+              setView(id);
+              setFit(true);
+            }}
           >
-            <option value="">全部功能域</option>
-            {Object.entries(functionalDomains).map(([id, name]) => (
-              <option key={id} value={id}>
+            {name}
+          </button>
+        ))}
+        <label>
+          叠加指标
+          <select
+            disabled={view === "matrix" || view === "network"}
+            aria-label="全景叠加指标"
+            value={metric}
+            onChange={(e) => setMetric(e.target.value as AtlasMetric)}
+          >
+            {Object.entries(atlasMetricNames).map(([id, name]) => (
+              <option
+                key={id}
+                value={id}
+                disabled={
+                  !["structure", "fit", "target", "summary"].includes(id) &&
+                  !atlas.evaluated
+                }
+              >
                 {name}
               </option>
             ))}
           </select>
         </label>
-        <label>
-          查看范围
-          <select
-            aria-label="全景查看层级"
-            value={focused.id}
-            onChange={(e) => {
-              setFocus(e.target.value);
-              setSelected(e.target.value);
-              setFit(true);
-            }}
-          >
-            {atlas.nodes
-              .filter((v) => v.kind !== "overhead")
-              .map((v) => (
-                <option value={v.id} key={v.id}>
-                  {"· ".repeat(v.depth)}
-                  {v.name}
+      </div>
+      <details className="atlas-locate">
+        <summary>定位与筛选 · 对象、功能域、层级</summary>
+        <div className="atlas-filter-row">
+          <label>
+            定位对象
+            <input
+              aria-label="全景搜索对象"
+              placeholder="名称 / 对象ID / 故障ID"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
+          <label>
+            功能域
+            <select
+              aria-label="全景功能域"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+            >
+              <option value="">全部功能域</option>
+              {Object.entries(functionalDomains).map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
                 </option>
               ))}
-          </select>
-        </label>
-        <label>
-          展开深度
-          <select
-            aria-label="全景展开深度"
-            value={depth}
-            onChange={(e) => setDepth(Number(e.target.value))}
-          >
-            {[1, 2, 3, 5, 10].map((v) => (
-              <option key={v} value={v}>
-                {v === 10 ? "全部层级" : v + "层"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" onClick={clear}>
-          清除筛选
-        </button>
-      </div>
+            </select>
+          </label>
+          <label>
+            查看范围
+            <select
+              aria-label="全景查看层级"
+              value={focused.id}
+              onChange={(e) => {
+                setFocus(e.target.value);
+                setSelectedId(e.target.value);
+                setInspector(false);
+                setFit(true);
+              }}
+            >
+              {atlas.nodes
+                .filter((v) => v.kind !== "overhead")
+                .map((v) => (
+                  <option value={v.id} key={v.id}>
+                    {"· ".repeat(v.depth)}
+                    {v.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            展开深度
+            <select
+              aria-label="全景展开深度"
+              value={depth}
+              onChange={(e) => setDepth(Number(e.target.value))}
+            >
+              {[1, 2, 3, 5, 10].map((v) => (
+                <option key={v} value={v}>
+                  {v === 10 ? "全部层级" : v + "层"}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={clear}>
+            清除筛选
+          </button>
+        </div>
+      </details>
       <details className="atlas-dimension-filters">
         <summary>按故障与机制定位对象（筛选不改变计算）</summary>
         <div className="atlas-filter-row">
@@ -503,9 +593,93 @@ export default function AuditAtlasExplorer({
           </label>
         </div>
       </details>
-      <div className="atlas-body">
+      <details className="atlas-reference">
+        <summary>拓扑依据与组网评估方法</summary>
+        <p>
+          参考
+          <a
+            href="https://support.huaweicloud.com/resmgmt-modelarts/resmgmt-a5_0003.html"
+            target="_blank"
+            rel="noreferrer"
+          >
+            华为云 Atlas 950 组网文档（2026-10-21）
+          </a>
+          。
+          1024指NPU模组数；千卡按1000活动模组评估，1024单独保留为参考点。其他规模按完整互联单元扩展，尾柜按需部署。
+        </p>
+        <div className="atlas-reference-links">
+          {[
+            ["多柜互联原图", "2632965674"],
+            ["八平面原图", "2629108460"],
+            ["参数面原图", "2628948572"],
+            ["VPC与存储面原图", "2659307771"],
+          ].map(([label, id]) => (
+            <a
+              key={id}
+              href={`https://support.huaweicloud.com/resmgmt-modelarts/figure/zh-cn_image_000000${id}.png`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {label} ↗
+            </a>
+          ))}
+        </div>
+        <p>
+          组网辅助验证采用明确的L2平面成功门，使用BDD和蒙特卡洛稳态快照交叉校验。训练可用度继续由故障、倒换、恢复、保存与污染的事件仿真计算；结构可用度不直接替代训练结果。
+        </p>
+        <p>
+          改进优先缩短检测恢复、提高覆盖并减少回滚与阻塞。减少设备数量需同时核查带宽、容量、冗余和共因；仅启用有依据的数量折算后才改变事件FIT。快速倒换减少业务中断，不自动改变器件FIT。
+        </p>
+        <p>{atlas950LayoutConflict}</p>
+        <div className="atlas-table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>项目</th>
+                <th>采用事实与边界</th>
+                <th>证据</th>
+              </tr>
+            </thead>
+            <tbody>
+              {atlas950Evidence.map((e) => (
+                <tr key={e.item}>
+                  <th>
+                    {e.item}
+                    <small>{e.status}</small>
+                  </th>
+                  <td>{e.value}</td>
+                  <td>{e.basis}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {view === "network" && (
+        <AuditNetworkStudy
+          key={cards + JSON.stringify(atlas.architecture.networkStudy)}
+          saved={atlas.architecture.networkStudy}
+          supernodes={atlas.topologySummary?.supernodes ?? 1}
+          referencePlanes={atlas.architecture.topology?.planesPerSupernode}
+          referenceCabinets={
+            atlas.architecture.topology?.interconnectRacksPerSupernode
+          }
+          onSave={onNetworkChange}
+        />
+      )}
+      <div
+        className={`atlas-body ${inspector ? "with-inspector" : ""}`}
+        hidden={view === "network"}
+      >
         <div className="atlas-main">
           <div className="atlas-toolbar">
+            <button
+              type="button"
+              aria-pressed={inspector}
+              onClick={() => setInspector(!inspector)}
+            >
+              {inspector ? "收起对象详情" : "打开对象详情"}
+            </button>
             <button
               type="button"
               disabled={!focused.parentId}
@@ -525,7 +699,7 @@ export default function AuditAtlasExplorer({
             >
               全系统
             </button>
-            {view !== "matrix" && (
+            {view !== "matrix" && view !== "flow" && (
               <>
                 <button
                   type="button"
@@ -562,44 +736,21 @@ export default function AuditAtlasExplorer({
               </>
             )}
           </div>
-          {view === "space" && (
-            <div className="atlas-space-controls">
-              <label>
-                旋转
-                <input
-                  aria-label="空间旋转"
-                  type="range"
-                  min="-65"
-                  max="65"
-                  value={yaw}
-                  onChange={(e) => setYaw(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                俯仰
-                <input
-                  aria-label="空间俯仰"
-                  type="range"
-                  min="10"
-                  max="70"
-                  value={pitch}
-                  onChange={(e) => setPitch(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                层间距
-                <input
-                  aria-label="空间层间距"
-                  type="range"
-                  min="80"
-                  max="420"
-                  value={spacing}
-                  onChange={(e) => setSpacing(Number(e.target.value))}
-                />
-              </label>
-            </div>
-          )}
-          {view !== "matrix" ? (
+          {view === "flow" ? (
+            <Suspense fallback={<p>正在载入交互拓扑…</p>}>
+              <AuditAtlasFlow
+                atlas={atlas}
+                options={options}
+                selected={selected}
+                onSelect={setSelected}
+                onFocus={(id) => {
+                  setFocus(id);
+                  setSelectedId(id);
+                  setInspector(false);
+                }}
+              />
+            </Suspense>
+          ) : view !== "matrix" ? (
             <div
               className="atlas-canvas"
               ref={surface}
@@ -629,14 +780,8 @@ export default function AuditAtlasExplorer({
                   dy = e.clientY - d.y;
                 if (Math.abs(dx) + Math.abs(dy) < 5) return;
                 d.moved = true;
-                if (view === "space") {
-                  setFit(false);
-                  setYaw(Math.max(-65, Math.min(65, d.yaw + dx / 5)));
-                  setPitch(Math.max(10, Math.min(70, d.pitch + dy / 5)));
-                } else {
-                  e.currentTarget.scrollLeft = d.left - dx;
-                  e.currentTarget.scrollTop = d.top - dy;
-                }
+                e.currentTarget.scrollLeft = d.left - dx;
+                e.currentTarget.scrollTop = d.top - dy;
               }}
               onPointerUp={(e) => {
                 skipClick.current = drag.current?.moved ?? false;
@@ -683,6 +828,9 @@ export default function AuditAtlasExplorer({
                     <option value="scale" disabled={!result}>
                       对象 × 规模损失
                     </option>
+                    <option value="gap" disabled={!result}>
+                      对象 × 规模可用度差距
+                    </option>
                     <option value="mechanism">对象 × 机制适用关系</option>
                   </select>
                 </label>
@@ -699,7 +847,9 @@ export default function AuditAtlasExplorer({
               <p className="note">
                 {axis === "mechanism"
                   ? "实色：已选/固定部署；浅色：未选候选；仅表示目录适用关系，不代表成功率或局部贡献。"
-                  : `损失单位 h；线性色阶 0～${atlasNumber(max)}，跨规模共用色标；灰色为未计算或数据不完整。`}
+                  : axis === "gap"
+                    ? "差距 = 目标 − 当前可用度（百分点）；正值超预算，负值有余量。各规模共用色标，灰色表示含未知对象。"
+                    : `损失单位 h；线性色阶 0～${atlasNumber(max)}，跨规模共用色标；灰色为未计算或数据不完整。`}
               </p>
               <div className="atlas-table-scroll">
                 <table>
@@ -734,7 +884,7 @@ export default function AuditAtlasExplorer({
                               style={
                                 axis !== "mechanism" && !unknown
                                   ? {
-                                      background: `rgba(210,120,55,${0.04 + (max ? (0.65 * (c.value ?? 0)) / max : 0)})`,
+                                      background: `rgba(${axis === "gap" && (c.value ?? 0) <= 0 ? "44,139,114" : "210,120,55"},${0.04 + (max ? (0.65 * Math.abs(c.value ?? 0)) / max : 0)})`,
                                     }
                                   : undefined
                               }
@@ -764,8 +914,8 @@ export default function AuditAtlasExplorer({
           <p className="atlas-caption">
             {view === "topology"
               ? "超节点组网参考：代表性层级与区域汇总。板柜密度需项目确认；点击区域关联故障与机制。选择“数量・FIT・可用度”叠加指标查看量化结果；平面全景保留全部自定义连接。"
-              : view === "space"
-                ? "三维坐标投影：拖动旋转，或用滑块调节；标签保持正向并自动避让。可按层级隔离，避免遮挡。"
+              : view === "flow"
+                ? "连线展示当前层与子层的包含关系。点击查看指标，双击或点击展开此层下钻；拖动平移、滚轮缩放，小地图定位。导出保留所选范围的完整包含式图。"
                 : view === "plan"
                   ? "拖动平移、按钮缩放；小屏保留可读字号，可左右滑动查看。点击或键盘选中模块查看关联明细。容器表示包含，连接依据见证据。"
                   : "行按同级或互斥叶层汇总，不叠加父子层。点击单元格联动右侧详情。"}
@@ -816,7 +966,19 @@ export default function AuditAtlasExplorer({
           </p>
           {message && <p role="alert">{message}</p>}
         </div>
-        <aside className="atlas-inspector" aria-label="全景对象明细">
+        <aside
+          className="atlas-inspector"
+          aria-label="全景对象明细"
+          hidden={!inspector}
+        >
+          <button
+            className="atlas-close-detail"
+            type="button"
+            aria-label="关闭对象详情"
+            onClick={() => setInspector(false)}
+          >
+            ×
+          </button>
           <h4>{n.name}</h4>
           <p className="atlas-path">
             {n.path
@@ -827,6 +989,7 @@ export default function AuditAtlasExplorer({
             type="button"
             onClick={() => {
               setFocus(n.id);
+              setView("flow");
               setFit(true);
             }}
           >
@@ -933,6 +1096,41 @@ export default function AuditAtlasExplorer({
                 {atlas.comparisonBasis}
                 ；对象差值来自事件账，无对象级置信区间。父层与子层不能重复相加。
               </p>
+              {n.measured?.frequencyRecovery && (
+                <div className="atlas-diagnosis">
+                  <h5>MTBF / MTTR 双路径诊断</h5>
+                  <p>{n.measured.action}</p>
+                  <dl>
+                    <dt>本层非恢复损失</dt>
+                    <dd>
+                      {atlasNumber(n.measured.frequencyRecovery.otherLossHours)}{" "}
+                      h
+                    </dd>
+                    <dt>仅缩短恢复的可行性</dt>
+                    <dd>
+                      {n.measured.frequencyRecovery.recoveryOnlyFeasible ===
+                      null
+                        ? "待分配预算"
+                        : n.measured.frequencyRecovery.recoveryOnlyFeasible
+                          ? "有预算空间，仍需正向复评"
+                          : "不足以达标：其他损失已超过本层预算"}
+                    </dd>
+                    <dt>固定恢复次数下的暂停预算 / 次</dt>
+                    <dd>
+                      {atlasNumber(
+                        n.measured.frequencyRecovery.requiredPauseSeconds,
+                      )}{" "}
+                      秒
+                    </dd>
+                  </dl>
+                  <p>{n.measured.frequencyRecovery.frequencyAction}</p>
+                  <small>{n.measured.frequencyRecovery.basis}</small>
+                  <p>
+                    下一步：在计算与权衡中生成分配建议，按本规模 Shapley
+                    形成重要度，由 AGREE 分担改进责任，再独立评估。
+                  </p>
+                </div>
+              )}
               {n.measured && (
                 <p className="note">
                   恢复停机/次 {atlasNumber(n.measured.recoveryPauseSeconds)}{" "}
@@ -948,6 +1146,32 @@ export default function AuditAtlasExplorer({
           )}
           {tab === "faults" && (
             <div>
+              {es.length > 0 && (
+                <div className="atlas-fault-summary">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>故障模式</th>
+                        <th>等效FIT</th>
+                        <th>损失 / h</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {es.map((e) => (
+                        <tr key={e.id}>
+                          <td>
+                            {e.id}
+                            <small>{faultTypeLabels[e.type]}</small>
+                          </td>
+                          <td>{atlasNumber(e.fit)}</td>
+                          <td>{atlasNumber(e.actualLossHours)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="note">下方逐项展开故障描述、事件率和数据来源。</p>
               {es.length ? (
                 es.map((e) => (
                   <details key={e.id} open={es.length < 4}>

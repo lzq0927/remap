@@ -115,7 +115,7 @@ test("allocation comparison runs applicable methods and explains individual skip
     expect(response.statusCode).toBe(200);
     const comparison=response.json();
     expect(comparison.runs.map((r:any)=>r.input.method)).toEqual(["equal"]);
-    expect(comparison.skipped).toEqual([{method:"arinc",reason:expect.stringMatching(/baseline rate/)},{method:"agree",reason:expect.stringMatching(/positive importance/)}]);
+    expect(comparison.skipped).toEqual([{method:"arinc",reason:expect.stringMatching(/baseline rate/)},{method:"agree.classical",reason:expect.stringMatching(/positive importance/)},{method:"agree",reason:expect.stringMatching(/positive importance/)}]);
     let run:any;
     for(let i=0;i<100;i++) {
       run=(await app.inject("/api/runs/"+comparison.runs[0].id)).json();
@@ -134,7 +134,7 @@ test("allocation comparison retains ARINC when only AGREE is inapplicable", asyn
     const response=await app.inject({method:"POST",url:"/api/allocations/compare",payload:{target:.9,hours:10,items:[{id:"A",baselineRate:.001,importance:0},{id:"B",baselineRate:.003}]}});
     expect(response.statusCode).toBe(200);
     expect(response.json().runs.map((r:any)=>r.input.method)).toEqual(["equal","arinc"]);
-    expect(response.json().skipped).toEqual([{method:"agree",reason:expect.stringMatching(/positive importance/)}]);
+    expect(response.json().skipped).toEqual([{method:"agree.classical",reason:expect.stringMatching(/positive importance/)},{method:"agree",reason:expect.stringMatching(/positive importance/)}]);
   } finally {await app.close();}
 });
 test("allocation comparison rejects without creating runs when every method is inapplicable", async () => {
@@ -143,7 +143,7 @@ test("allocation comparison rejects without creating runs when every method is i
     const response=await app.inject({method:"POST",url:"/api/allocations/compare",payload:{target:0,hours:10,items:[{id:"A"}]}});
     expect(response.statusCode).toBe(400);
     expect(response.json().error.code).toBe("METHOD_INAPPLICABLE");
-    for(const method of ["equal","arinc","agree"])expect(response.json().error.message).toContain(method+": Invalid allocation bounds");
+    for(const method of ["equal","arinc","agree.classical","agree"])expect(response.json().error.message).toContain(method+": Invalid allocation bounds");
     expect((await app.inject("/api/runs")).json()).toHaveLength(0);
   } finally {await app.close();}
 });
