@@ -102,7 +102,7 @@ export default function AuditArchitectureEditor({
       <p className="arch-short-note">
         {mode === "structure"
           ? "按硬件组成逐层确认故障归属。Pod、机柜、超节点顺序可调整；各规模为并列方案，数量、连接与共享故障域分别记录。"
-          : "分层损失预算用于定位差距，保持现状FIT与措施参数不变。父层汇总子层；当前默认均分仅为暂定设计参照，不代表专家已确认的模块指标。"}
+          : "默认先评估现状，再用故障模式、实际损失与适用机制贡献进行AGREE工程分配。父层汇总子层；缺少现状证据时只显示总体预算，子层待评估。历史均分配置仍保留其原口径。"}
       </p>
       {mode === "structure" && (
         <AuditAtlasExplorer
@@ -165,6 +165,9 @@ export default function AuditArchitectureEditor({
                 })
               }
             >
+              <option value="agree-evidence">
+                AGREE · 故障与机制证据（推荐）
+              </option>
               <option value="equal">同级均分 · 暂定参照</option>
               <option value="weighted">按设计权重分配</option>
               <option value="agree">AGREE损失预算适配</option>
@@ -173,8 +176,14 @@ export default function AuditArchitectureEditor({
           </label>
           <p className="note">
             总损失预算 =（1 − 规模目标）×
-            评估窗口。AGREE使用设计复杂度与重要度分配，再归一化到总损失预算；这是有限窗口损失适配，最终仍回代完整模型。重要度越高，允许损失越小。
+            评估窗口。AGREE使用设计复杂度与重要度分配，再归一化到总损失预算；这是有限窗口损失适配，最终仍回代完整模型。证据模式在运行完成后保存逐层依据：故障模式数、FIT暴露、实际损失、适用机制正Shapley投影。它是工程优先级，不是条件失效概率。
           </p>
+          {architecture.budgetMethod === "agree-evidence" && (
+            <p className="note">
+              此步确认分配规则；现状运行前只显示总体预算，子层待评估。运行完成后，在“分层诊断
+              → 分层分配与机制”查看实际预算及依据，再独立生成改进分配建议。
+            </p>
+          )}
           <label className="arch-toggle">
             <input
               type="checkbox"

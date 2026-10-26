@@ -19,6 +19,10 @@ import {
 } from "../../contracts/src/audit-hardware";
 import { auditReferenceOnly } from "../../contracts/src/audit-presets";
 import { agreeLossAllocation } from "./audit-allocation";
+import {
+  layerEvidenceAllocation,
+  type LayerAllocationReference,
+} from "./audit-layer-allocation";
 
 export const architectureLossNames: Record<string, string> = {
   downtime: "恢复停机",
@@ -88,7 +92,8 @@ export function architectureBudgets(
       total = budgets.get(parent.id) ?? null;
     if (!group.length) return;
     let values: (number | null)[];
-    if (total === null) values = group.map(() => null);
+    if (total === null || architecture.budgetMethod === "agree-evidence")
+      values = group.map(() => null);
     else if (architecture.budgetMethod === "agree" && total > 0) {
       const allocated = agreeLossAllocation(
         total,
@@ -121,7 +126,10 @@ export function architectureBudgets(
 }
 
 /** A diagnostic roll-up of the ORIGINAL solver ledger. No new availability solver. */
-export function auditArchitectureDiagnosis(result: any) {
+export function auditArchitectureDiagnosis(
+  result: any,
+  reference?: LayerAllocationReference,
+) {
   const architecture = resolveAuditArchitecture(
     result.request.architecture,
     result.events,
@@ -153,7 +161,26 @@ export function auditArchitectureDiagnosis(result: any) {
       referenceOnly || architecture.budgetMethod === "none"
         ? null
         : (1 - target) * hours;
-    const budgets = architectureBudgets(architecture, cards, hours, budget);
+    const evidencePlan =
+      architecture.budgetMethod === "agree-evidence"
+        ? layerEvidenceAllocation(
+            architecture,
+            scaleEvents,
+            row,
+            coverage,
+            result.attribution?.find((a: any) => a.cards === cards)
+              ?.contributions ?? [],
+            hours,
+            budget,
+            cards,
+          )
+        : null;
+    const frozen = reference?.scales.find((s) => s.cards === cards);
+    const budgets = evidencePlan
+      ? frozen
+        ? new Map(frozen.nodes.map((n) => [n.id, n.allowedHours]))
+        : evidencePlan.budgets
+      : architectureBudgets(architecture, cards, hours, budget);
     const nodes = architecture.nodes.map((n) => {
       const included = new Set(ids.get(n.id)!);
       const eventIds = architecture.nodes
@@ -256,6 +283,11 @@ export function auditArchitectureDiagnosis(result: any) {
                   : "复核检测等待、局部恢复成功率与失败升级耗时";
       return {
         ...n,
+        allocationEvidence: evidencePlan
+          ? (frozen?.nodes.find((r) => r.id === n.id)?.allocationEvidence ??
+            evidencePlan.evidence.get(n.id) ??
+            null)
+          : null,
         leaf: children(n.id).length === 0,
         eventIds,
         quantity:
@@ -370,6 +402,12 @@ export function auditArchitectureDiagnosis(result: any) {
       weaknesses,
       ranking,
       scaleEvents,
+      allocationMethod: evidencePlan?.method ?? architecture.budgetMethod,
+      allocationBasis: evidencePlan?.basis ?? "显式设计参照",
+      allocationFrozen: !!frozen && !!evidencePlan,
+      allocationIssues: frozen
+        ? (frozen.allocationIssues ?? [])
+        : (evidencePlan?.issues ?? []),
     };
   });
   return {
@@ -404,6 +442,21 @@ export function architectureReviewChecks(
     ...diagnosis.scales.map((scale) => Math.abs(scale.residualHours)),
   );
   return [
+    ...(diagnosis.scales.some((s) => s.allocationIssues?.length)
+      ? [
+          {
+            name: "分层AGREE分配可行性",
+            status: "failed",
+            detail: diagnosis.scales
+              .flatMap((s) =>
+                s.allocationIssues.map(
+                  (i) => `${s.cards}卡 ${i.id}: ${i.message}`,
+                ),
+              )
+              .join("；"),
+          },
+        ]
+      : []),
     {
       name: "分层损失与总体可用度一致",
       status: maximum < 1e-6 ? "passed" : "failed",

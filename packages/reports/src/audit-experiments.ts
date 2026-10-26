@@ -1,4 +1,7 @@
 import { planScaleSections } from "./audit-plan-scales";
+import { auditArchitectureDiagnosis } from "../../analysis/src/audit-architecture";
+import { trainingScenarioComparisonTables } from "./audit-training-scenario";
+import { layerDecisionSvg } from "./audit-layer-decision";
 import { decisionStudySections } from "./audit-decision-study";
 import { architectureSections } from "./audit-architecture";
 import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
@@ -22,6 +25,12 @@ export const experimentStatus: Record<string, string> = {
 };
 export function compareAuditExperiments(runs: Run[]) {
   if (
+    runs.length < 2 ||
+    runs.length > 12 ||
+    new Set(runs.map((r) => r.id)).size !== runs.length
+  )
+    throw new Error("请选择2至12次不同的已完成评估");
+  if (
     runs.some(
       (r) =>
         r.status !== "succeeded" ||
@@ -37,19 +46,62 @@ export function compareAuditExperiments(runs: Run[]) {
       r.result.kind === "expert-review-audit" ? r.id : r.result.sourceRunId,
     ),
   );
-  if (sourceIds.size !== 1 || bases.length > 1)
+  const trainingFamily = runs.every(
+    (r) =>
+      r.result.kind === "expert-review-audit" &&
+      r.result.request.trainingScenario?.version === "training-600h.v1",
+  );
+  if (trainingFamily) {
+    const order = ["current", "extension", "breakthrough"];
+    runs = [...runs].sort(
+      (a, b) =>
+        order.indexOf(a.result.request.trainingScenario.id) -
+          order.indexOf(b.result.request.trainingScenario.id) ||
+        String(a.createdAt).localeCompare(String(b.createdAt)),
+    );
+    const identity = (r: any) =>
+      JSON.stringify({
+        hours: r.request.hours,
+        metric: r.metricId,
+        version: r.modelVersion,
+        cards: r.request.cards,
+        target: r.request.target,
+        targets: r.request.targets,
+        scales: [...new Set(r.rows.map((s: any) => s.cards))].sort(),
+        architecture: r.architectureDiagnosis?.architecture,
+        events: r.events.map((e: any) => [e.id, e.type]).sort(),
+      });
+    if (
+      runs.some(
+        (r) =>
+          r.result.request.hours !== 600 ||
+          identity(r.result) !== identity(runs[0].result),
+      )
+    )
+      throw new Error(
+        "三档独立评估需使用相同600小时窗口、目标、规模、架构、事件目录及模型版本；FIT与措施参数可不同",
+      );
+  }
+  if (!trainingFamily && (sourceIds.size !== 1 || bases.length > 1))
     throw new Error("请选择基于同一次第一轮、相同目标和故障证据的评估");
-  const base = bases[0],
+  const base =
+      (trainingFamily
+        ? bases.find((r) => r.result.request.trainingScenario.id === "current")
+        : undefined) ?? bases[0],
     first = runs[0];
   const request = base?.result.request ?? first.result.request;
   const entries = runs.map((run) => ({
     id: run.id,
     name:
       run.result.kind === "expert-review-audit"
-        ? "第一轮现状"
+        ? trainingFamily
+          ? run.result.request.trainingScenario.name
+          : "第一轮现状"
         : run.result.name,
     round: run.result.kind === "expert-review-audit" ? "current" : "scenario",
     inputHash: run.inputHash,
+    trainingScenario: run.result.request.trainingScenario,
+    events: run.result.events,
     createdAt: run.createdAt,
     rows:
       run.result.kind === "expert-review-audit"
@@ -83,7 +135,13 @@ export function compareAuditExperiments(runs: Run[]) {
     },
     factors: run.result.factors ?? [],
     attribution: run.result.attribution,
-    architectureDiagnosis: run.result.architectureDiagnosis,
+    architectureDiagnosis:
+      trainingFamily && base?.result.architectureDiagnosis
+        ? auditArchitectureDiagnosis(
+            run.result,
+            base.result.architectureDiagnosis,
+          )
+        : run.result.architectureDiagnosis,
     sampling:
       run.result.kind === "expert-review-audit"
         ? run.result.request.trials
@@ -94,15 +152,24 @@ export function compareAuditExperiments(runs: Run[]) {
     name: "多次评估横向比较",
     metricId: "training.retained-clean-progress",
     request,
-    sourceRunId: [...sourceIds][0],
+    sourceRunId: trainingFamily ? base?.id : [...sourceIds][0],
+    comparisonMode: trainingFamily ? "training-scenarios" : "frozen-baseline",
+    allocationReferenceRunId: trainingFamily ? base?.id : undefined,
     entries,
-    assumptions: [
-      `现状配置：${auditMechanismSummary(request, (base ?? first).result.selection).title}；${auditMechanismSummary(request, (base ?? first).result.selection).roles}。`,
-      "只比较同一冻结第一轮、目标、故障模式与计算口径；每次参数独立保存，不重新计算或替换旧结果。",
-      "第一轮排名是所选候选措施相对固定基线的组合贡献；改进排名是相对第一轮的增量，基准不同，不直接相加排名。",
-      "第一轮真实现状指使用确认的现状参数评估，不等同于现场可用度实测。",
-      "分配建议未执行第二轮；只有用户单独点击并完成的评估进入横向比较。",
-    ],
+    assumptions: trainingFamily
+      ? [
+          "这些是分别执行的600小时输入场景，60%/82%/98.5%是用户参考值，结果使用各次实际仿真值。FIT与措施允许不同，不能将跨场景差值解释为单项措施的因果贡献。",
+          `比较图统一沿用 ${base?.result.request.trainingScenario.name}（${base?.id}）的分层预算与证据；仅派生比较视图，不修改任何原始运行。`,
+          "每档Shapley相对各自固定基线，排名不直接相减；需要改进增量归因时，从同一现状运行创建独立改进评估。",
+          "源模板记录载入意图，之后允许继续编辑；真实输入以每次计算配置和事件快照为准。未建模对象不构成达标证明。",
+        ]
+      : [
+          `现状配置：${auditMechanismSummary(request, (base ?? first).result.selection).title}；${auditMechanismSummary(request, (base ?? first).result.selection).roles}。`,
+          "只比较同一冻结第一轮、目标、故障模式与计算口径；每次参数独立保存，不重新计算或替换旧结果。",
+          "第一轮排名是所选候选措施相对固定基线的组合贡献；改进排名是相对第一轮的增量，基准不同，不直接相加排名。",
+          "第一轮真实现状指使用确认的现状参数评估，不等同于现场可用度实测。",
+          "分配建议未执行第二轮；只有用户单独点击并完成的评估进入横向比较。",
+        ],
   };
 }
 function parameterEntries(result: any) {
@@ -478,7 +545,7 @@ export function experimentSections(result: any): AuditSection[] {
     {
       title: "多次评估 / 横向结论",
       paragraphs: [
-        `共同第一轮：${result.sourceRunId}。主规模${number(main, 0)}卡，目标${percent(result.request.target)}。每行对应一次实际完成的评估。`,
+        `${result.comparisonMode === "training-scenarios" ? "分层预算参照" : "共同第一轮"}：${result.allocationReferenceRunId ?? result.sourceRunId}。主规模${number(main, 0)}卡，目标${percent(result.request.target)}。每行对应一次实际完成的评估。`,
         ...result.assumptions,
       ],
       visual: "experiment-comparison",
@@ -554,6 +621,7 @@ export function experimentSections(result: any): AuditSection[] {
     {
       title: "多次评估 / 参数横向比较",
       tables: [
+        ...trainingScenarioComparisonTables(result),
         {
           heads: ["参数", ...entries.map((e: any) => e.name)],
           rows: parameterKeys.map((key) => [
@@ -626,29 +694,36 @@ export function experimentChart(result: any) {
           : (result.request.targets?.[String(x)] ?? result.request.target);
       return { x, statistics: { mean: v, ciLow: v, ciHigh: v } };
     });
-  return lineChart({
-    title: "各次评估与目标的规模曲线",
-    series: [
-      ...entries.map((e: any, i: number) => ({
-        name: e.name,
-        color: colors[i % colors.length],
-        points: e.rows
-          .filter((r: any) => !auditReferenceOnly(result.request, r.cards))
-          .map((r: any) => ({
-            x: r.cards,
-            statistics: r.statistics,
-          })),
-      })),
-      {
-        name: "可用度目标",
-        color: "#b24b4b",
-        dashed: true,
-        points: targetPoints,
-      },
-    ],
-    xLabel: "作业规模 / 卡",
-    formatX: (n) => n.toLocaleString() + "卡",
-    logarithmic: true,
-    note: "只展示各次独立完成评估的冻结数值；连接离散点不证明中间规模。95%均值区间仅反映抽样误差。",
-  });
+  const decision =
+    result.comparisonMode === "training-scenarios"
+      ? `<details><summary>展开三档分层分配、差距与机制总图</summary><div class="table-wrap">${layerDecisionSvg(result, result.request.cards)}</div></details>`
+      : "";
+  return (
+    decision +
+    lineChart({
+      title: "各次评估与目标的规模曲线",
+      series: [
+        ...entries.map((e: any, i: number) => ({
+          name: e.name,
+          color: colors[i % colors.length],
+          points: e.rows
+            .filter((r: any) => !auditReferenceOnly(result.request, r.cards))
+            .map((r: any) => ({
+              x: r.cards,
+              statistics: r.statistics,
+            })),
+        })),
+        {
+          name: "可用度目标",
+          color: "#b24b4b",
+          dashed: true,
+          points: targetPoints,
+        },
+      ],
+      xLabel: "作业规模 / 卡",
+      formatX: (n) => n.toLocaleString() + "卡",
+      logarithmic: true,
+      note: "只展示各次独立完成评估的冻结数值；连接离散点不证明中间规模。95%均值区间仅反映抽样误差。",
+    })
+  );
 }

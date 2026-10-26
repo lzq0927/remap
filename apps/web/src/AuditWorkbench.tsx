@@ -1,4 +1,5 @@
 import AuditArchitectureEditor from "./AuditArchitectureEditor";
+import AuditTrainingScenarioEditor from "./AuditTrainingScenarioEditor";
 import { optimizationSampling } from "../../../packages/contracts/src/audit-optimization";
 import {
   auditLossBudgetLabels,
@@ -85,10 +86,12 @@ export default function AuditWorkbench({
     onDraftChange({ request, overrides, hardware, model, policy, allScales });
   }, [request, overrides, hardware, model, policy, allScales, onDraftChange]);
   let parsedModel: Record<string, number> | undefined,
-    parsedPolicy: Record<string, Record<string, number>> | undefined;
+    parsedPolicy: Record<string, Record<string, number>> | undefined,
+    parsedOverrides: AuditRequest["eventOverrides"];
   try {
     parsedModel = JSON.parse(model);
     parsedPolicy = JSON.parse(policy);
+    parsedOverrides = JSON.parse(overrides);
   } catch {
     /* keep advanced JSON editable */
   }
@@ -150,6 +153,26 @@ export default function AuditWorkbench({
         <h3 id="audit-scope" className="audit-step-title">
           01 / 评估范围
         </h3>
+        <AuditTrainingScenarioEditor
+          request={{
+            ...scopedRequest,
+            model: parsedModel,
+            policy: parsedPolicy,
+            eventOverrides: parsedOverrides,
+          }}
+          events={events}
+          onApply={(r) => {
+            JSON.parse(model);
+            JSON.parse(policy);
+            JSON.parse(overrides);
+            setRequest(r);
+            setModel(JSON.stringify(r.model, null, 2));
+            setPolicy(JSON.stringify(r.policy, null, 2));
+            setOverrides(JSON.stringify(r.eventOverrides, null, 2));
+            setHardware("[]");
+            setAllScales((r.scales?.length ?? 0) > 1);
+          }}
+        />
         <div className="fields">
           <label>
             采样配置

@@ -37,7 +37,7 @@ test("review workflow runs the chosen expert metric and downloads a complete aud
   ).toBeVisible();
   await panel.getByRole("button", { name: "运行可靠性评估" }).click();
   await expect(
-    page.getByText("事件与机制收益审核 · 保留干净检查点", { exact: true }),
+    page.getByText("可靠性设计与评估 · 结果", { exact: true }),
   ).toBeVisible({ timeout: 30000 });
   await expect(
     page.getByRole("region", { name: "预算与实际损失" }),

@@ -1,3 +1,4 @@
+import { layerDecisionSvg } from "../../../packages/reports/src/audit-layer-decision";
 import {
   lazy,
   Suspense,
@@ -170,9 +171,14 @@ export default function AuditAtlasExplorer({
     idPrefix: `atlas-${svgId}`,
   };
   const svg = useMemo(
-    () => atlasSvg(atlas, options),
+    () =>
+      view === "decision" && result
+        ? layerDecisionSvg(result, cards, focused.id, depth)
+        : atlasSvg(atlas, options),
     [
       atlas,
+      result,
+      cards,
       focus,
       depth,
       domain,
@@ -420,6 +426,9 @@ export default function AuditAtlasExplorer({
       <div className="atlas-views" role="group" aria-label="全景显示方式">
         {[
           ...(atlas.architecture.topology ? [["topology", "超节点组网"]] : []),
+          ...(result?.architectureDiagnosis
+            ? [["decision", "分层分配与机制"]]
+            : []),
           ["plan", "平面全景"],
           ["flow", "交互分层拓扑"],
           ["matrix", "多维热力矩阵"],

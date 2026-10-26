@@ -30,6 +30,24 @@ test("run summaries page the full task history without exposing snapshots", asyn
           kind: "expert-audit-experiment",
           sourceRunId,
           name: `Scenario ${i}`,
+          rows: ["unrelated-solver-output"],
+          ...(i === 0
+            ? {
+                request: {
+                  cards: 500000,
+                  trainingScenario: {
+                    version: "training-600h.v1",
+                    name: "现状",
+                    source: "omit-this-scenario-source",
+                  },
+                },
+                rows: [
+                  { id: "base", cards: 500000, statistics: { mean: 0.1 } },
+                  { id: "combined", cards: 10000, statistics: { mean: 0.95 } },
+                  { id: "combined", cards: 500000, statistics: { mean: 0.6 } },
+                ],
+              }
+            : {}),
         },
       });
     const response = await app.inject(
@@ -47,6 +65,12 @@ test("run summaries page the full task history without exposing snapshots", asyn
     ).json();
     expect(filtered.total).toBe(1);
     expect(filtered.items[0].id).toBe(sourceRunId);
+    expect(filtered.items[0]).toMatchObject({
+      trainingScenarioVersion: "training-600h.v1",
+      trainingScenarioName: "现状",
+      availability: 0.6,
+    });
+    expect(response.body).not.toContain("omit-this-scenario-source");
     expect(
       (
         await app.inject(

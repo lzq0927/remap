@@ -321,6 +321,11 @@ export class Store {
       json_extract(payload, '$.createdAt') AS createdAt,
       json_extract(payload, '$.inputHash') AS inputHash,
       json_extract(payload, '$.result.kind') AS kind,
+      json_extract(payload, '$.result.request.trainingScenario.version') AS trainingScenarioVersion,
+      json_extract(payload, '$.result.request.trainingScenario.name') AS trainingScenarioName,
+      CASE WHEN json_extract(payload, '$.result.request.trainingScenario.version') = 'training-600h.v1'
+       THEN (SELECT json_extract(j.value, '$.statistics.mean') FROM json_each(payload, '$.result.rows') AS j
+       WHERE json_extract(j.value, '$.id') = 'combined' AND json_extract(j.value, '$.cards') = json_extract(payload, '$.result.request.cards') LIMIT 1) END AS availability,
       COALESCE(json_extract(payload, '$.result.name'), json_extract(payload, '$.input.name')) AS name,
       COALESCE(json_extract(payload, '$.result.sourceRunId'), json_extract(payload, '$.input.source.id')) AS sourceRunId,
       COALESCE(json_extract(payload, '$.result.planningRunId'), json_extract(payload, '$.input.plan.id')) AS planningRunId,

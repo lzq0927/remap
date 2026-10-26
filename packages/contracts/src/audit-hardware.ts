@@ -275,7 +275,7 @@ export function hardwareAuditArchitecture(
     view: "hardware",
     name: "硬件分层架构",
     basis,
-    budgetMethod: "equal",
+    budgetMethod: "agree-evidence",
     nodes,
     dependencies: [
       ["hardware-chip", "object-NIC", "节点互连"],

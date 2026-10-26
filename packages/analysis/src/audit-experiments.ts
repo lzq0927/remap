@@ -511,10 +511,13 @@ export function auditExperiment(
           : fit,
     };
   });
-  const architectureDiagnosis = auditArchitectureDiagnosis({
-    ...result,
-    events: scenarioEvents,
-  });
+  const architectureDiagnosis = auditArchitectureDiagnosis(
+    {
+      ...result,
+      events: scenarioEvents,
+    },
+    source.result.architectureDiagnosis,
+  );
   return {
     ...result,
     events: scenarioEvents,

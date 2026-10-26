@@ -192,6 +192,14 @@ export function registerAuditExperimentRoutes(
       { snapshots },
       req.headers["idempotency-key"],
     );
-    return runs.complete(run.id, result);
+    const completed = runs.complete(run.id, result);
+    return req.query?.view === "result"
+      ? {
+          id: completed.id,
+          status: completed.status,
+          operation: completed.operation,
+          result: completed.result,
+        }
+      : completed;
   });
 }

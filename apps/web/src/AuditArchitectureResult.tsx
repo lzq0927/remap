@@ -1,4 +1,5 @@
 import AuditAtlasExplorer from "./AuditAtlasExplorer";
+import { layerAllocationTable } from "../../../packages/reports/src/audit-layer-decision";
 import { useState } from "react";
 import AuditHardwareDiagnosis from "./AuditHardwareDiagnosis";
 import { contributionHeatmap } from "../../../packages/reports/src/audit-decision-study";
@@ -62,6 +63,9 @@ export default function AuditArchitectureResult({
         result={result}
         events={result.events ?? []}
         cards={cards}
+      />
+      <div
+        dangerouslySetInnerHTML={{ __html: layerAllocationTable(d, cards) }}
       />
       <div
         className="scale-summary-flow"

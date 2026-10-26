@@ -1,3 +1,4 @@
+import AuditTrainingScenarioHistory from "./AuditTrainingScenarioHistory";
 import { auditSummaryScales } from "../../../packages/contracts/src/audit-presets";
 import AuditArchitectureResult from "./AuditArchitectureResult";
 import { useId, useState } from "react";
@@ -49,7 +50,8 @@ export default function AuditResult({
   );
   return (
     <>
-      <h3>事件与机制收益审核 · 保留干净检查点</h3>
+      <h3>可靠性设计与评估 · 结果</h3>
+      {r.request.trainingScenario && <AuditTrainingScenarioHistory />}
       <WorkspaceViewTabs
         name="评估结果视图"
         value={view}

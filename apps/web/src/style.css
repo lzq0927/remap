@@ -2634,3 +2634,15 @@ main > header {
     margin: 0;
   }
 }
+/* Scenario inputs remain optional; keep dense numeric controls readable on phones. */
+.training-scenario-editor,.training-scenario-history{margin:16px 0;padding:16px;border:1px solid #d9e2eb;border-radius:12px;min-width:0;background:#f8fafc}
+.training-scenario-editor summary,.training-scenario-history summary{font-weight:650;cursor:pointer}
+.training-scenario-editor .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:16px 0}
+.training-scenario-editor label{display:flex;flex-direction:column;gap:6px;margin:10px 0;min-width:0}
+.training-scenario-editor select,.training-scenario-editor input,.training-scenario-editor textarea{max-width:100%;min-width:0;width:100%;box-sizing:border-box}
+.training-scenario-editor label.arch-toggle{flex-direction:row;align-items:flex-start;line-height:1.6}
+.training-scenario-editor label.arch-toggle input{width:auto;flex:none;margin-top:5px}
+.training-scenario-history button{margin:8px 12px 8px 0}
+.training-scenario-history .table-wrap{max-width:100%;overflow:auto}
+.training-scenario-history > .table-wrap > table{min-width:640px;table-layout:auto}
+.training-scenario-history > .table-wrap > table th,.training-scenario-history > .table-wrap > table td{white-space:nowrap}

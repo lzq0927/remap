@@ -129,7 +129,7 @@ export function architectureTargetBreakdown(
   const children = d.architecture.nodes.filter((n) => n.parentId === parent.id);
   const nodes = children.length ? children : [parent],
     scales = orderedDiagnosisScales(d);
-  return `<div class="scale-target-breakdown" data-budget-parent="${esc(parent.id)}"><h4>${esc(parent.name)} · 分层目标分解</h4><p class="note">同级允许损失之和等于上级预算；父层与子层不重复相加。每格为允许损失 / 实际损失（等效计算小时），目标由本次${esc({ none: "暂不分配", equal: "同级均分", weighted: "设计权重", agree: "AGREE损失预算适配" }[d.architecture.budgetMethod])}得到，不改变现状FIT和措施。</p><div class="table-wrap"><table><thead><tr><th>下级对象</th>${scales.map((s) => `<th>${label(s.cards)}</th>`).join("")}</tr></thead><tbody>${nodes
+  return `<div class="scale-target-breakdown" data-budget-parent="${esc(parent.id)}"><h4>${esc(parent.name)} · 分层目标分解</h4><p class="note">同级允许损失之和等于上级预算；父层与子层不重复相加。每格为允许损失 / 实际损失（等效计算小时），目标由本次${esc({ none: "暂不分配", equal: "同级均分", weighted: "设计权重", agree: "AGREE损失预算适配", "agree-evidence": "AGREE故障与机制证据分配" }[d.architecture.budgetMethod])}得到，不改变现状FIT和措施。</p><div class="table-wrap"><table><thead><tr><th>下级对象</th>${scales.map((s) => `<th>${label(s.cards)}</th>`).join("")}</tr></thead><tbody>${nodes
     .map(
       (n) =>
         `<tr><th>${esc(n.name)}</th>${scales

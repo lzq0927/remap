@@ -35,7 +35,13 @@ export const auditArchitectureSchema = z
     propagations: z.array(propagationSchema).max(2000).optional(),
     name: z.string().trim().min(1).max(120),
     basis: z.string().trim().min(1).max(2000),
-    budgetMethod: z.enum(["none", "equal", "weighted", "agree"]),
+    budgetMethod: z.enum([
+      "none",
+      "equal",
+      "weighted",
+      "agree",
+      "agree-evidence",
+    ]),
     nodes: z.array(node).min(2).max(120),
     dependencies: z
       .array(
@@ -62,7 +68,7 @@ export function defaultAuditArchitecture(
   events: AuditEventView[],
 ): AuditArchitecture {
   const basis =
-    "可编辑的功能分组模板；层级、均分预算与重要度为暂定设计参照，需按项目架构复核";
+    "可编辑的功能分组模板；分层预算基于现状故障与机制证据进行AGREE工程分配，复杂度和重要度可按项目复核";
   const entry = (
     id: string,
     name: string,
@@ -102,7 +108,7 @@ export function defaultAuditArchitecture(
     version: "1",
     name: "系统分层架构",
     basis,
-    budgetMethod: "equal",
+    budgetMethod: "agree-evidence",
     nodes,
     dependencies: [],
   };

@@ -1,4 +1,8 @@
 import { auditPlanningModelKeys } from "../../contracts/src/audit-planning";
+import {
+  trainingScenarioIssues,
+  type TrainingScenario,
+} from "../../contracts/src/audit-training-scenario";
 import { networkStudySnapshot } from "./audit-network-study";
 import { hardwareScaleEvents } from "../../contracts/src/audit-hardware";
 import { supernodeAuditArchitecture } from "../../contracts/src/audit-supernode";
@@ -89,6 +93,7 @@ export type EventOverride = {
   note?: string;
 };
 export interface AuditRequest {
+  trainingScenario?: TrainingScenario;
   architecture?: AuditArchitecture;
   eventCatalogVersion?: AuditCatalogVersion;
   optimization?: AuditOptimizationRequest;
@@ -288,6 +293,15 @@ export function resolveAudit(request: AuditRequest) {
         request.optimization.fitTargets ?? request.candidateFitOverrides,
     });
   }
+  if (request.trainingScenario) {
+    const issues = trainingScenarioIssues(
+      request.trainingScenario,
+      getAuditEvents(),
+    );
+    if (request.hours !== 600)
+      issues.push("训练场景使用600小时固定窗口；其他窗口请另建普通评估");
+    if (issues.length) throw new Error(issues.join("；"));
+  }
   const submodelPlan = auditSubmodelPlan(request.submodelAllocation);
   if (
     request.lossBudgetMethod !== undefined &&
@@ -390,7 +404,7 @@ export function resolveAudit(request: AuditRequest) {
         throw new Error("Unknown policy parameter " + key);
       numberIn(
         value,
-        ["domains", "computeSeconds"].includes(key) ? 1 : 0,
+        key === "domains" ? 1 : key === "computeSeconds" ? 0.000001 : 0,
         ["coverage", "success"].includes(key)
           ? 1
           : key === "domains"

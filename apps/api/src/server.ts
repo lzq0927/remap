@@ -51,6 +51,7 @@ import { registerCatalogRoutes } from "./catalog-routes";
 import { registerModelingRoutes } from "./modeling-routes";
 import { registerPortableRoutes } from "./portable-routes";
 import { auditExtensionCatalog } from "../../../packages/contracts/src/audit-extensions";
+import { trainingScenarioPreset } from "../../../packages/contracts/src/audit-training-scenario";
 
 export interface BuildAppOptions {
   agentIntegration?: AgentIntegration;
@@ -192,6 +193,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   );
   app.get("/api/defaults", async () => ({
     audit: getAuditDefaults(),
+    auditTrainingScenarios: ["current", "extension", "breakthrough"].map((id) =>
+      trainingScenarioPreset(id as "current" | "extension" | "breakthrough"),
+    ),
     auditEvents: getAuditEvents(),
     auditEventCatalogs: {
       "expert-2026-10-09": getAuditEvents("expert-2026-10-09"),

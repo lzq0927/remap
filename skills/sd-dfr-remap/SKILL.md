@@ -5,6 +5,8 @@ description: Help users set reliability goals, assess current mechanisms, alloca
 
 # 可靠性设计与评估
 
+新模板默认按故障损失与适用机制贡献进行分层AGREE工程分配，600小时三档输入与独立比较见[证据分配与训练场景](references/evidence-allocation-training.md)。区分工程重要度投影、经典条件概率和真实Shapley；不再替用户默认均分，也不把参考百分比写成结果。
+
 有边界的分配、工作量备选、保守情景和固定方案跨规模解释见[决策规划](references/decision-planning.md)。读取实际设置与证据，不按示例猜参数；选择备选后仍单独执行正式评估。
 
 硬件主视图、并列规模数量、故障传播、等效FIT数量外推和MTBF/MTTR口径见[硬件分层](references/hardware-architecture.md)。未知配置不编造，源FIT和已折算的规模FIT不能混用。

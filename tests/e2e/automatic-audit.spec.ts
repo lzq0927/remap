@@ -104,7 +104,7 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
   }
   await expect(
     page.getByRole("heading", {
-      name: "事件与机制收益审核 · 保留干净检查点",
+      name: "可靠性设计与评估 · 结果",
       exact: true,
     }),
   ).toBeVisible({ timeout: 30000 });
