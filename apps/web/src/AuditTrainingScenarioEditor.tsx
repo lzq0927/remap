@@ -7,9 +7,10 @@ import {
 } from "../../../packages/contracts/src/audit-training-scenario";
 import type { AuditRequest } from "../../../packages/analysis/src/audit";
 import type { AuditEventView } from "../../../packages/contracts/src/audit-objects";
+import AuditRecoveryBudget from "./AuditRecoveryBudget";
 const fields: [keyof TrainingScenario, string, number?][] = [
   ["referenceCards", "MTBF参考卡数"],
-  ["mtbfHours", "参考MTBF（小时）"],
+  ["referenceAvailability", "场景参考可用度（%）", 1],
   ["checkpointSeconds", "检查点 / step周期（秒）"],
   ["saveSeconds", "保存阻塞（秒）"],
   ["detectionSeconds", "检测与调度（秒）"],
@@ -17,11 +18,11 @@ const fields: [keyof TrainingScenario, string, number?][] = [
   ["constructionSeconds", "模型构建（秒）"],
   ["loadSeconds", "CKPT加载（秒）"],
   ["compilationSeconds", "算子编译执行（秒）"],
-  ["detectionSuccess", "故障检出成功率", 1],
-  ["recoverySuccess", "自动恢复成功率", 1],
+  ["detectionSuccess", "故障检出成功率（%）", 1],
+  ["recoverySuccess", "自动恢复成功率（%）", 1],
   ["manualRecoveryHours", "失败后人工追加恢复（小时）"],
-  ["sdcCoverage", "静默检出率（99.x须明确）", 1],
-  ["slowCoverage", "亚健康检出率", 1],
+  ["sdcCoverage", "静默检出率（%，可调整）", 1],
+  ["slowCoverage", "亚健康检出率（%）", 1],
   ["investigationHours", "人工排查时长（小时）"],
   ["slowDetectionSeconds", "亚健康发现秒数（参考300）"],
   ["sdcDetectionSeconds", "静默发现秒数（参考1）"],
@@ -49,8 +50,8 @@ export default function AuditTrainingScenarioEditor({
     <details className="training-scenario-editor">
       <summary>600小时三档训练场景 · 现状 / 延长线 / 突破</summary>
       <p>
-        固定600小时窗口，参考60% / 82% / 98.5%分别对应损失240 / 108 /
-        9小时。参考百分比不写入计算结果。每档分别载入、确认、运行；旧结果保持。
+        固定600小时总窗口。当前万卡98.5%是现状参考；各需求规模默认共同目标为98.5%，技术增强后的结果可以高于目标。60% /
+        82%是原始现状/延长线参考值；延长线与突破方案均按正式目标评估，默认50万卡98.5%。参数只是可调整的参考起点，未达标时可通过分配继续改善，再单独评估。每档分别运行，保留旧结果。
       </p>
       <label>
         场景模板
@@ -70,7 +71,52 @@ export default function AuditTrainingScenarioEditor({
           <option value="breakthrough">突破性改进</option>
         </select>
       </label>
+      <AuditRecoveryBudget request={request} scenario={s} />
+      <details>
+        <summary>其他规模的可用度参考值（可选，非计算结果）</summary>
+        <div className="fields">
+          {[...new Set([request.cards, ...(request.scales ?? []), ...Object.keys(s.referenceAvailabilityByScale ?? {}).map(Number)])]
+            .filter(c => c !== (s.referenceAvailabilityCards ?? 500000))
+            .sort((a,b) => a-b)
+            .map(c => <label key={c}>{c.toLocaleString()}卡参考可用度（%）
+              <input aria-label={`${c}卡参考可用度（%）`} type="number" min="0" max="100" step="any"
+                value={s.referenceAvailabilityByScale?.[c] === undefined ? "" : Number((s.referenceAvailabilityByScale[c] * 100).toPrecision(12))}
+                onChange={e => {
+                  const referenceAvailabilityByScale = {...s.referenceAvailabilityByScale};
+                  if (e.target.value === "") delete referenceAvailabilityByScale[c];
+                  else referenceAvailabilityByScale[c] = Number(e.target.value) / 100;
+                  patch({referenceAvailabilityByScale});
+                }} />
+            </label>)}
+        </div>
+        <p className="note">这些是各规模分别提供的参考点；不假定各规模采用相同MTTR，不强制拟合仿真结果。</p>
+      </details>
       <div className="fields">
+        <label>
+          参考MTBF（分钟）
+          <input
+            aria-label="参考MTBF（分钟）"
+            type="number"
+            min="0.000001"
+            step="any"
+            value={Number((s.mtbfHours * 60).toPrecision(12))}
+            onChange={(e) => patch({ mtbfHours: Number(e.target.value) / 60 })}
+          />
+          <small>现状万卡30小时 = 1800分钟；其他档在各自参考卡数下填写。</small>
+        </label>
+        <label>
+          可用度参考卡数
+          <input
+            aria-label="可用度参考卡数"
+            type="number"
+            min="1"
+            step="1"
+            value={s.referenceAvailabilityCards ?? 500000}
+            onChange={(e) =>
+              patch({ referenceAvailabilityCards: Number(e.target.value) })
+            }
+          />
+        </label>
         <label>
           场景名称
           <input
@@ -86,12 +132,21 @@ export default function AuditTrainingScenarioEditor({
               aria-label={label}
               type="number"
               min="0"
-              max={max}
+              max={max === 1 ? 100 : max}
               step="any"
-              value={s[key] === null ? "" : String(s[key])}
+              value={
+                s[key] === null
+                  ? ""
+                  : max === 1
+                    ? Number((Number(s[key]) * 100).toPrecision(12))
+                    : String(s[key])
+              }
               onChange={(e) =>
                 patch({
-                  [key]: e.target.value === "" ? null : Number(e.target.value),
+                  [key]:
+                    e.target.value === ""
+                      ? null
+                      : Number(e.target.value) / (max === 1 ? 100 : 1),
                 })
               }
             />

@@ -175,7 +175,7 @@ export default function AuditAtlasFlow({
     return { nodes, edges, focused };
   }, [atlas, options, selected, onFocus, onSelect, columns]);
   return (
-    <div ref={surface}>
+    <div ref={surface} className="atlas-flow-workspace">
       <nav className="atlas-breadcrumb" aria-label="架构层级路径">
         {focused.path.map((id, i) => (
           <span key={id}>
@@ -201,14 +201,10 @@ export default function AuditAtlasFlow({
           fitView
           fitViewOptions={{
             padding: 0.15,
-            minZoom: 0.85,
+            minZoom: 0.2,
             maxZoom: 1,
-            nodes:
-              columns === 1
-                ? nodes.slice(0, 2).map((n) => ({ id: n.id }))
-                : undefined,
           }}
-          minZoom={0.3}
+          minZoom={0.2}
           maxZoom={2}
           nodesDraggable={false}
           nodesConnectable={false}

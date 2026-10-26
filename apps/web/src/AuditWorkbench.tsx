@@ -1,6 +1,7 @@
 import AuditArchitectureEditor from "./AuditArchitectureEditor";
 import AuditTrainingScenarioEditor from "./AuditTrainingScenarioEditor";
 import { optimizationSampling } from "../../../packages/contracts/src/audit-optimization";
+import AuditRecoveryBudget from "./AuditRecoveryBudget";
 import {
   auditLossBudgetLabels,
   auditBudgetDefaults,
@@ -238,9 +239,10 @@ export default function AuditWorkbench({
         <details className="audit-help" open={stage === undefined}>
           <summary>规模目标与 MTBF 口径说明</summary>
           <p className="note">
-            初始目标以五十万卡 98.5%、参考 MTBF 0.6 小时为锚点， 按 A = MTBF /
-            (MTBF + 参考恢复预算) 推导其他规模目标。 参考 MTBF：二十万卡 1.5
-            小时、十万卡 3 小时、万卡 30 小时。
+            万卡、十万卡、二十万卡、五十万卡均采用98.5%的共同最低目标。当前万卡98.5%是现状参考；技术增强后，万卡实际可用度可继续提高，更大规模也要达到98.5%。参考
+            MTBF：万卡30小时、十万卡3小时、二十万卡1.5小时、五十万卡0.6小时；
+            训练改进场景采用各自的MTBF。MTTR = MTBF × (1−A) /
+            A，不能对所有规模及方案统一使用同一个恢复秒数。
             这些仅用于需求推导；实际可用度仍由故障模式
             FIT、措施和时间损失账计算，恢复时间不会被统一替换。
           </p>
@@ -253,6 +255,10 @@ export default function AuditWorkbench({
               </div>
             ))}
           </div>
+          <AuditRecoveryBudget
+            request={request}
+            scenario={request.trainingScenario}
+          />
         </details>
         <button
           type="button"

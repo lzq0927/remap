@@ -78,7 +78,27 @@ for (const width of [1440, 390])
       .getByRole("button", { name: "查看分层目标与跨规模薄弱点", exact: true })
       .click();
     await expect(atlas).toContainText("已保存计算结果");
+    await atlas
+      .getByRole("button", { name: "分层分配与机制", exact: true })
+      .click();
+    await atlas.locator('[data-decision-node="object-HBM"] > rect').click();
+    await expect(atlas.locator(".atlas-inspector h4")).toHaveText(
+      "HBM / 内存路径",
+    );
+    await expect(atlas.locator(".atlas-inspector")).toContainText("MEMP-hard");
+    await expect(atlas.locator(".atlas-inspector")).toContainText(
+      "实际等效MTTR / 目标预算",
+    );
+    await atlas
+      .getByRole("button", { name: "关闭对象详情", exact: true })
+      .click();
+    await atlas
+      .getByRole("button", { name: "超节点组网", exact: true })
+      .click();
     await atlas.getByRole("button", { name: "全屏大图", exact: true }).click();
+    await atlas
+      .getByRole("button", { name: "筛选与依据", exact: true })
+      .click();
     await atlas.getByLabel("全景叠加指标").selectOption("loss");
     await atlas
       .getByText("定位与筛选 · 对象、功能域、层级", { exact: true })
@@ -95,6 +115,9 @@ for (const width of [1440, 390])
       .click();
     await expect(atlas.getByLabel("交互分层拓扑画布")).toBeVisible();
     await expect(atlas.locator(".react-flow__minimap")).toBeVisible();
+    expect(
+      (await atlas.locator(".react-flow").boundingBox())!.height,
+    ).toBeGreaterThan(300);
     await atlas
       .getByRole("button", { name: "关闭对象详情", exact: true })
       .click();

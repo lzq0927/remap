@@ -249,7 +249,7 @@ export default function AuditOptimizationEditor({
       <details className="mechanism-targets" open>
         <summary>第二轮参数参考初值（AGREE 将推导实际要求）</summary>
         <p>
-          此配置用于历史自动优化模型；参数参考来自机制库及当前模型，具体要求可编辑。AGREE先分配预算，再反解具体要求，可以严于参考值。最终共同参数采用各规模最严格要求，并独立复评。高级显式参数可锁定，锁定后不足仍显示缺口。
+          参数参考来自机制库及当前模型，是可调整起点，不是优化上限；例如静默检出率可根据分配结果继续提高。AGREE先分配预算，再反解具体要求。最终共同参数采用各规模最严格要求，并独立复评。高级显式参数可锁定，锁定后不足仍显示缺口。
         </p>
         <div className="fields">
           {mechanismTargetCatalog

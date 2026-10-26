@@ -1,3 +1,4 @@
+import { topologyDecision } from "./audit-topology-decision";
 import {
   auditArchitectureDiagnosis,
   architectureResponsibilities,
@@ -172,6 +173,16 @@ function guidedExperimentPlan(
       !Object.keys(patch.policy).some((code) => activeCodes.includes(code))
     )
       return;
+    if (patch.policy) {
+      patch = {
+        ...patch,
+        policy: Object.fromEntries(
+          Object.entries(patch.policy).filter(([code]) =>
+            activeCodes.includes(code),
+          ),
+        ),
+      };
+    }
     groups.push({
       id,
       name,
@@ -217,8 +228,18 @@ function guidedExperimentPlan(
   add(
     "detect",
     mechanismNames.detection,
-    ["sdcDetect", "elastic", "process"],
+    ["hardDetect", "slowDetect", "sdcDetect", "elastic", "process"],
     {
+      policy: {
+        "D-HARD": {
+          coverage: targetValue("hardCoverage", 0.999),
+          detectSeconds: targetValue("detectSeconds", 0.5),
+        },
+        "D-SLOW": {
+          coverage: targetValue("slowCoverage", 0.999),
+          detectSeconds: targetValue("detectSeconds", 0.5),
+        },
+      },
       model: {
         detectProbability: targetValue("hardCoverage", 0.999),
         detectSeconds: targetValue("detectSeconds", 0.5),
@@ -669,6 +690,9 @@ function guidedExperimentPlan(
     request,
     allocations,
     architectureDiagnosis,
+    topologyDecision:
+      source.result.topologyDecision ??
+      topologyDecision({ ...source.result, architectureDiagnosis }),
     networkStudyResult: structuredClone(
       source.result.networkStudyResult ?? null,
     ),

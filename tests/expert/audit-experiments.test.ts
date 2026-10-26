@@ -172,8 +172,8 @@ it("compares immutable first and subsequent runs and exports separate conclusion
     "参数横向比较",
     "第一轮现状",
     "仅SDC99.5%",
-    "0.95",
-    "0.995",
+    "95%",
+    "99.5%",
     "各次评估与目标的规模曲线",
   ])
     expect(html).toContain(text);
@@ -300,5 +300,54 @@ it("allows base-model parameter experiments without imposing the sample mechanis
   expect(scenario.factors).toHaveLength(1);
   expect(scenario.factors[0].kind).toBe("model");
   expect(scenario.request.mechanisms).toEqual([]);
+  expect(JSON.stringify(s)).toBe(before);
+});
+
+it("plans the enabled hard-detection policy instead of changing only its overridden fallback", () => {
+  const base = request();
+  const s = source({
+    ...base,
+    scales: [500000],
+    targets: { 500000: base.target },
+    mechanisms: ["hardDetect"],
+    model: {
+      ...base.model,
+      detectProbability: 0.1,
+      detectSeconds: 600,
+      timeoutSeconds: 3600,
+    },
+    policy: { ...base.policy, "D-HARD": { coverage: 0.1, detectSeconds: 600 } },
+  });
+  // The enabled policy overrides base-model detection; the planner must change it.
+  const before = JSON.stringify(s);
+  const p = auditExperimentPlan({
+    source: s,
+    options: {
+      enabled: true,
+      exploreExtensions: false,
+      screeningTrials: 4,
+      parameterTargets: { hardCoverage: 0.999, detectSeconds: 1 },
+      planning: { maxCandidates: 8, conservative: { enabled: false } },
+    },
+  });
+  expect(p.decisions.some((d: any) => d.id === "detect" && d.selected)).toBe(
+    true,
+  );
+  expect(p.configuration.policy?.["D-HARD"]?.coverage).toBeGreaterThan(0.1);
+  expect(p.configuration.policy?.["D-HARD"]?.detectSeconds).toBeLessThan(600);
+  expect(p.configuration.policy?.["D-SLOW"]).toBeUndefined();
+  expect(p.configuration.fitTargets).toBeUndefined();
+  const evaluated = auditExperiment({
+    source: s,
+    name: "检测政策复评",
+    configuration: {
+      ...p.configuration,
+      attributionTrials: 4,
+      permutations: 2,
+    },
+  });
+  expect(evaluated.rows[0].statistics.mean).toBeGreaterThan(
+    s.result.rows.find((r) => r.id === "combined")!.statistics.mean,
+  );
   expect(JSON.stringify(s)).toBe(before);
 });

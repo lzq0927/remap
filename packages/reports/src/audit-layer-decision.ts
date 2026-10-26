@@ -1,7 +1,16 @@
 import type { AuditArchitectureDiagnosis } from "../../analysis/src/audit-architecture";
+import { topologyDecisionSvg } from "./audit-topology-decision";
 import { auditMechanismNames } from "../../contracts/src/audit-mechanism-view";
 import { auditExtensionCatalog } from "../../contracts/src/audit-extensions";
-import type { TrainingScenario } from "../../contracts/src/audit-training-scenario";
+import {
+  trainingRecoveryBudget,
+  trainingReferenceAvailability,
+  type TrainingScenario,
+} from "../../contracts/src/audit-training-scenario";
+import {
+  auditNumber as num,
+  auditPercent as pct,
+} from "../../contracts/src/audit-recovery-budget";
 
 const esc = (v: unknown) =>
   String(v ?? "").replace(
@@ -11,12 +20,6 @@ const esc = (v: unknown) =>
         c
       ]!,
   );
-const num = (v: number | null | undefined, d = 3) =>
-  v == null || !Number.isFinite(v)
-    ? "—"
-    : v.toLocaleString("zh-CN", { maximumFractionDigits: d });
-const pct = (v: number | null | undefined) =>
-  v == null ? "—" : num(v * 100) + "%";
 const name = (id: string) =>
   auditMechanismNames[id] ??
   auditExtensionCatalog.find((m) => m.id === id)?.name ??
@@ -65,6 +68,10 @@ export function layerDecisionSvg(
   focusId?: string,
   depth = 10,
 ): string {
+  if (!focusId || focusId === "system") {
+    const topology = topologyDecisionSvg(result, cards);
+    if (topology) return topology;
+  }
   const entries: {
     name: string;
     diagnosis: AuditArchitectureDiagnosis;
@@ -78,7 +85,10 @@ export function layerDecisionSvg(
           .map((e: any) => ({
             name: e.name,
             diagnosis: e.architectureDiagnosis,
-            reference: e.trainingScenario?.referenceAvailability,
+            reference: e.trainingScenario
+              ? (trainingReferenceAvailability(e.trainingScenario, cards) ??
+                undefined)
+              : undefined,
             scenario: e.trainingScenario,
             configuration: e.configuration,
           }))
@@ -90,7 +100,12 @@ export function layerDecisionSvg(
                 result.name ??
                 "本轮评估",
               diagnosis: result.architectureDiagnosis,
-              reference: result.request.trainingScenario?.referenceAvailability,
+              reference: result.request.trainingScenario
+                ? (trainingReferenceAvailability(
+                    result.request.trainingScenario,
+                    cards,
+                  ) ?? undefined)
+                : undefined,
               scenario: result.request.trainingScenario,
               configuration: result.configuration ?? result.config,
             },
@@ -117,7 +132,7 @@ export function layerDecisionSvg(
     left = 760,
     right = 440,
     width = left + cell * cols + right + 40;
-  const rowHeight = 112,
+  const rowHeight = 132,
     top = 292,
     footer = top + ordered.length * rowHeight,
     height = footer + (entries.some((e) => e.scenario) ? 800 : 240);
@@ -206,6 +221,21 @@ export function layerDecisionSvg(
         13,
         "#677b8c",
       );
+      if (entry.scenario) {
+        const b = trainingRecoveryBudget(
+          entry.scenario,
+          cards,
+          s.target,
+          d.hours,
+        );
+        body += text(
+          x,
+          230,
+          `参考MTBF ${num(b.target.mtbfHours! * 60)} min → 目标等效MTTR ${num(b.target.equivalentMttrSeconds, 1)} s`,
+          12,
+          "#286d79",
+        );
+      }
     }
   });
   const rx = left + cell * cols;
@@ -267,6 +297,13 @@ export function layerDecisionSvg(
         `正贡献投影 ${num(e?.projectedGain == null ? null : e.projectedGain * 100)} pp`,
         12,
       );
+    body += text(
+      560,
+      y + 117,
+      `条件MTTR ${num(n.frequencyRecovery?.targetEquivalentMttrSeconds, 1)} s`,
+      12,
+      "#175869",
+    );
     entries.forEach((entry, j) => {
       const sn = entry.diagnosis.scales
         .find((s) => s.cards === cards)
@@ -302,6 +339,13 @@ export function layerDecisionSvg(
         y + 78,
         `恢复停机 ${num(sn.recoveryPauseSeconds, 2)} s / 次`,
         13,
+      );
+      body += text(
+        x,
+        y + 101,
+        `本档条件MTTR预算 ${num(sn.frequencyRecovery?.targetEquivalentMttrSeconds, 1)} s`,
+        12,
+        "#286d79",
       );
       body += `<title>${esc(sn.focus)}；${esc(sn.action)}</title>`;
     });
@@ -369,7 +413,7 @@ export function layerDecisionSvg(
   body += lines(
     rx,
     footer + 58,
-    "FIT是源模型的等效事件率，不是单件失效率。恢复停机均值来自损失账，不等于完整物理修复MTTR。当前图展示逐层责任和已建模证据，不自动证明未建模对象达标。",
+    "条件MTTR=本层hard间隔×(1−目标)/目标；总损失须共同占用预算，层间秒数不能相加。FIT是等效事件率，恢复停机来自实际损失账；条件换算不替代正向复评。",
     27,
     14,
   );
@@ -445,7 +489,7 @@ export function layerDecisionSvg(
     body += lines(
       32,
       y + 344,
-      "参数中尚未明确的step与99.x由操作者填写。人工排查映射成漏检暴露时长；这不是完整人工工单模型。阶段模板是载入意图，后续真实修改以合计参数为准。",
+      "模板参数均为可调整参考初值，不是优化上限。step与99.x需明确；AGREE分配后调整机制，再独立复评。人工排查映射成漏检暴露时长；真实修改以实际配置为准。",
       46,
       14,
     );
@@ -475,7 +519,7 @@ export function layerAllocationTable(
 ) {
   const s = d.scales.find((s) => s.cards === cards);
   if (!s?.nodes.some((n) => n.allocationEvidence)) return "";
-  return `<details class="arch-evidence"><summary>分层分配依据 · 故障 / 损失 / Shapley / AGREE</summary><p>${esc(s.allocationBasis)}</p>${s.allocationIssues?.length ? `<p>分配不可行，未伪造子层预算：${esc(s.allocationIssues.map((i) => i.message).join("；"))}</p>` : ""}<p>${s.allocationFrozen ? "沿用现状轮的冻结预算与分配证据；实际损失使用本轮结果。" : "本轮现状证据；只对已建模责任范围分配全部预算，含未知对象时不构成完整系统的达标证明。"}</p><p>R*=exp(−B/T)，qᵢ=[1−(R*)^(Cᵢ/ΣC)]/Eᵢ，wᵢ=−ln(1−qᵢ)，Bᵢ=B×wᵢ/Σw；qᵢ≥1时分配不可行，不能用均分掩盖。该归一化用于损失责任预算，不能解释为器件可靠度。</p><div class="table-wrap"><table style="min-width:1280px;table-layout:auto"><thead><tr><th>层级</th><th>独立模式数</th><th>等效FIT</th><th>实际损失 h</th><th>正贡献投影 pp</th><th>C复杂度</th><th>E工程重要度</th><th>允许损失 h</th><th>依据</th></tr></thead><tbody>${s.nodes
+  return `<details class="arch-evidence"><summary>分层分配依据 · 故障 / 损失 / Shapley / AGREE</summary><p>以下保留原故障归属账用于核对；超节点主图及措施规划采用拓扑守恒分解，具体模块预算见上方拓扑明细。两者是同一总损失的不同归属视角，请勿相加。</p><p>${esc(s.allocationBasis)}</p>${s.allocationIssues?.length ? `<p>分配不可行，未伪造子层预算：${esc(s.allocationIssues.map((i) => i.message).join("；"))}</p>` : ""}<p>${s.allocationFrozen ? "沿用现状轮的冻结预算与分配证据；实际损失使用本轮结果。" : "本轮现状证据；只对已建模责任范围分配全部预算，含未知对象时不构成完整系统的达标证明。"}</p><p>R*=exp(−B/T)，qᵢ=[1−(R*)^(Cᵢ/ΣC)]/Eᵢ，wᵢ=−ln(1−qᵢ)，Bᵢ=B×wᵢ/Σw；qᵢ≥1时分配不可行，不能用均分掩盖。该归一化用于损失责任预算，不能解释为器件可靠度。</p><div class="table-wrap"><table style="min-width:1280px;table-layout:auto"><thead><tr><th>层级</th><th>独立模式数</th><th>等效FIT</th><th>实际损失 h</th><th>正贡献投影 pp</th><th>C复杂度</th><th>E工程重要度</th><th>允许损失 h</th><th>依据</th></tr></thead><tbody>${s.nodes
     .map((n) => {
       const e = n.allocationEvidence;
       return `<tr><th>${esc(n.name)}</th><td>${num(e?.modeCount, 0)}</td><td>${num(e?.fit)}</td><td>${num(e?.actualHours)}</td><td>${num(e?.projectedGain == null ? null : e.projectedGain * 100)}</td><td>${num(e?.complexity)}</td><td>${num(n.parentId ? e?.importance : null)}</td><td>${num(n.allowedHours)}</td><td>${esc(e?.priorityBasis || (n.parentId ? "数据待补" : "总体目标"))}</td></tr>`;

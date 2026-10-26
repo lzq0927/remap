@@ -1,3 +1,6 @@
+import AuditTopologyInspector from "./AuditTopologyInspector";
+import { topologyDecision } from "../../../packages/analysis/src/audit-topology-decision";
+import FullscreenLayer from "./FullscreenLayer";
 import { layerDecisionSvg } from "../../../packages/reports/src/audit-layer-decision";
 import {
   lazy,
@@ -150,6 +153,17 @@ export default function AuditAtlasExplorer({
   } | null>(null);
   const skipClick = useRef(false);
   const n = atlas.nodes.find((v) => v.id === selected) ?? root;
+  const decision = useMemo(
+    () =>
+      result?.topologyDecision ??
+      (result?.architectureDiagnosis ? topologyDecision(result) : null),
+    [result],
+  );
+  const projected =
+    view === "decision" &&
+    decision?.scales
+      .find((s: any) => s.cards === cards)
+      ?.scenarios[0]?.nodes.find((n: any) => n.id === selected);
   const focused = atlas.nodes.find((v) => v.id === focus) ?? root;
   const options = {
     includeOverhead: view === "matrix",
@@ -245,12 +259,7 @@ export default function AuditAtlasExplorer({
     if (!fit || !surface.current) return;
     const el = surface.current;
     const measure = () =>
-      setZoom(
-        Math.max(
-          el.clientWidth < 500 ? 0.8 : 0.55,
-          Math.min(1.2, (el.clientWidth - 24) / svgWidth),
-        ),
-      );
+      setZoom(Math.max(0.08, Math.min(1.2, (el.clientWidth - 24) / svgWidth)));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -320,7 +329,7 @@ export default function AuditAtlasExplorer({
   } catch {
     /* solver validates */
   }
-  return (
+  const content = (
     <section
       className={`audit-atlas ${full ? "atlas-full" : ""} ${fullTools ? "atlas-show-tools" : ""}`}
       aria-label="架构故障机制全景"
@@ -329,6 +338,27 @@ export default function AuditAtlasExplorer({
         <div>
           <span className="workbench-eyebrow">ARCHITECTURE & RELIABILITY</span>
           <h3>架构与可靠性工作台</h3>
+          {full && (
+            <label className="atlas-full-scale">
+              规模{" "}
+              <select
+                aria-label="全屏图规模"
+                value={cards}
+                onChange={(e) => {
+                  setCards(Number(e.target.value));
+                  setFit(true);
+                }}
+              >
+                {[...new Set([...viewScales, inputCards])]
+                  .sort((a, b) => a - b)
+                  .map((c) => (
+                    <option key={c} value={c}>
+                      {c.toLocaleString()}卡
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
           <p>
             {cards.toLocaleString()}卡 ·{" "}
             {atlas.evaluated ? "已保存计算结果" : "配置预览，尚未计算"} ·
@@ -345,7 +375,14 @@ export default function AuditAtlasExplorer({
               筛选与依据
             </button>
           )}
-          <button type="button" onClick={() => setFull(!full)}>
+          <button
+            type="button"
+            onClick={() => {
+              setInspector(false);
+              setFullTools(false);
+              setFull(!full);
+            }}
+          >
             {full ? "退出大屏（Esc）" : "全屏大图"}
           </button>
         </div>
@@ -734,6 +771,15 @@ export default function AuditAtlasExplorer({
                 <button type="button" onClick={() => setFit(true)}>
                   适配显示
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFit(false);
+                    setZoom(0.85);
+                  }}
+                >
+                  可读大小
+                </button>
                 <label>
                   <input
                     type="checkbox"
@@ -988,361 +1034,413 @@ export default function AuditAtlasExplorer({
           >
             ×
           </button>
-          <h4>{n.name}</h4>
-          <p className="atlas-path">
-            {n.path
-              .map((id) => atlas.nodes.find((v) => v.id === id)?.name)
-              .join(" → ")}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setFocus(n.id);
-              setView("flow");
-              setFit(true);
-            }}
-          >
-            以此对象为查看范围
-          </button>
-          <div
-            className="atlas-detail-tabs"
-            role="group"
-            aria-label="对象关联信息"
-          >
-            {[
-              ["object", "对象"],
-              ["faults", "故障"],
-              ["mechanisms", "机制"],
-              ["evidence", "证据"],
-            ].map(([id, name]) => (
+          {projected ? (
+            <AuditTopologyInspector
+              decision={decision}
+              cards={cards}
+              id={selected}
+              onSelect={setSelected}
+              mechanisms={atlas.mechanisms}
+            />
+          ) : (
+            <>
+              <h4>{n.name}</h4>
+              <p className="atlas-path">
+                {n.path
+                  .map((id) => atlas.nodes.find((v) => v.id === id)?.name)
+                  .join(" → ")}
+              </p>
               <button
-                key={id}
                 type="button"
-                aria-pressed={tab === id}
-                onClick={() => setTab(id)}
+                onClick={() => {
+                  setFocus(n.id);
+                  setView("flow");
+                  setFit(true);
+                }}
               >
-                {name}
+                以此对象为查看范围
               </button>
-            ))}
-          </div>
-          {tab === "object" && (
-            <div>
-              <dl>
-                <dt>物理层级</dt>
-                <dd>
-                  {hardwareLevels[n.hardwareLevel!] ??
-                    (n.parentId ? "自定义对象" : "集群")}
-                </dd>
-                <dt>主功能域</dt>
-                <dd>
-                  {atlasDomainNames[n.domain]} · {n.domainBasis}
-                </dd>
-                <dt>本规模数量</dt>
-                <dd>{atlasNumber(qty)}</dd>
-                <dt>NPU等效FIT / 区域总事件FIT</dt>
-                <dd>
-                  {atlasNumber(n.npuEquivalentFit)} /{" "}
-                  {atlasNumber(n.aggregateEventFit)}
-                </dd>
-                <dt>分层目标 / 当前可用度</dt>
-                <dd>
-                  {n.targetAvailability === null
-                    ? "未分配"
-                    : (n.targetAvailability * 100).toFixed(4) + "%"}{" "}
-                  /{" "}
-                  {n.attributedAvailability === null
-                    ? "待评估"
-                    : (n.attributedAvailability * 100).toFixed(4) + "%"}
-                </dd>
-              </dl>
-              <p className="note">
-                区域总事件FIT = NPU等效FIT ×
-                实际评估卡数，包含多类故障；当前可用度是系统损失责任投影，非单器件稳态可用度。
-                {n.coverageStatus !== "modeled" ? "含未建模故障对象。" : ""}
-              </p>
-              {onDomainChange && n.kind !== "overhead" && (
-                <label>
-                  配置主功能域
-                  <select
-                    aria-label="配置对象主功能域"
-                    value={n.functionalDomain ?? ""}
-                    onChange={(e) =>
-                      onDomainChange(
-                        n.id,
-                        (e.target.value || undefined) as
-                          | FunctionalDomain
-                          | undefined,
-                      )
-                    }
+              <div
+                className="atlas-detail-tabs"
+                role="group"
+                aria-label="对象关联信息"
+              >
+                {[
+                  ["object", "对象"],
+                  ["faults", "故障"],
+                  ["mechanisms", "机制"],
+                  ["evidence", "证据"],
+                ].map(([id, name]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={tab === id}
+                    onClick={() => setTab(id)}
                   >
-                    <option value="">按对象 / 子层推导</option>
-                    {Object.entries(functionalDomains).map(([id, name]) => (
-                      <option key={id} value={id}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {atlas.evaluated && (
-                <div className="atlas-numbers">
-                  <div>
-                    已建模损失<strong>{atlasNumber(n.actualHours)} h</strong>
-                  </div>
-                  <div>
-                    分层预算
-                    <strong>{atlasNumber(n.measured?.allowedHours)} h</strong>
-                  </div>
-                  <div>
-                    对照损失<strong>{atlasNumber(n.baselineHours)} h</strong>
-                  </div>
-                  <div>
-                    减少损失<strong>{atlasNumber(n.improvementHours)} h</strong>
-                  </div>
-                </div>
-              )}
-              <p className="note">
-                {atlas.comparisonBasis}
-                ；对象差值来自事件账，无对象级置信区间。父层与子层不能重复相加。
-              </p>
-              {n.measured?.frequencyRecovery && (
-                <div className="atlas-diagnosis">
-                  <h5>MTBF / MTTR 双路径诊断</h5>
-                  <p>{n.measured.action}</p>
+                    {name}
+                  </button>
+                ))}
+              </div>
+              {tab === "object" && (
+                <div>
                   <dl>
-                    <dt>本层非恢复损失</dt>
+                    <dt>物理层级</dt>
                     <dd>
-                      {atlasNumber(n.measured.frequencyRecovery.otherLossHours)}{" "}
-                      h
+                      {hardwareLevels[n.hardwareLevel!] ??
+                        (n.parentId ? "自定义对象" : "集群")}
                     </dd>
-                    <dt>仅缩短恢复的可行性</dt>
+                    <dt>主功能域</dt>
                     <dd>
-                      {n.measured.frequencyRecovery.recoveryOnlyFeasible ===
-                      null
-                        ? "待分配预算"
-                        : n.measured.frequencyRecovery.recoveryOnlyFeasible
-                          ? "有预算空间，仍需正向复评"
-                          : "不足以达标：其他损失已超过本层预算"}
+                      {atlasDomainNames[n.domain]} · {n.domainBasis}
                     </dd>
-                    <dt>固定恢复次数下的暂停预算 / 次</dt>
+                    <dt>本规模数量</dt>
+                    <dd>{atlasNumber(qty)}</dd>
+                    <dt>NPU等效FIT / 区域总事件FIT</dt>
                     <dd>
-                      {atlasNumber(
-                        n.measured.frequencyRecovery.requiredPauseSeconds,
-                      )}{" "}
-                      秒
+                      {atlasNumber(n.npuEquivalentFit)} /{" "}
+                      {atlasNumber(n.aggregateEventFit)}
+                    </dd>
+                    <dt>分层目标 / 当前可用度</dt>
+                    <dd>
+                      {n.targetAvailability === null
+                        ? "未分配"
+                        : (n.targetAvailability * 100).toFixed(4) + "%"}{" "}
+                      /{" "}
+                      {n.attributedAvailability === null
+                        ? "待评估"
+                        : (n.attributedAvailability * 100).toFixed(4) + "%"}
                     </dd>
                   </dl>
-                  <p>{n.measured.frequencyRecovery.frequencyAction}</p>
-                  <small>{n.measured.frequencyRecovery.basis}</small>
-                  <p>
-                    下一步：在计算与权衡中生成分配建议，按本规模 Shapley
-                    形成重要度，由 AGREE 分担改进责任，再独立评估。
+                  <p className="note">
+                    区域总事件FIT = NPU等效FIT ×
+                    实际评估卡数，包含多类故障；当前可用度是系统损失责任投影，非单器件稳态可用度。
+                    {n.coverageStatus !== "modeled" ? "含未建模故障对象。" : ""}
                   </p>
-                </div>
-              )}
-              {n.measured && (
-                <p className="note">
-                  恢复停机/次 {atlasNumber(n.measured.recoveryPauseSeconds)}{" "}
-                  秒；中断事件间隔{" "}
-                  {atlasNumber(
-                    n.measured.types.find((t: any) => t.type === "hard")
-                      ?.intervalHours,
-                  )}{" "}
-                  小时。事件间隔不是业务中断MTBF。
-                </p>
-              )}
-            </div>
-          )}
-          {tab === "faults" && (
-            <div>
-              {es.length > 0 && (
-                <div className="atlas-fault-summary">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>故障模式</th>
-                        <th>等效FIT</th>
-                        <th>损失 / h</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {es.map((e) => (
-                        <tr key={e.id}>
-                          <td>
-                            {e.id}
-                            <small>{faultTypeLabels[e.type]}</small>
-                          </td>
-                          <td>{atlasNumber(e.fit)}</td>
-                          <td>{atlasNumber(e.actualLossHours)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              <p className="note">下方逐项展开故障描述、事件率和数据来源。</p>
-              {es.length ? (
-                es.map((e) => (
-                  <details key={e.id} open={es.length < 4}>
-                    <summary>
-                      {e.id} · {faultTypeLabels[e.type]}
-                    </summary>
-                    <p>{e.description ?? e.domain}</p>
-                    <dl>
-                      <dt>本规模等效FIT</dt>
-                      <dd>
-                        {atlasNumber(e.fit)}
-                        {atlas.error ? "（参考输入，未完成折算）" : ""}
-                      </dd>
-                      <dt>事件率 / 非全局停机小时</dt>
-                      <dd>{atlasNumber(e.rate)}</dd>
-                      <dt>当前 / 对照损失</dt>
-                      <dd>
-                        {atlasNumber(e.actualLossHours)} /{" "}
-                        {atlasNumber(e.baselineLossHours)} h
-                      </dd>
-                    </dl>
-                    <p className="atlas-source">{e.source ?? "来源待补充"}</p>
-                  </details>
-                ))
-              ) : (
-                <p>
-                  该对象暂无匹配故障。公共开销单独计账，缺少故障数据不代表零风险。
-                </p>
-              )}
-            </div>
-          )}
-          {tab === "mechanisms" && (
-            <div>
-              <p className="note">
-                可跨对象、域、阶段；适用关系不等于全部覆盖。修改参数后需独立评估。
-              </p>
-              {ms.map((m) => {
-                const contribution = atlas.ranking.find(
-                  (r: any) =>
-                    r.id === m.id ||
-                    r.id ===
-                      "policy:" +
-                        (
-                          {
-                            hardDetect: "D-HARD",
-                            slowDetect: "D-SLOW",
-                            sdcDetect: "D-SDC",
-                            step: "R-SDC",
-                            replay: "R-REPLAY",
-                            process: "R-PROCESS",
-                            elastic: "R-ELASTIC",
-                            fast: "C-FAST",
-                          } as Record<string, string>
-                        )[m.id],
-                );
-                return (
-                  <details key={m.id}>
-                    <summary>
-                      {m.name} · {statusNames[m.status]}
-                    </summary>
-                    <p>
-                      {m.domains.map((d) => atlasDomainNames[d]).join(" / ")} ·{" "}
-                      {m.faultTypes.map((t) => faultTypeLabels[t]).join(" / ")}
-                    </p>
-                    <p>
-                      {m.stages.map((v) => mechanismStages[v]).join(" / ")}；
-                      {m.capabilities
-                        .map((v) => mechanismCapabilities[v])
-                        .join(" / ")}
-                    </p>
-                    <p>{m.effect}</p>
-                    <dl>
-                      {Object.entries(m.parameters).map(([k, v]) => (
-                        <div key={k}>
-                          <dt>{parameterLabels[k] ?? k}</dt>
-                          <dd>{String(v)}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    {!Object.keys(m.parameters).length && (
-                      <p>未选候选参数需在方案中明确，未计入本轮。</p>
-                    )}
-                    {contribution && (
-                      <p className="atlas-contribution">
-                        本规模全局贡献{" "}
-                        {(contribution.statistics.mean * 100).toFixed(4)}{" "}
-                        pp；区间 [
-                        {(contribution.statistics.ciLow * 100).toFixed(4)},{" "}
-                        {(contribution.statistics.ciHigh * 100).toFixed(4)}]
-                        pp。不是当前对象的局部Shapley。
-                      </p>
-                    )}
-                    <p className="atlas-source">{m.source}</p>
-                    <p className="note">{m.applicability}</p>
-                  </details>
-                );
-              })}
-              {!ms.length && <p>当前筛选没有适用机制。</p>}
-              <details>
-                <summary>本规模完整归因（含改进因子）</summary>
-                <p>{atlas.attributionBasis}</p>
-                {atlas.ranking.map((r: any) => (
-                  <p key={r.id}>
-                    {r.name ?? r.id}：{atlasNumber(r.statistics.mean * 100)} pp
-                  </p>
-                ))}
-              </details>
-            </div>
-          )}
-          {tab === "evidence" && (
-            <div>
-              <p className="atlas-source">{n.source}</p>
-              <h5>连接与依赖</h5>
-              {atlas.architecture.dependencies
-                .filter(
-                  (e) =>
-                    n.descendants.includes(e.from) ||
-                    n.descendants.includes(e.to),
-                )
-                .map((e, i) => (
-                  <p key={i}>
-                    {atlas.nodes.find((v) => v.id === e.from)?.name} →{" "}
-                    {atlas.nodes.find((v) => v.id === e.to)?.name}：{e.label}
-                    <small>{e.source}</small>
-                  </p>
-                ))}
-              <h5>故障传播证据</h5>
-              {atlas.propagation
-                .filter((p) => n.eventIds.includes(p.eventId))
-                .map((p) => (
-                  <p key={p.eventId}>
-                    {p.eventId}：
-                    {p.path
-                      .map((id) => atlas.nodes.find((v) => v.id === id)?.name)
-                      .join(" → ")}
-                    <small>
-                      {p.manifestation}；{p.impact}；{p.containment}；{p.source}
-                    </small>
-                  </p>
-                ))}
-              <details>
-                <summary>计算快照与基础参数</summary>
-                <pre>
-                  {JSON.stringify(
-                    {
-                      provenance: atlas.provenance,
-                      model: atlas.effectiveModel,
-                    },
-                    null,
-                    2,
+                  {onDomainChange && n.kind !== "overhead" && (
+                    <label>
+                      配置主功能域
+                      <select
+                        aria-label="配置对象主功能域"
+                        value={n.functionalDomain ?? ""}
+                        onChange={(e) =>
+                          onDomainChange(
+                            n.id,
+                            (e.target.value || undefined) as
+                              | FunctionalDomain
+                              | undefined,
+                          )
+                        }
+                      >
+                        <option value="">按对象 / 子层推导</option>
+                        {Object.entries(functionalDomains).map(([id, name]) => (
+                          <option key={id} value={id}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   )}
-                </pre>
-              </details>
-              {atlas.notes.map((v) => (
-                <p className="note" key={v}>
-                  {v}
-                </p>
-              ))}
-            </div>
+                  {atlas.evaluated && (
+                    <div className="atlas-numbers">
+                      <div>
+                        已建模损失
+                        <strong>{atlasNumber(n.actualHours)} h</strong>
+                      </div>
+                      <div>
+                        分层预算
+                        <strong>
+                          {atlasNumber(n.measured?.allowedHours)} h
+                        </strong>
+                      </div>
+                      <div>
+                        对照损失
+                        <strong>{atlasNumber(n.baselineHours)} h</strong>
+                      </div>
+                      <div>
+                        减少损失
+                        <strong>{atlasNumber(n.improvementHours)} h</strong>
+                      </div>
+                    </div>
+                  )}
+                  <p className="note">
+                    {atlas.comparisonBasis}
+                    ；对象差值来自事件账，无对象级置信区间。父层与子层不能重复相加。
+                  </p>
+                  {n.measured?.frequencyRecovery && (
+                    <div className="atlas-diagnosis">
+                      <h5>MTBF / MTTR 双路径诊断</h5>
+                      <p>{n.measured.action}</p>
+                      <dl>
+                        <dt>目标等效MTTR（条件换算）</dt>
+                        <dd>
+                          {atlasNumber(
+                            n.measured.frequencyRecovery
+                              .targetEquivalentMttrSeconds,
+                          )}{" "}
+                          秒
+                        </dd>
+                        <dt>本层非恢复损失</dt>
+                        <dd>
+                          {atlasNumber(
+                            n.measured.frequencyRecovery.otherLossHours,
+                          )}{" "}
+                          h
+                        </dd>
+                        <dt>仅缩短恢复的可行性</dt>
+                        <dd>
+                          {n.measured.frequencyRecovery.recoveryOnlyFeasible ===
+                          null
+                            ? "待分配预算"
+                            : n.measured.frequencyRecovery.recoveryOnlyFeasible
+                              ? "有预算空间，仍需正向复评"
+                              : "不足以达标：其他损失已超过本层预算"}
+                        </dd>
+                        <dt>固定恢复次数下的暂停预算 / 次</dt>
+                        <dd>
+                          {atlasNumber(
+                            n.measured.frequencyRecovery.requiredPauseSeconds,
+                          )}{" "}
+                          秒
+                        </dd>
+                      </dl>
+                      <small>
+                        {n.measured.frequencyRecovery.targetConversionBasis}
+                      </small>
+                      <p>{n.measured.frequencyRecovery.frequencyAction}</p>
+                      <small>{n.measured.frequencyRecovery.basis}</small>
+                      <p>
+                        下一步：在计算与权衡中生成分配建议，按本规模 Shapley
+                        形成重要度，由 AGREE 分担改进责任，再独立评估。
+                      </p>
+                    </div>
+                  )}
+                  {n.measured && (
+                    <p className="note">
+                      恢复停机/次 {atlasNumber(n.measured.recoveryPauseSeconds)}{" "}
+                      秒；中断事件间隔{" "}
+                      {atlasNumber(
+                        n.measured.types.find((t: any) => t.type === "hard")
+                          ?.intervalHours,
+                      )}{" "}
+                      小时。事件间隔不是业务中断MTBF。
+                    </p>
+                  )}
+                </div>
+              )}
+              {tab === "faults" && (
+                <div>
+                  {es.length > 0 && (
+                    <div className="atlas-fault-summary">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>故障模式</th>
+                            <th>等效FIT</th>
+                            <th>损失 / h</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {es.map((e) => (
+                            <tr key={e.id}>
+                              <td>
+                                {e.id}
+                                <small>{faultTypeLabels[e.type]}</small>
+                              </td>
+                              <td>{atlasNumber(e.fit)}</td>
+                              <td>{atlasNumber(e.actualLossHours)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <p className="note">
+                    下方逐项展开故障描述、事件率和数据来源。
+                  </p>
+                  {es.length ? (
+                    es.map((e) => (
+                      <details key={e.id} open={es.length < 4}>
+                        <summary>
+                          {e.id} · {faultTypeLabels[e.type]}
+                        </summary>
+                        <p>{e.description ?? e.domain}</p>
+                        <dl>
+                          <dt>本规模等效FIT</dt>
+                          <dd>
+                            {atlasNumber(e.fit)}
+                            {atlas.error ? "（参考输入，未完成折算）" : ""}
+                          </dd>
+                          <dt>事件率 / 非全局停机小时</dt>
+                          <dd>{atlasNumber(e.rate)}</dd>
+                          <dt>当前 / 对照损失</dt>
+                          <dd>
+                            {atlasNumber(e.actualLossHours)} /{" "}
+                            {atlasNumber(e.baselineLossHours)} h
+                          </dd>
+                        </dl>
+                        <p className="atlas-source">
+                          {e.source ?? "来源待补充"}
+                        </p>
+                      </details>
+                    ))
+                  ) : (
+                    <p>
+                      该对象暂无匹配故障。公共开销单独计账，缺少故障数据不代表零风险。
+                    </p>
+                  )}
+                </div>
+              )}
+              {tab === "mechanisms" && (
+                <div>
+                  <p className="note">
+                    可跨对象、域、阶段；适用关系不等于全部覆盖。修改参数后需独立评估。
+                  </p>
+                  {ms.map((m) => {
+                    const contribution = atlas.ranking.find(
+                      (r: any) =>
+                        r.id === m.id ||
+                        r.id ===
+                          "policy:" +
+                            (
+                              {
+                                hardDetect: "D-HARD",
+                                slowDetect: "D-SLOW",
+                                sdcDetect: "D-SDC",
+                                step: "R-SDC",
+                                replay: "R-REPLAY",
+                                process: "R-PROCESS",
+                                elastic: "R-ELASTIC",
+                                fast: "C-FAST",
+                              } as Record<string, string>
+                            )[m.id],
+                    );
+                    return (
+                      <details key={m.id}>
+                        <summary>
+                          {m.name} · {statusNames[m.status]}
+                        </summary>
+                        <p>
+                          {m.domains
+                            .map((d) => atlasDomainNames[d])
+                            .join(" / ")}{" "}
+                          ·{" "}
+                          {m.faultTypes
+                            .map((t) => faultTypeLabels[t])
+                            .join(" / ")}
+                        </p>
+                        <p>
+                          {m.stages.map((v) => mechanismStages[v]).join(" / ")}
+                          ；
+                          {m.capabilities
+                            .map((v) => mechanismCapabilities[v])
+                            .join(" / ")}
+                        </p>
+                        <p>{m.effect}</p>
+                        <dl>
+                          {Object.entries(m.parameters).map(([k, v]) => (
+                            <div key={k}>
+                              <dt>{parameterLabels[k] ?? k}</dt>
+                              <dd>{String(v)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        {!Object.keys(m.parameters).length && (
+                          <p>未选候选参数需在方案中明确，未计入本轮。</p>
+                        )}
+                        {contribution && (
+                          <p className="atlas-contribution">
+                            本规模全局贡献{" "}
+                            {(contribution.statistics.mean * 100).toFixed(4)}{" "}
+                            pp；区间 [
+                            {(contribution.statistics.ciLow * 100).toFixed(4)},{" "}
+                            {(contribution.statistics.ciHigh * 100).toFixed(4)}]
+                            pp。不是当前对象的局部Shapley。
+                          </p>
+                        )}
+                        <p className="atlas-source">{m.source}</p>
+                        <p className="note">{m.applicability}</p>
+                      </details>
+                    );
+                  })}
+                  {!ms.length && <p>当前筛选没有适用机制。</p>}
+                  <details>
+                    <summary>本规模完整归因（含改进因子）</summary>
+                    <p>{atlas.attributionBasis}</p>
+                    {atlas.ranking.map((r: any) => (
+                      <p key={r.id}>
+                        {r.name ?? r.id}：{atlasNumber(r.statistics.mean * 100)}{" "}
+                        pp
+                      </p>
+                    ))}
+                  </details>
+                </div>
+              )}
+              {tab === "evidence" && (
+                <div>
+                  <p className="atlas-source">{n.source}</p>
+                  <h5>连接与依赖</h5>
+                  {atlas.architecture.dependencies
+                    .filter(
+                      (e) =>
+                        n.descendants.includes(e.from) ||
+                        n.descendants.includes(e.to),
+                    )
+                    .map((e, i) => (
+                      <p key={i}>
+                        {atlas.nodes.find((v) => v.id === e.from)?.name} →{" "}
+                        {atlas.nodes.find((v) => v.id === e.to)?.name}：
+                        {e.label}
+                        <small>{e.source}</small>
+                      </p>
+                    ))}
+                  <h5>故障传播证据</h5>
+                  {atlas.propagation
+                    .filter((p) => n.eventIds.includes(p.eventId))
+                    .map((p) => (
+                      <p key={p.eventId}>
+                        {p.eventId}：
+                        {p.path
+                          .map(
+                            (id) => atlas.nodes.find((v) => v.id === id)?.name,
+                          )
+                          .join(" → ")}
+                        <small>
+                          {p.manifestation}；{p.impact}；{p.containment}；
+                          {p.source}
+                        </small>
+                      </p>
+                    ))}
+                  <details>
+                    <summary>计算快照与基础参数</summary>
+                    <pre>
+                      {JSON.stringify(
+                        {
+                          provenance: atlas.provenance,
+                          model: atlas.effectiveModel,
+                        },
+                        null,
+                        2,
+                      )}
+                    </pre>
+                  </details>
+                  {atlas.notes.map((v) => (
+                    <p className="note" key={v}>
+                      {v}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </aside>
       </div>
     </section>
+  );
+  return full ? (
+    <FullscreenLayer label="架构图全屏" onClose={() => setFull(false)}>
+      {content}
+    </FullscreenLayer>
+  ) : (
+    content
   );
 }

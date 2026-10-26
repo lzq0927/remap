@@ -1,5 +1,6 @@
 import AuditAtlasExplorer from "./AuditAtlasExplorer";
 import { layerAllocationTable } from "../../../packages/reports/src/audit-layer-decision";
+import { topologyEstimateDetails } from "../../../packages/reports/src/audit-topology-decision";
 import { useState } from "react";
 import AuditHardwareDiagnosis from "./AuditHardwareDiagnosis";
 import { contributionHeatmap } from "../../../packages/reports/src/audit-decision-study";
@@ -57,7 +58,10 @@ export default function AuditArchitectureResult({
       <style>{architectureCss + auditChartCss + decisionBriefCss}</style>
       <h3>系统分层目标与现状诊断</h3>
       <p className="note">
-        从架构定位责任层，再比较各规模的目标差距、故障损失与机制贡献。
+        从架构定位责任层，再比较各规模的目标差距、故障损失与机制贡献。 AGREE
+        支撑目标预算分配，Shapley
+        支撑组合收益归因，故障与恢复时序仿真给出可用度结果；BDD /
+        蒙特卡洛在“组网辅助验证”中核查连接模型。
       </p>
       <AuditAtlasExplorer
         result={result}
@@ -65,7 +69,11 @@ export default function AuditArchitectureResult({
         cards={cards}
       />
       <div
-        dangerouslySetInnerHTML={{ __html: layerAllocationTable(d, cards) }}
+        dangerouslySetInnerHTML={{
+          __html:
+            topologyEstimateDetails(result, cards) +
+            layerAllocationTable(d, cards),
+        }}
       />
       <div
         className="scale-summary-flow"

@@ -2646,3 +2646,10 @@ main > header {
 .training-scenario-history .table-wrap{max-width:100%;overflow:auto}
 .training-scenario-history > .table-wrap > table{min-width:640px;table-layout:auto}
 .training-scenario-history > .table-wrap > table th,.training-scenario-history > .table-wrap > table td{white-space:nowrap}
+.recovery-budget{min-width:0;margin:16px 0;padding:14px;border:1px solid #d9e2eb;border-radius:10px;background:#fff}
+.recovery-budget .table-wrap{max-width:100%;overflow:auto}
+.recovery-budget table{min-width:720px;table-layout:auto}
+.recovery-budget th,.recovery-budget td{white-space:nowrap;padding:10px}
+.recovery-budget h4{margin:0 0 8px}
+.recovery-budget-scroll-hint{display:none;color:#526978;font-size:12px}
+@media(max-width:640px){.recovery-budget-scroll-hint{display:block}}

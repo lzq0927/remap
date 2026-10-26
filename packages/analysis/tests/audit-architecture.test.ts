@@ -207,10 +207,11 @@ describe("architecture accounting and scale diagnostics", () => {
       links.some((l) => l.mechanismId === "unaddressed" && l.actualHours > 0),
     ).toBe(true);
     for (const link of links.filter((l) => l.mechanismId === "sdcDetect")) {
-      const node = result.architectureDiagnosis.scales[0].nodes.find(
-        (n) => n.id === link.layerId,
-      )!;
-      if (node.kind !== "overhead")
+      const node = result
+        .topologyDecision!.scales.find((s) => s.cards === 500000)!
+        .scenarios[0].nodes.find((n) => n.id === link.layerId)!;
+      expect(node).toBeDefined();
+      if (node.id !== "overhead")
         expect(link.eventIds.every((id) => id.endsWith("-sdc"))).toBe(true);
     }
   });

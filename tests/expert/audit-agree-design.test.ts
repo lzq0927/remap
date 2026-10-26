@@ -73,6 +73,14 @@ it("uses AGREE importance and tighter targets to change actual derived parameter
   expect(strict.policy["C-FAST"].saveSeconds).toBeLessThan(0.5);
   expect(strict.model.sdcDelayHours).toBe(120);
 });
+it("treats coverage and latency references as adjustable starts, not optimization ceilings", () => {
+  const r = design(0.18, 0.5, {
+    parameterTargets: { sdcCoverage: 0.95, detectSeconds: 1, saveSeconds: 4 },
+  });
+  expect(r.policy["D-SDC"].coverage).toBeGreaterThan(0.95);
+  expect(r.policy["D-SDC"].detectSeconds).toBeLessThanOrEqual(1);
+  expect(r.policy["C-FAST"].saveSeconds).toBeLessThan(4);
+});
 it("conserves nested budgets and supplies formula, route rate, controlling scale and lock status", () => {
   const d = design();
   for (const p of d.perScale[0].componentPlans) {

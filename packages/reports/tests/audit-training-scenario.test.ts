@@ -14,6 +14,7 @@ import { compareAuditExperiments } from "../src/audit-experiments";
 import { layerDecisionSvg } from "../src/audit-layer-decision";
 import { report } from "../src/render";
 import { hardwareScaleEvents } from "../../contracts/src/audit-hardware";
+import { targetRecoverySections } from "../src/audit-training-scenario";
 const events = getAuditEvents();
 const ready = (id: "current" | "extension" | "breakthrough") => ({
   ...trainingScenarioPreset(id),
@@ -67,6 +68,55 @@ it("requires explicit step, 99.x, event scope and investigation interpretation",
   expect(() =>
     resolveAudit({ ...initial(), trainingScenario: s, hours: 600 }),
   ).toThrow(/step/);
+});
+it("preserves formal target edits and accepts reference-parameter improvements without rewriting old inputs", () => {
+  const old = initial(),
+    before = structuredClone(old);
+  const input = {
+    ...old,
+    target: 0.99,
+    scales: [10000, 500000],
+    targets: { 10000: 0.985, 500000: 0.99 },
+  };
+  const s = {
+    ...ready("extension"),
+    sdcCoverage: 0.999,
+    detectionSeconds: 0.5,
+  };
+  const applied = applyTrainingScenario(input, s, events);
+  expect(applied.target).toBe(0.99);
+  expect(applied.targets?.[500000]).toBe(0.99);
+  expect(applied.targets?.[10000]).toBe(0.985);
+  expect(resolveAudit(applied).policy["D-SDC"].coverage).toBe(0.999);
+  expect(applied.model!.detectSeconds).toBe(0.5);
+  expect(old).toEqual(before);
+  const rows = targetRecoverySections({
+    request: {
+      ...applied,
+      target: 0.985,
+      targets: { 10000: 0.985, 500000: 0.985 },
+      scales: [10000, 500000],
+      trainingScenario: ready("current"),
+    },
+  })[0].tables![0].rows;
+  expect(rows[0]).toEqual([
+    "10,000",
+    "1,800",
+    "98.5%",
+    "1,644.7",
+    "9",
+    "98.5%",
+    "1,644.7",
+  ]);
+  expect(rows[1]).toEqual([
+    "500,000",
+    "36",
+    "98.5%",
+    "32.9",
+    "9",
+    "60%",
+    "1,440",
+  ]);
 });
 it("converts reference-scale MTBF once, preserves slow/SDC and counts detection/recovery separately", () => {
   const input = initial(),
@@ -135,11 +185,16 @@ it("compares independent scenarios without fitting reference percentages or movi
   expect(svg).toContain("延长线改进");
   expect(svg).toContain("突破性改进");
   expect(svg).toContain("正贡献投影");
+  expect(svg).toContain("目标等效MTTR 15.5 s");
+  expect(svg).toContain("目标等效MTTR 41.1 s");
   expect(svg).not.toMatch(/NaN|Infinity/);
   const html = report({ ...runs[0], result: comparison }, "html");
   expect(html).toContain("相对各自固定基线");
   expect(html).toContain("model.manualAdditionalSeconds");
   expect(html).toContain("CORE-hard FIT");
+  expect(html).toContain("50万卡正式目标");
+  expect(html).toContain("15.5");
+  expect(html).toContain("41.1");
   expect(runs).toEqual(before);
   const incompatible = structuredClone(runs);
   incompatible[1].result.request.target = 0.99;

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AuditRequest } from "../../analysis/src/audit";
 import type { AuditEventView } from "./audit-objects";
 import { hardwareScaleEvents } from "./audit-hardware";
+import { recoveryBudget } from "./audit-recovery-budget";
 
 const time = z.number().finite().nonnegative().max(31536000);
 const probability = z.number().finite().min(0).max(1);
@@ -13,6 +14,21 @@ export const trainingScenarioSchema = z
     source: z.string().trim().min(1).max(2000),
     mechanismNotes: z.string().trim().max(1200).optional(),
     referenceAvailability: probability,
+    referenceAvailabilityCards: z
+      .number()
+      .int()
+      .positive()
+      .max(1000000)
+      .optional(),
+    referenceAvailabilityByScale: z
+      .record(
+        z
+          .string()
+          .regex(/^[1-9]\d*$/)
+          .refine((s) => Number(s) <= 1000000),
+        probability,
+      )
+      .optional(),
     referenceCards: z.number().int().positive().max(1000000),
     mtbfHours: z.number().finite().positive().max(87600),
     mtbfEventIds: z.array(z.string()).max(2000),
@@ -54,6 +70,8 @@ export function trainingScenarioPreset(
         ? "极致CKPT；降lane优化、压测筛查优化；模型缩容训练、温备恢复；静默在线检测；基于算子打点的亚健康定界定位。"
         : "沿用极致CKPT；NPO/OIO优化、HBM新编码纠错、在线压测增强；静默在线检测；智能Agent故障管理。",
     referenceAvailability: current ? 0.6 : extended ? 0.82 : 0.985,
+    referenceAvailabilityCards: 500000,
+    referenceAvailabilityByScale: current ? { 10000: 0.985 } : {},
     referenceCards: current ? 10000 : 500000,
     mtbfHours: current ? 30 : (extended ? 17 : 45) / 60,
     mtbfEventIds: [],
@@ -75,6 +93,36 @@ export function trainingScenarioPreset(
     hardTimeoutSeconds: 60,
     investigationMapping: null,
     assumptionsConfirmed: false,
+  };
+}
+/** User reference points are independent observations, never fitted outputs or target caps. */
+export function trainingReferenceAvailability(
+  s: TrainingScenario,
+  cards: number,
+): number | null {
+  return cards === (s.referenceAvailabilityCards ?? 500000)
+    ? s.referenceAvailability
+    : (s.referenceAvailabilityByScale?.[cards] ?? null);
+}
+/** Template MTBF extrapolation, under the same selected event scope and linear exposure.
+ * Actual quantity-scaled rates and achieved availability remain in the independent simulation. */
+export function trainingRecoveryBudget(
+  s: TrainingScenario,
+  cards: number,
+  target: number,
+  hours = 600,
+) {
+  const mtbfHours = (s.mtbfHours * s.referenceCards) / cards;
+  const referenceAvailability = trainingReferenceAvailability(s, cards);
+  return {
+    cards,
+    target: recoveryBudget(mtbfHours, target, hours),
+    reference:
+      referenceAvailability !== null
+        ? recoveryBudget(mtbfHours, referenceAvailability, hours)
+        : null,
+    basis:
+      "按模板MTBF及同范围线性暴露折算；若仅选择计算中断，不代表全系统业务MTBF。",
   };
 }
 export function trainingScenarioIssues(
@@ -163,9 +211,25 @@ export function applyTrainingScenario(
     ...request,
     hours: 600,
     cards: 500000,
-    scales: request.scales?.includes(500000) ? request.scales : [500000],
-    target: 0.985,
-    targets: { ...request.targets, 500000: 0.985 },
+    scales: [
+      ...new Set([
+        ...(request.scales ?? [request.cards]),
+        request.cards,
+        500000,
+      ]),
+    ],
+    target:
+      request.cards === 500000
+        ? request.target
+        : (request.targets?.[500000] ?? 0.985),
+    targets: {
+      ...request.targets,
+      [request.cards]: request.target,
+      500000:
+        request.cards === 500000
+          ? request.target
+          : (request.targets?.[500000] ?? 0.985),
+    },
     trainingScenario: s,
     rateArithmetic: "catalog",
     sensitivity: false,

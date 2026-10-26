@@ -18,6 +18,8 @@ import {
   hardwareScaleEvents,
 } from "../../contracts/src/audit-hardware";
 import { auditReferenceOnly } from "../../contracts/src/audit-presets";
+import { equivalentMttrSeconds } from "../../contracts/src/audit-recovery-budget";
+import { topologyDecision } from "./audit-topology-decision";
 import { agreeLossAllocation } from "./audit-allocation";
 import {
   layerEvidenceAllocation,
@@ -306,6 +308,15 @@ export function auditArchitectureDiagnosis(
         frequencyRecovery: {
           hardEventIntervalHours:
             types.find((t) => t.type === "hard")?.intervalHours ?? null,
+          targetEquivalentMttrSeconds:
+            allowedHours === null
+              ? null
+              : equivalentMttrSeconds(
+                  types.find((t) => t.type === "hard")?.intervalHours ?? null,
+                  1 - allowedHours / hours,
+                ),
+          targetConversionBasis:
+            "按本层hard事件间隔与损失责任目标作MTBF×(1−A)/A条件换算；包含各类损失预算，不是单项物理恢复时限，不与其他层秒数直接相加。",
           physicalFitReductionAssumed: false,
           otherLossHours: actualHours - loss.downtime,
           recoveryOnlyFeasible:
@@ -493,7 +504,24 @@ export function architectureResponsibilities(
   const row = result.rows.find(
     (r: any) => r.cards === cards && (!r.id || r.id === "combined"),
   );
-  return scale.nodes
+  const topology =
+    result.topologyDecision ??
+    topologyDecision({ ...result, architectureDiagnosis: diagnosis });
+  const projectedScale = topology?.scales.find((s: any) => s.cards === cards);
+  const projected = projectedScale?.scenarios[0];
+  const projectedEvidence =
+    topology?.estimates.filter(
+      (e: any) => e.cards === cards && e.scenario === projected?.name,
+    ) ?? [];
+  const projectedNodes = projected?.nodes.map((n: any) => ({
+    ...n,
+    leaf: !projected.nodes.some((c: any) => c.parentId === n.id),
+    kind: n.id === "overhead" ? "overhead" : "object",
+    eventIds: projectedEvidence
+      .filter((e: any) => e.nodeId === n.id)
+      .map((e: any) => e.eventId),
+  })) as AuditArchitectureDiagnosis["scales"][number]["nodes"] | undefined;
+  return (projectedNodes ?? scale.nodes)
     .filter((n) => n.leaf)
     .flatMap((n) => {
       const segments =
@@ -522,11 +550,19 @@ export function architectureResponsibilities(
                   Object.keys(architectureLossNames).filter(
                     (key) => !["save", "mechanismOverhead"].includes(key),
                   );
+                const projectionFraction = projected
+                  ? (projectedEvidence.find(
+                      (e: any) => e.nodeId === n.id && e.eventId === eventId,
+                    )?.fraction ?? 0)
+                  : 1;
                 return keys.map((lossKey) => ({
                   eventId,
                   lossKey,
-                  actualHours: row.perEvent?.[eventId]?.[lossKey] ?? 0,
-                  weight: (event?.fit ?? 0) / keys.length,
+                  actualHours:
+                    (row.perEvent?.[eventId]?.[lossKey] ?? 0) *
+                    projectionFraction,
+                  weight:
+                    ((event?.fit ?? 0) * projectionFraction) / keys.length,
                 }));
               })
             : [
@@ -584,6 +620,7 @@ export function architectureResponsibilities(
                   (weight ? segment.weight / weight : 1 / segments.length) *
                   share,
             basis:
+              (projected ? "沿用超节点主图的守恒估算分配；" : "") +
               "按故障与可改善损失项匹配，再按正Shapley分担设计责任；叶层预算按FIT份额及类型内损失项均分作参照，公共开销单列；不是独立物理损失或改善收益",
           };
         });

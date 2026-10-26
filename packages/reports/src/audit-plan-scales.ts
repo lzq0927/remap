@@ -1,21 +1,16 @@
 import type { AuditSection } from "./audit";
 import { lineChart } from "./audit-charts";
 import { parameterLabels } from "./audit-labels";
+import { auditParameter } from "../../contracts/src/audit-recovery-budget";
 import {
   summaryNumber as num,
   summaryScaleLabel as label,
   summaryColors,
 } from "./audit-scale-summary";
 const pct = (v: number) => num(v * 100) + "%";
-const probability = (key: string) =>
-  /^(coverage|success|recoverySuccess|detectProbability|slowDetectProbability|manualProbability|overhead|validationOverhead|eligibleShare|reduction|communicationFraction|bandwidthRatio)$/i.test(
-    key,
-  );
 const format = (key: string, value: unknown) =>
   typeof value === "number"
-    ? probability(key)
-      ? pct(value)
-      : num(value, 6)
+    ? auditParameter(value, key)
     : String(value ?? "未调整");
 
 export function planScaleChart(result: any) {

@@ -1,19 +1,10 @@
-/** Requirement derivation only. Never used as a recovery time by the solver. */
-export const auditTargetBasis = {
-  anchorCards: 500000,
-  anchorTarget: 0.985,
-  anchorMtbfHours: 0.6,
-  recoveryReferenceHours: 0.6 * (1 / 0.985 - 1),
-  formula: "A = MTBF / (MTBF + 目标推导参考恢复时间)",
-};
-export function derivedAvailabilityTarget(mtbfHours: number) {
-  return mtbfHours / (mtbfHours + auditTargetBasis.recoveryReferenceHours);
-}
+/** Common requirement floor across scales, independent of technology-scenario outcomes. */
+export const auditCommonAvailabilityTarget: number = 0.985;
 export const auditScalePresets = [
-  { cards: 500000, target: 0.985, hardMtbfHours: 0.6 },
-  { cards: 200000, target: derivedAvailabilityTarget(1.5), hardMtbfHours: 1.5 },
-  { cards: 100000, target: derivedAvailabilityTarget(3), hardMtbfHours: 3 },
-  { cards: 10000, target: derivedAvailabilityTarget(30), hardMtbfHours: 30 },
+  { cards: 500000, target: auditCommonAvailabilityTarget, hardMtbfHours: 0.6 },
+  { cards: 200000, target: auditCommonAvailabilityTarget, hardMtbfHours: 1.5 },
+  { cards: 100000, target: auditCommonAvailabilityTarget, hardMtbfHours: 3 },
+  { cards: 10000, target: auditCommonAvailabilityTarget, hardMtbfHours: 30 },
 ] as const;
 export const auditDefaultTargets = Object.fromEntries(
   auditScalePresets.map((p) => [String(p.cards), p.target]),

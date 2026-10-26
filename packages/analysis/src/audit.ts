@@ -1,4 +1,5 @@
 import { auditPlanningModelKeys } from "../../contracts/src/audit-planning";
+import { topologyDecision } from "./audit-topology-decision";
 import {
   trainingScenarioIssues,
   type TrainingScenario,
@@ -1149,6 +1150,7 @@ function auditOneRound(
   return {
     ...result,
     architectureDiagnosis,
+    topologyDecision: topologyDecision({ ...result, architectureDiagnosis }),
     networkStudyResult: networkStudySnapshot(
       architectureDiagnosis.architecture,
       result.request.cards,

@@ -2,6 +2,8 @@ import { planScaleSections } from "./audit-plan-scales";
 import { auditArchitectureDiagnosis } from "../../analysis/src/audit-architecture";
 import { trainingScenarioComparisonTables } from "./audit-training-scenario";
 import { layerDecisionSvg } from "./audit-layer-decision";
+import { topologyEstimateDetails } from "./audit-topology-decision";
+import { topologyDecision } from "../../analysis/src/audit-topology-decision";
 import { decisionStudySections } from "./audit-decision-study";
 import { architectureSections } from "./audit-architecture";
 import { auditMechanismSummary } from "../../contracts/src/audit-mechanism-view";
@@ -13,11 +15,11 @@ import type { Run } from "../../contracts/src/types";
 import type { AuditSection } from "./audit";
 import { parameterLabels } from "./audit-labels";
 import { lineChart } from "./audit-charts";
-const number = (value: number, digits = 5) =>
-  Number.isFinite(value)
-    ? value.toLocaleString("zh-CN", { maximumFractionDigits: digits })
-    : "—";
-const percent = (value: number) => number(value * 100) + "%";
+import {
+  auditNumber as number,
+  auditPercent as percent,
+  auditParameter,
+} from "../../contracts/src/audit-recovery-budget";
 export const experimentStatus: Record<string, string> = {
   supported: "假设下采样支持",
   below: "低于目标",
@@ -147,7 +149,7 @@ export function compareAuditExperiments(runs: Run[]) {
         ? run.result.request.trials
         : run.result.rows[0]?.statistics.n,
   }));
-  return {
+  const comparison = {
     kind: "expert-audit-comparison",
     name: "多次评估横向比较",
     metricId: "training.retained-clean-progress",
@@ -170,6 +172,13 @@ export function compareAuditExperiments(runs: Run[]) {
           "第一轮真实现状指使用确认的现状参数评估，不等同于现场可用度实测。",
           "分配建议未执行第二轮；只有用户单独点击并完成的评估进入横向比较。",
         ],
+  };
+  return {
+    ...comparison,
+    topologyDecision: topologyDecision(
+      comparison,
+      base?.result.topologyDecision,
+    ),
   };
 }
 function parameterEntries(result: any) {
@@ -194,7 +203,7 @@ function parameterEntries(result: any) {
         "新增专家机制",
         "未部署",
         Object.entries(factor.value.parameters)
-          .map(([k, v]) => `${k}=${v}`)
+          .map(([k, v]) => `${k}=${auditParameter(Number(v), k)}`)
           .join("；"),
         factor.source,
       ]);
@@ -207,8 +216,10 @@ function parameterEntries(result: any) {
           (factor.kind === "schedule"
             ? `${number(Number(key), 0)}卡周期 / 秒`
             : key),
-        factor.kind === "fit" ? "见来源" : number(factor.before?.[key]),
-        number(Number(value)),
+        factor.kind === "fit"
+          ? "见来源"
+          : auditParameter(factor.before?.[key], key),
+        auditParameter(Number(value), key),
         factor.source,
       ]);
   }
@@ -631,7 +642,7 @@ export function experimentSections(result: any): AuditSection[] {
             ...entries.map((e: any) =>
               key.startsWith("ext:") && value(e, key) === undefined
                 ? "未部署"
-                : number(value(e, key)),
+                : auditParameter(value(e, key), key),
             ),
           ]),
         },
@@ -696,7 +707,7 @@ export function experimentChart(result: any) {
     });
   const decision =
     result.comparisonMode === "training-scenarios"
-      ? `<details><summary>展开三档分层分配、差距与机制总图</summary><div class="table-wrap">${layerDecisionSvg(result, result.request.cards)}</div></details>`
+      ? `<details open><summary>展开三档分层分配、差距与机制总图</summary><div class="table-wrap">${layerDecisionSvg(result, result.request.cards)}</div></details>${topologyEstimateDetails(result, result.request.cards)}`
       : "";
   return (
     decision +

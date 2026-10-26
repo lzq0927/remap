@@ -7,11 +7,11 @@ import { lineChart } from "./audit-charts";
 import { parameterLabels } from "./audit-labels";
 import { auditExtensionCatalog } from "../../contracts/src/audit-extensions";
 import { auditSummaryRows } from "../../contracts/src/audit-presets";
-const num = (n: number, digits = 4) =>
-  Number.isFinite(n)
-    ? n.toLocaleString("zh-CN", { maximumFractionDigits: digits })
-    : "—";
-const pct = (n: number) => num(n * 100) + "%";
+import {
+  auditNumber as num,
+  auditPercent as pct,
+  auditParameter,
+} from "../../contracts/src/audit-recovery-budget";
 const esc = (value: unknown) =>
   String(value ?? "").replace(
     /[&<>"']/g,
@@ -53,8 +53,10 @@ function parameterEntries(r: any) {
             : (definition?.parameters[key]?.label ??
               parameterLabels[key] ??
               key),
-          f.kind === "extension" ? "现状未部署" : num(f.before?.[key]),
-          num(Number(value)),
+          f.kind === "extension"
+            ? "现状未部署"
+            : auditParameter(f.before?.[key], key),
+          auditParameter(Number(value), key),
         ],
         source: f.parameterSources?.[key] ?? f.source ?? "工程目标，待确认",
       });
@@ -126,7 +128,7 @@ export function auditOptimizationSections(r: any): AuditSection[] {
         o.strategy,
         o.firstRound,
         o.reason,
-        "初始目标由 50 万卡 98.5% 与参考 MTBF 0.6h 推导共同恢复预算，再用其他规模的参考 MTBF 得出需求目标；此推导不修改仿真的恢复时间。历史或自定义目标以本次冻结输入为准。",
+        "目标采用本次冻结的分规模输入；MTTR参考预算按各规模/场景MTBF×(1−A)/A分别反推，不共用同一个恢复秒数。机制参考值可调整，分配结果须独立复评；该换算不修改故障或恢复参数。",
         o.planningVersion === "agree-mechanism-design-v3"
           ? "第一轮评估现有措施，不先分配固定指标。第二轮以各规模贡献建议 AGREE 工程重要度，先冻结损失路径预算，再筛选专家机制、反解参数，并用同一故障模型独立复评。源 FIT 不因目标缺口自动降低。"
           : o.planningVersion === "mechanism-bounds-v2"
@@ -210,14 +212,14 @@ export function auditOptimizationSections(r: any): AuditSection[] {
     const requirementRows = (cards: number) =>
       requirements(cards).map((p: any, i: number) => [
         requirementName(p),
-        num(p.reference, 7),
-        num(p.allowedHours, 7),
-        (p.direction === "up" ? "≥ " : "≤ ") + num(p.required, 7),
-        num(
+        auditParameter(p.reference, p.key),
+        num(p.allowedHours),
+        "约 " + auditParameter(p.required, p.key),
+        auditParameter(
           p.code === "schedule"
             ? p.adopted
             : o.design.envelope.find((e: any) => e.id === p.id)?.adopted,
-          7,
+          p.key,
         ),
         `D${cards}-${i + 1}${p.locked ? " · 显式锁定" : ""}`,
       ]);
@@ -233,13 +235,14 @@ export function auditOptimizationSections(r: any): AuditSection[] {
                 demanding
                   .map(
                     (p: any) =>
-                      `${requirementName(p)} ${num(p.reference, 7)} → ${num(p.adopted, 7)}`,
+                      `${requirementName(p)} ${auditParameter(p.reference, p.key)} → ${auditParameter(p.adopted, p.key)}`,
                   )
                   .join("；") +
                 "。这些是预算反解要求，当前没有产品可达证据；评估达标以这些能力与成本同时实现为条件。",
             ]
           : []),
         "下面分别列出每个规模的分配要求；共同参数取各规模最严格要求，检查点周期分别配置。只在显式输入锁定时保留用户值，超预算仍显示；不把预算不足换算成大幅降低FIT。",
+        "展示数值适度取整，概率以百分数显示；完整精度保留在运行数据中，独立复评使用实际参数。极小正值不显示为0，接近100%的检出率不显示为已完全检出。",
       ],
       tables: [
         {
@@ -247,7 +250,7 @@ export function auditOptimizationSections(r: any): AuditSection[] {
             "机制 / 参数",
             "参考初值",
             "对应子预算 / h",
-            "该规模要求",
+            "该规模要求（近似）",
             "共同采用值 / 周期",
             "推导索引",
           ],
@@ -512,7 +515,7 @@ export function auditOptimizationSections(r: any): AuditSection[] {
             num(s.diagnostics.totalExcessHours),
             num(s.diagnostics.checkpoint.periodSeconds),
             num(s.diagnostics.checkpoint.saveSeconds),
-            num(s.diagnostics.checkpoint.allocatedSaveSeconds, 6),
+            num(s.diagnostics.checkpoint.allocatedSaveSeconds),
             num(s.diagnostics.downtimeSecondsPerObservedRecovery),
           ]),
         },

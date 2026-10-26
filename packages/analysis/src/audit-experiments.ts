@@ -1,3 +1,4 @@
+import { topologyDecision } from "./audit-topology-decision";
 import {
   auditArchitectureDiagnosis,
   architectureReviewChecks,
@@ -522,6 +523,10 @@ export function auditExperiment(
     ...result,
     events: scenarioEvents,
     architectureDiagnosis,
+    topologyDecision: topologyDecision(
+      { ...result, events: scenarioEvents, architectureDiagnosis },
+      source.result.topologyDecision ?? undefined,
+    ),
     networkStudyResult: structuredClone(
       source.result.networkStudyResult ?? null,
     ),

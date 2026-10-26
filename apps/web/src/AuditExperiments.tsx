@@ -16,7 +16,7 @@ import type { AuditPlanningOptions } from "../../../packages/contracts/src/audit
 import { auditMechanismSummary } from "../../../packages/contracts/src/audit-mechanism-view";
 import { auditReferenceOnly } from "../../../packages/contracts/src/audit-presets";
 import { experimentStatus } from "../../../packages/reports/src/audit-experiments";
-const pct = (value: number) => (value * 100).toFixed(4) + "%";
+import { auditPercent as pct } from "../../../packages/contracts/src/audit-recovery-budget";
 const blank = (): AuditOptimizationRequest => ({
   enabled: true,
   autoTune: false,

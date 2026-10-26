@@ -1,4 +1,7 @@
-import { trainingScenarioSections } from "./audit-training-scenario";
+import {
+  trainingScenarioSections,
+  targetRecoverySections,
+} from "./audit-training-scenario";
 import {
   auditSummaryRows,
   auditSummaryScales,
@@ -182,6 +185,7 @@ export function auditSections(r: any): AuditSection[] {
   });
   const brief = auditSummary(r);
   const sections: AuditSection[] = [
+    ...targetRecoverySections(r),
     ...trainingScenarioSections(r),
     ...auditOptimizationSections(r),
     {

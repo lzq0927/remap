@@ -11,7 +11,6 @@ import {
   resolveAudit,
 } from "../../packages/analysis/src/audit";
 import {
-  auditTargetBasis,
   auditScalePresets,
 } from "../../packages/contracts/src/audit-presets";
 import {
@@ -40,29 +39,20 @@ const small = () => ({
   },
 });
 
-it("derives requirement targets from the 500k anchor without replacing fault recovery or FIT", () => {
+it("uses a common requirement floor across scales without replacing fault recovery or FIT", () => {
   const input = getAuditDefaults(),
     resolved = resolveAudit(input);
   expect(input.cards).toBe(500000);
   expect(input.scales[0]).toBe(500000);
   expect(input.target).toBe(0.985);
   expect(input.lossBudgetMethod).toBe("none");
-  expect(auditTargetBasis.recoveryReferenceHours * 3600).toBeCloseTo(
-    32.893401,
-    5,
-  );
   expect(auditScalePresets.map((p) => (p.target * 100).toFixed(2))).toEqual([
     "98.50",
-    "99.39",
-    "99.70",
-    "99.97",
+    "98.50",
+    "98.50",
+    "98.50",
   ]);
-  for (const p of auditScalePresets)
-    expect(p.target).toBeCloseTo(
-      p.hardMtbfHours /
-        (p.hardMtbfHours + auditTargetBasis.recoveryReferenceHours),
-      14,
-    );
+  expect(new Set(auditScalePresets.map(p => p.target)).size).toBe(1);
   expect(resolved.model.recoveryAttemptSeconds).toBe(180);
   expect(resolved.events.map((e) => e.fit)).toEqual(
     getAuditEvents().map((e) => e.fit),

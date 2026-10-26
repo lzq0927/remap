@@ -53,14 +53,34 @@ for (const width of [1440, 390])
         .click();
       const editor = page.locator(".training-scenario-editor");
       await editor.getByLabel("训练场景模板", { exact: true }).selectOption(id);
+      const budget = editor.getByRole("region", {
+        name: "目标与等效MTTR核算",
+        exact: true,
+      });
+      await expect(budget).toContainText("98.5%");
+      if (id === "current") {
+        await expect(budget).toContainText("1,644.7");
+        await expect(budget).toContainText("1,440");
+      } else {
+        await expect(budget).toContainText(
+          id === "extension" ? "15.5" : "41.1",
+        );
+        await expect(
+          editor.getByLabel("参考MTBF（分钟）", { exact: true }),
+        ).toHaveValue(id === "extension" ? "17" : "45");
+      }
+      await editor.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: `artifacts/evidence-allocation/budget-${id}-${width}.png`,
+      });
       if (id !== "current")
         await editor
           .getByLabel("检查点 / step周期（秒）", { exact: true })
           .fill("1");
       if (id === "breakthrough")
         await editor
-          .getByLabel("静默检出率（99.x须明确）", { exact: true })
-          .fill("0.995");
+          .getByLabel("静默检出率（%，可调整）", { exact: true })
+          .fill("99.5");
       await editor
         .getByLabel("MTBF故障范围", { exact: true })
         .selectOption("compute");
@@ -135,6 +155,11 @@ for (const width of [1440, 390])
       const run = history[0];
       ids.push(run.id);
       expect(run.result.request.hours).toBe(600);
+      for (const cards of [10000, 100000, 200000, 500000])
+        expect(run.result.request.targets[cards]).toBe(0.985);
+      expect(run.result.config.policy["D-SDC"].coverage).toBe(
+        id === "current" ? 0.8 : id === "extension" ? 0.95 : 0.995,
+      );
       const d = run.result.architectureDiagnosis.scales.find(
         (s: any) => s.cards === 500000,
       );
@@ -166,6 +191,39 @@ for (const width of [1440, 390])
             exact: true,
           }),
         ).toBeVisible();
+        await diagnosis
+          .getByRole("button", { name: "全屏大图", exact: true })
+          .click();
+        const full = page.getByRole("dialog", {
+          name: "架构图全屏",
+          exact: true,
+        });
+        await expect(full).toBeVisible();
+        expect(
+          await full.evaluate((el) => {
+            const box = el.getBoundingClientRect();
+            return (
+              box.x === 0 &&
+              box.y === 0 &&
+              Math.abs(box.width - innerWidth) < 1 &&
+              Math.abs(box.height - innerHeight) < 1 &&
+              el.contains(
+                document.elementFromPoint(innerWidth / 2, innerHeight - 30),
+              )
+            );
+          }),
+        ).toBe(true);
+        await full
+          .getByRole("button", { name: "放大全景", exact: true })
+          .click();
+        await page.screenshot({
+          path: `artifacts/evidence-allocation/fullscreen-${width}.png`,
+        });
+        await page.keyboard.press("Escape");
+        await expect(full).toHaveCount(0);
+        expect(
+          await page.evaluate(() => document.body.style.overflow),
+        ).not.toBe("hidden");
         await diagnosis
           .getByText("分层分配依据 · 故障 / 损失 / Shapley / AGREE", {
             exact: true,
@@ -203,6 +261,29 @@ for (const width of [1440, 390])
     await expect(
       history.getByRole("link", { name: "下载训练场景比较报告", exact: true }),
     ).toBeVisible({ timeout: 30000 });
+    await history
+      .getByRole("button", { name: "全屏查看三档总图", exact: true })
+      .click();
+    const fullComparison = page.getByRole("dialog", {
+      name: "三档决策总图全屏",
+      exact: true,
+    });
+    await expect(fullComparison).toContainText("损失—可靠性机制热力图");
+    await expect(fullComparison).toContainText("参数面Spine");
+    expect(
+      await fullComparison.evaluate((el) =>
+        el.contains(
+          document.elementFromPoint(innerWidth / 2, innerHeight - 30),
+        ),
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `artifacts/evidence-allocation/three-fullscreen-${width}.png`,
+    });
+    await fullComparison
+      .getByRole("button", { name: "退出总图全屏（Esc）", exact: true })
+      .click();
+    await expect(fullComparison).toHaveCount(0);
     const download = page.waitForEvent("download");
     await history
       .getByRole("button", { name: "导出三档分层总图 SVG", exact: true })

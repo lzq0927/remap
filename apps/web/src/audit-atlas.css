@@ -1147,3 +1147,170 @@
     padding: 4px;
   }
 }
+
+/* Top-layer dialog prevents fixed navigation and Agent panels from covering the graph. */
+.diagram-full-dialog {
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  background: #f4f7fa;
+  color: #19384c;
+  overflow: hidden;
+}
+.diagram-full-dialog::backdrop {
+  background: #142f46;
+}
+.diagram-full-dialog .atlas-full {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 0;
+  padding: 14px 18px;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.diagram-full-dialog .atlas-full > * {
+  flex-shrink: 0;
+}
+.diagram-full-dialog .atlas-full .atlas-heading {
+  position: sticky;
+  top: -14px;
+  z-index: 5;
+  background: #fff;
+  padding: 8px 0;
+}
+.diagram-full-dialog .atlas-full .atlas-body {
+  flex: 1;
+  min-height: 240px;
+  display: flex;
+  gap: 12px;
+}
+.diagram-full-dialog .atlas-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.diagram-full-dialog .atlas-full .atlas-canvas,
+.diagram-full-dialog .atlas-full .atlas-flow {
+  flex: 1;
+  min-height: 220px;
+  height: 100%;
+}
+.diagram-full-dialog .atlas-full .atlas-inspector {
+  position: static;
+  flex: 0 0 320px;
+  max-height: 100%;
+  overflow: auto;
+}
+.decision-diagram {
+  border: 1px solid #d7e3eb;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 16px 0;
+  background: #f4f7fa;
+}
+.decision-diagram-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: white;
+  border-bottom: 1px solid #d7e3eb;
+}
+.decision-diagram-toolbar small {
+  color: #587287;
+}
+.decision-diagram-toolbar button {
+  padding: 6px 10px;
+}
+.decision-diagram-viewport {
+  height: 640px;
+  overflow: auto;
+  touch-action: pan-x pan-y;
+  cursor: grab;
+  overscroll-behavior: contain;
+}
+.decision-diagram-viewport svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: none;
+}
+.decision-diagram-full {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.decision-diagram-full .decision-diagram-viewport {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+@media (max-width: 600px) {
+  .diagram-full-dialog .atlas-full {
+    padding: 8px;
+  }
+  .diagram-full-dialog .atlas-full .atlas-body.with-inspector {
+    flex-direction: column;
+  }
+  .diagram-full-dialog .atlas-full .atlas-inspector {
+    flex-basis: 240px;
+    width: 100%;
+  }
+  .decision-diagram-toolbar strong {
+    width: 100%;
+  }
+  .decision-diagram-toolbar small {
+    font-size: 11px;
+  }
+}
+
+.diagram-full-dialog .atlas-full:not(.atlas-show-tools) > .workbench-kpis,
+.diagram-full-dialog .atlas-full:not(.atlas-show-tools) .atlas-breadcrumb,
+.diagram-full-dialog .atlas-full:not(.atlas-show-tools) .atlas-views > label {
+  display: none;
+}
+.atlas-full-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.atlas-full-scale select {
+  width: 130px;
+  margin: 0;
+  padding: 3px 6px;
+}
+
+.diagram-full-dialog .atlas-flow-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 440px;
+}
+.diagram-full-dialog .atlas-full .atlas-flow {
+  height: auto;
+  min-height: 360px;
+}
+/* React Flow's percentage-height root needs a definite canvas height. */
+.diagram-full-dialog .atlas-full .atlas-flow {
+  flex: none;
+  height: calc(100dvh - 340px);
+  min-height: 360px;
+}
