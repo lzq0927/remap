@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import FullscreenLayer from "./FullscreenLayer";
-import { topologyDecisionSvg } from "../../../packages/reports/src/audit-topology-decision";
+import {
+  decisionPageSvg,
+  decisionViews,
+  type DecisionView,
+} from "../../../packages/reports/src/audit-decision-pages";
 import "./audit-atlas.css";
 export default function AuditDecisionDiagram({ result }: { result: any }) {
+  const [view, setView] = useState<DecisionView>("architecture"),
+    [cards, setCards] = useState(result.request?.cards ?? 500000),
+    [detail, setDetail] = useState("");
   const [full, setFull] = useState(false),
     [zoom, setZoom] = useState(0.5),
     [fit, setFit] = useState(true);
@@ -13,7 +20,7 @@ export default function AuditDecisionDiagram({ result }: { result: any }) {
     left: number;
     top: number;
   } | null>(null);
-  const svg = topologyDecisionSvg(result, result.request?.cards ?? 500000);
+  const svg = decisionPageSvg(result, cards, view);
   const width = Number(svg.match(/width="([^"]+)"/)?.[1] ?? 2400);
   useEffect(() => {
     if (!fit || !viewport.current) return;
@@ -31,7 +38,58 @@ export default function AuditDecisionDiagram({ result }: { result: any }) {
       aria-label="三档综合决策图"
     >
       <div className="decision-diagram-toolbar">
-        <strong>50万卡主图 · 四规模对照</strong>
+        <strong>架构、损失与改进要求</strong>
+        <select
+          aria-label="决策图规模"
+          value={cards}
+          onChange={(e) => {
+            setCards(Number(e.target.value));
+            setDetail("");
+          }}
+        >
+          {(
+            result.topologyDecision?.scales ??
+            result.architectureDiagnosis?.scales ??
+            []
+          ).map((s: any) => (
+            <option key={s.cards} value={s.cards}>
+              {s.cards / 10000}万卡
+            </option>
+          ))}
+        </select>
+        <div
+          className="decision-view-tabs"
+          role="group"
+          aria-label="决策图视图"
+        >
+          {decisionViews.map((v) => (
+            <button
+              key={v.id}
+              aria-pressed={view === v.id}
+              onClick={() => {
+                setView(v.id);
+                setFit(true);
+                setDetail("");
+              }}
+            >
+              {v.name}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => {
+            const u = URL.createObjectURL(
+              new Blob([svg], { type: "image/svg+xml" }),
+            );
+            const a = document.createElement("a");
+            a.href = u;
+            a.download = `ReMAP-${view}-${cards}.svg`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(u), 1000);
+          }}
+        >
+          导出当前图 SVG
+        </button>
         <button type="button" onClick={() => setFull(!full)}>
           {full ? "退出总图全屏（Esc）" : "全屏查看三档总图"}
         </button>
@@ -61,13 +119,39 @@ export default function AuditDecisionDiagram({ result }: { result: any }) {
         </button>
         <small>拖动画布 / 触屏滚动 · 放大查看模块数值</small>
       </div>
+      {detail && (
+        <p role="status" className="decision-node-detail">
+          {detail}
+          <button onClick={() => setDetail("")}>关闭详情</button>
+        </p>
+      )}
       <div
+        onClick={(e) => {
+          const target = (e.target as Element).closest("[data-decision-node]");
+          if (target) setDetail(target.textContent ?? "");
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            const target = (e.target as Element).closest(
+              "[data-decision-node]",
+            );
+            if (target) {
+              e.preventDefault();
+              setDetail(target.textContent ?? "");
+            }
+          }
+        }}
         className="decision-diagram-viewport"
         ref={viewport}
         tabIndex={0}
         aria-label="三档总图画布"
         onPointerDown={(e) => {
-          if (e.pointerType === "touch" || e.button !== 0) return;
+          if (
+            e.pointerType === "touch" ||
+            e.button !== 0 ||
+            (e.target as Element).closest("[data-decision-node]")
+          )
+            return;
           drag.current = {
             x: e.clientX,
             y: e.clientY,

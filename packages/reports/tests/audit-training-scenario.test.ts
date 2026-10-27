@@ -59,7 +59,7 @@ it("calibrates the selected reference-scale rate without multiplying inventory t
     500000,
   )[0];
   expect(scaled.fit).toBeCloseTo(stored.fit * 2, 10);
-  expect(1e9 / 500000 / scaled.fit).toBeCloseTo(17 / 60, 10);
+  expect(1e9 / 500000 / scaled.fit).toBeCloseTo(18 / 60, 10);
 });
 it("requires explicit step, 99.x, event scope and investigation interpretation", () => {
   const s = trainingScenarioPreset("breakthrough");
@@ -185,15 +185,15 @@ it("compares independent scenarios without fitting reference percentages or movi
   expect(svg).toContain("延长线改进");
   expect(svg).toContain("突破性改进");
   expect(svg).toContain("正贡献投影");
-  expect(svg).toContain("目标等效MTTR 15.5 s");
-  expect(svg).toContain("目标等效MTTR 41.1 s");
+  expect(svg).toContain("16.4");
+  expect(svg).toContain("41.1");
   expect(svg).not.toMatch(/NaN|Infinity/);
   const html = report({ ...runs[0], result: comparison }, "html");
   expect(html).toContain("相对各自固定基线");
   expect(html).toContain("model.manualAdditionalSeconds");
   expect(html).toContain("CORE-hard FIT");
   expect(html).toContain("50万卡正式目标");
-  expect(html).toContain("15.5");
+  expect(html).toContain("16.4");
   expect(html).toContain("41.1");
   expect(runs).toEqual(before);
   const incompatible = structuredClone(runs);

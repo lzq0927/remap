@@ -161,18 +161,7 @@ it("freezes current topology allocation across three independent scenarios and k
   ).toBeGreaterThan(0.985);
   const svg = topologyDecisionSvg(comparison),
     details = topologyEstimateDetails(comparison, 500000);
-  for (const s of [
-    "损失—可靠性机制热力图",
-    "参数面Leaf",
-    "参数面Spine",
-    "10万卡",
-    "20万卡",
-    "50万卡",
-    "等效MTTR",
-    "净减损",
-    "目标等效MTTR 15.5 s",
-    "目标等效MTTR 41.1 s",
-  ])
+  for (const s of ["架构与指标差距", "光模块 / 光链路", "Leaf / Spine", "等效MTTR", "正贡献投影", "41.1"])
     expect(svg).toContain(s);
   expect(svg).not.toMatch(/待补充|NaN|Infinity/);
   expect(details).toContain("工程估算");

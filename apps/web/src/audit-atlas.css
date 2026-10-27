@@ -1314,3 +1314,5 @@
   height: calc(100dvh - 340px);
   min-height: 360px;
 }
+
+.decision-view-tabs{display:flex;gap:6px;overflow-x:auto;max-width:100%}.decision-view-tabs button{white-space:nowrap}.decision-view-tabs [aria-pressed="true"]{background:#244f6b;color:#fff}.decision-node-detail{padding:12px;background:#fff6df;border-left:4px solid #ac812e}.decision-diagram-viewport svg{height:auto;max-width:100%}

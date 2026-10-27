@@ -1,3 +1,4 @@
+import { decisionPagesHtml } from "./audit-decision-pages";
 import { layerDecisionSvg, layerAllocationTable } from "./audit-layer-decision";
 import { topologyEstimateDetails } from "./audit-topology-decision";
 import { atlasReport, atlasMarkdown } from "./audit-atlas";
@@ -141,7 +142,7 @@ export function architectureReport(result: any) {
   const primary =
     d.scales.find((s) => s.cards === result.request.cards) ??
     orderedDiagnosisScales(d, true)[0];
-  return `<div class="architecture-diagnosis scale-summary"><h3>分层分配与机制决策总图</h3><div class="table-wrap">${layerDecisionSvg(result, primary.cards)}</div>${topologyEstimateDetails(result, primary.cards)}${layerAllocationTable(d, primary.cards)}${atlasReport(result)}<p class="note">${esc(d.architecture.basis)}</p><details class="arch-evidence"><summary>展开完整系统架构与来源 · ${primary.cards.toLocaleString()}卡</summary>${architectureTree(d.architecture, d, primary.cards, 10)}</details>${hardwareReport(d, primary.cards)}${architectureSummary(d)}${contributionHeatmap(d)}<h3>各规模优先核对的薄弱点与改进路径</h3>${architectureDecisionBrief(d)}<details class="arch-evidence"><summary>子系统与故障对象差距矩阵</summary>${architectureHeatmap(d)}${architectureHeatmap(d, "leaf")}</details>${orderedDiagnosisScales(
+  return `<div class="architecture-diagnosis scale-summary"><h3>分层分配与机制决策总图</h3><div class="table-wrap">${decisionPagesHtml(result, primary.cards) || layerDecisionSvg(result, primary.cards)}</div>${topologyEstimateDetails(result, primary.cards)}${layerAllocationTable(d, primary.cards)}${atlasReport(result)}<p class="note">${esc(d.architecture.basis)}</p><details class="arch-evidence"><summary>展开完整系统架构与来源 · ${primary.cards.toLocaleString()}卡</summary>${architectureTree(d.architecture, d, primary.cards, 10)}</details>${hardwareReport(d, primary.cards)}${architectureSummary(d)}${contributionHeatmap(d)}<h3>各规模优先核对的薄弱点与改进路径</h3>${architectureDecisionBrief(d)}<details class="arch-evidence"><summary>子系统与故障对象差距矩阵</summary>${architectureHeatmap(d)}${architectureHeatmap(d, "leaf")}</details>${orderedDiagnosisScales(
     d,
     true,
   )

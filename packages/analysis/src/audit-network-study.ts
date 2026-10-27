@@ -43,10 +43,22 @@ export function networkSuccessTree(
         id: `cabinet-${(Math.floor((plane * c.cabinets) / c.planes) + (layout === "split-cabinet" ? branch : 0)) % c.cabinets}`,
         probability: cabinet,
       },
-      { type: "event", id: `device-${plane}-${branch}`, probability: device },
+      {
+        type: "event",
+        id:
+          c.opticsPerPath === undefined
+            ? `device-${plane}-${branch}`
+            : `path-${plane}-${branch}-device`,
+        probability: device,
+      },
+      ...Array.from({ length: c.opticsPerPath ?? 0 }, (_, i) => ({
+        type: "event" as const,
+        id: `path-${plane}-${branch}-optic-${i}`,
+        probability: 1 / (1 + c.opticFit! * 1e-9 * c.opticRepairHours!),
+      })),
     ],
   });
-  return {
+  const capacity: StaticNode = {
     type: "kofn",
     k: c.requiredPlanes,
     children: Array.from({ length: c.planes }, (_, i) =>
@@ -55,6 +67,19 @@ export function networkSuccessTree(
         : { type: "or", children: [path(i, 0), path(i, 1)] },
     ),
   } as StaticNode;
+  return c.sharedFit === undefined
+    ? capacity
+    : ({
+        type: "and",
+        children: [
+          capacity,
+          {
+            type: "event",
+            id: "shared-upstream",
+            probability: 1 / (1 + c.sharedFit * 1e-9 * c.sharedRepairHours!),
+          },
+        ],
+      } as StaticNode);
 }
 
 function wilson(successes: number, n: number): [number, number] {
@@ -135,7 +160,10 @@ export function compareNetworkLayouts(input: NetworkStudy, supernodes = 1) {
     },
   );
   return {
-    method: "l2-capacity-bdd-snapshot-mc.v1",
+    method:
+      config.opticsPerPath === undefined
+        ? "l2-capacity-bdd-snapshot-mc.v1"
+        : "l2-optics-shared-bdd-snapshot-mc.v2",
     metric: "steady-state-structural-availability",
     config,
     supernodes,

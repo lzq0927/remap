@@ -50,7 +50,8 @@ export default function AuditTrainingScenarioEditor({
     <details className="training-scenario-editor">
       <summary>600小时三档训练场景 · 现状 / 延长线 / 突破</summary>
       <p>
-        固定600小时总窗口。当前万卡98.5%是现状参考；各需求规模默认共同目标为98.5%，技术增强后的结果可以高于目标。60% /
+        固定600小时总窗口。当前万卡98.5%是现状参考；各需求规模默认共同目标为98.5%，技术增强后的结果可以高于目标。60%
+        /
         82%是原始现状/延长线参考值；延长线与突破方案均按正式目标评估，默认50万卡98.5%。参数只是可调整的参考起点，未达标时可通过分配继续改善，再单独评估。每档分别运行，保留旧结果。
       </p>
       <label>
@@ -75,21 +76,51 @@ export default function AuditTrainingScenarioEditor({
       <details>
         <summary>其他规模的可用度参考值（可选，非计算结果）</summary>
         <div className="fields">
-          {[...new Set([request.cards, ...(request.scales ?? []), ...Object.keys(s.referenceAvailabilityByScale ?? {}).map(Number)])]
-            .filter(c => c !== (s.referenceAvailabilityCards ?? 500000))
-            .sort((a,b) => a-b)
-            .map(c => <label key={c}>{c.toLocaleString()}卡参考可用度（%）
-              <input aria-label={`${c}卡参考可用度（%）`} type="number" min="0" max="100" step="any"
-                value={s.referenceAvailabilityByScale?.[c] === undefined ? "" : Number((s.referenceAvailabilityByScale[c] * 100).toPrecision(12))}
-                onChange={e => {
-                  const referenceAvailabilityByScale = {...s.referenceAvailabilityByScale};
-                  if (e.target.value === "") delete referenceAvailabilityByScale[c];
-                  else referenceAvailabilityByScale[c] = Number(e.target.value) / 100;
-                  patch({referenceAvailabilityByScale});
-                }} />
-            </label>)}
+          {[
+            ...new Set([
+              request.cards,
+              ...(request.scales ?? []),
+              ...Object.keys(s.referenceAvailabilityByScale ?? {}).map(Number),
+            ]),
+          ]
+            .filter((c) => c !== (s.referenceAvailabilityCards ?? 500000))
+            .sort((a, b) => a - b)
+            .map((c) => (
+              <label key={c}>
+                {c.toLocaleString()}卡参考可用度（%）
+                <input
+                  aria-label={`${c}卡参考可用度（%）`}
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="any"
+                  value={
+                    s.referenceAvailabilityByScale?.[c] === undefined
+                      ? ""
+                      : Number(
+                          (s.referenceAvailabilityByScale[c] * 100).toPrecision(
+                            12,
+                          ),
+                        )
+                  }
+                  onChange={(e) => {
+                    const referenceAvailabilityByScale = {
+                      ...s.referenceAvailabilityByScale,
+                    };
+                    if (e.target.value === "")
+                      delete referenceAvailabilityByScale[c];
+                    else
+                      referenceAvailabilityByScale[c] =
+                        Number(e.target.value) / 100;
+                    patch({ referenceAvailabilityByScale });
+                  }}
+                />
+              </label>
+            ))}
         </div>
-        <p className="note">这些是各规模分别提供的参考点；不假定各规模采用相同MTTR，不强制拟合仿真结果。</p>
+        <p className="note">
+          这些是各规模分别提供的参考点；不假定各规模采用相同MTTR，不强制拟合仿真结果。
+        </p>
       </details>
       <div className="fields">
         <label>
@@ -153,6 +184,52 @@ export default function AuditTrainingScenarioEditor({
           </label>
         ))}
       </div>
+      <fieldset>
+        <legend>MTBF参考范围的代际暴露</legend>
+        <p>
+          万卡保持×1，大规模可填写×2；只作用于下方选中的中断事件，其他存储、链路等在硬件配置中独立设置。未启用时沿用当前架构。
+        </p>
+        <label>
+          <input
+            type="checkbox"
+            aria-label="按规模设置MTBF暴露"
+            checked={!!s.exposureByScale}
+            onChange={(e) =>
+              patch({
+                exposureByScale: e.target.checked
+                  ? { 10000: 1, 100000: 2, 200000: 2, 500000: 2 }
+                  : undefined,
+              })
+            }
+          />
+          启用MTBF范围的分规模暴露
+        </label>
+        {s.exposureByScale && (
+          <div className="fields">
+            {[10000, 100000, 200000, 500000].map((c) => (
+              <label key={c}>
+                {c / 10000}万卡
+                <input
+                  aria-label={`MTBF暴露倍率 ${c}`}
+                  type="number"
+                  min="0.001"
+                  max="100"
+                  step="0.1"
+                  value={s.exposureByScale?.[c] ?? 1}
+                  onChange={(e) =>
+                    patch({
+                      exposureByScale: {
+                        ...s.exposureByScale,
+                        [c]: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        )}
+      </fieldset>
       <label>
         MTBF故障范围
         <select
@@ -168,7 +245,9 @@ export default function AuditTrainingScenarioEditor({
                         .filter(
                           (e) =>
                             e.type === "hard" &&
-                            /^(CORE|SRAM|MEMP|MEMT|MODULE|CPU|DDR)-/.test(e.id),
+                            /^(CORE|SRAM|IOD|MEMP|MEMT|MODULE|CPU|DDR|SSD)-/.test(
+                              e.id,
+                            ),
                         )
                         .map((e) => e.id)
                     : [],
@@ -182,7 +261,7 @@ export default function AuditTrainingScenarioEditor({
             </option>
           )}
           <option value="all">全部已建模中断事件</option>
-          <option value="compute">计算 / 内存对象中断事件</option>
+          <option value="compute">算力 / 内存 / 主机 / 本地存储中断事件</option>
         </select>
       </label>
       <label>

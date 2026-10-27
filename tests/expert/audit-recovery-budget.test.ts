@@ -60,8 +60,8 @@ it("keeps scenario reference availability separate from the shared improvement t
   );
   expect(current.reference?.equivalentMttrSeconds).toBeCloseTo(1440, 10);
   expect(current.target.equivalentMttrSeconds).toBeCloseTo(32.893401, 5);
-  expect(extension.target.equivalentMttrSeconds).toBeCloseTo(15.532995, 5);
-  expect(extension.reference?.equivalentMttrSeconds).toBeCloseTo(223.902439, 5);
+  expect(extension.target.equivalentMttrSeconds).toBeCloseTo(16.446701, 5);
+  expect(extension.reference?.equivalentMttrSeconds).toBeCloseTo(237.073171, 5);
   expect(breakthrough.target.equivalentMttrSeconds).toBeCloseTo(41.116751, 5);
   for (const s of [current, extension, breakthrough])
     expect(s.target.lossHours).toBeCloseTo(9, 10);

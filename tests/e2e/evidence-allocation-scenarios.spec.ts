@@ -63,11 +63,11 @@ for (const width of [1440, 390])
         await expect(budget).toContainText("1,440");
       } else {
         await expect(budget).toContainText(
-          id === "extension" ? "15.5" : "41.1",
+          id === "extension" ? "16.4" : "41.1",
         );
         await expect(
           editor.getByLabel("参考MTBF（分钟）", { exact: true }),
-        ).toHaveValue(id === "extension" ? "17" : "45");
+        ).toHaveValue(id === "extension" ? "18" : "45");
       }
       await editor.scrollIntoViewIfNeeded();
       await page.screenshot({
@@ -84,6 +84,13 @@ for (const width of [1440, 390])
       await editor
         .getByLabel("MTBF故障范围", { exact: true })
         .selectOption("compute");
+      await editor.getByLabel("按规模设置MTBF暴露", { exact: true }).check();
+      await expect(
+        editor.getByLabel("MTBF暴露倍率 10000", { exact: true }),
+      ).toHaveValue("1");
+      await expect(
+        editor.getByLabel("MTBF暴露倍率 500000", { exact: true }),
+      ).toHaveValue("2");
       await editor
         .getByLabel("人工排查映射", { exact: true })
         .selectOption("sdc-only");
@@ -155,6 +162,15 @@ for (const width of [1440, 390])
       const run = history[0];
       ids.push(run.id);
       expect(run.result.request.hours).toBe(600);
+      expect(run.result.request.trainingScenario.mtbfEventIds).toContain(
+        "IOD-hard",
+      );
+      expect(run.result.request.trainingScenario.mtbfEventIds).toContain(
+        "SSD-hard",
+      );
+      expect(run.result.request.trainingScenario.exposureByScale[500000]).toBe(
+        2,
+      );
       for (const cards of [10000, 100000, 200000, 500000])
         expect(run.result.request.targets[cards]).toBe(0.985);
       expect(run.result.config.policy["D-SDC"].coverage).toBe(
@@ -187,7 +203,7 @@ for (const width of [1440, 390])
           .click();
         await expect(
           diagnosis.getByRole("img", {
-            name: "分层分配与机制决策图",
+            name: "架构与指标差距",
             exact: true,
           }),
         ).toBeVisible();
@@ -268,8 +284,32 @@ for (const width of [1440, 390])
       name: "三档决策总图全屏",
       exact: true,
     });
-    await expect(fullComparison).toContainText("损失—可靠性机制热力图");
-    await expect(fullComparison).toContainText("参数面Spine");
+    await expect(fullComparison).toContainText("光模块 / 光链路");
+    await expect(fullComparison).toContainText("Leaf / Spine");
+    await fullComparison
+      .getByRole("button", { name: "损失—措施—参数", exact: true })
+      .click();
+    await expect(fullComparison).toContainText("三阶段逐层对照");
+    await expect(fullComparison).toContainText("M8");
+    await fullComparison
+      .getByLabel("决策图规模", { exact: true })
+      .selectOption("100000");
+    await expect(fullComparison.getByRole("img")).toContainText("100,000卡");
+    await fullComparison
+      .getByRole("button", { name: "跨规模薄弱点", exact: true })
+      .click();
+    await expect(fullComparison).toContainText("超预算");
+    await fullComparison
+      .getByRole("button", { name: "业界依据与建议", exact: true })
+      .click();
+    await expect(fullComparison).toContainText("ByteCheckpoint");
+    await fullComparison
+      .getByRole("button", { name: "架构与指标", exact: true })
+      .click();
+    await fullComparison
+      .getByRole("button", { name: "01 计算资源", exact: true })
+      .click();
+    await expect(fullComparison.getByRole("status")).toContainText("计算资源");
     expect(
       await fullComparison.evaluate((el) =>
         el.contains(

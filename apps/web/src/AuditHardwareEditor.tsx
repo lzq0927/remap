@@ -30,6 +30,18 @@ function Inventory({
     n.inventory?.unitsPerParent?.toString() ?? "",
   );
   const [source, setSource] = useState(n.inventory?.source ?? "");
+  const [exposureEnabled, setExposureEnabled] = useState(!!n.exposure);
+  const [exposureSource, setExposureSource] = useState(
+    n.exposure?.source ?? "",
+  );
+  const [exposureScope, setExposureScope] = useState(
+    n.exposure?.eventIds ?? n.eventIds,
+  );
+  const [multipliers, setMultipliers] = useState<Record<string, string>>(
+    Object.fromEntries(
+      scales.map((c) => [c, String(n.exposure?.multipliers[c] ?? 1)]),
+    ),
+  );
   const [level, setLevel] = useState(n.hardwareLevel ?? "other");
   const [enabled, setEnabled] = useState(!!n.rateModel);
   const [referenceCards, setReferenceCards] = useState(
@@ -181,10 +193,84 @@ function Inventory({
           )}
         </>
       )}
+      {leaf && !!n.eventIds.length && (
+        <fieldset>
+          <legend>代际暴露与基础FIT敏感性</legend>
+          <label>
+            <input
+              type="checkbox"
+              aria-label="启用分项代际暴露"
+              checked={exposureEnabled}
+              onChange={(e) => setExposureEnabled(e.target.checked)}
+            />
+            启用分项代际暴露
+          </label>
+          {exposureEnabled && (
+            <>
+              <p>
+                按所选事件改变等效FIT，保持卡数和BOM数量不变。存储容量、带宽翻倍只是参考，需说明对应数量或单位器件失效率；已在数量中增加的部分不要重复填写倍率。
+              </p>
+              {n.eventIds.map((id) => (
+                <label key={id}>
+                  <input
+                    type="checkbox"
+                    checked={exposureScope.includes(id)}
+                    onChange={(e) =>
+                      setExposureScope(
+                        e.target.checked
+                          ? [...exposureScope, id]
+                          : exposureScope.filter((v) => v !== id),
+                      )
+                    }
+                  />
+                  {id}
+                </label>
+              ))}
+              <div className="fields">
+                {scales.map((c) => (
+                  <label key={c}>
+                    {c.toLocaleString()}卡暴露倍率
+                    <input
+                      aria-label={`代际暴露倍率 ${c}`}
+                      type="number"
+                      min="0.001"
+                      max="100"
+                      step="0.1"
+                      value={multipliers[c]}
+                      onChange={(e) =>
+                        setMultipliers({ ...multipliers, [c]: e.target.value })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+              <label>
+                代际暴露依据
+                <input
+                  aria-label="代际暴露依据"
+                  value={exposureSource}
+                  onChange={(e) => setExposureSource(e.target.value)}
+                />
+              </label>
+            </>
+          )}
+        </fieldset>
+      )}
       <button
         type="button"
         disabled={
-          !source.trim() || (enabled && (!rateSource.trim() || !referenceCount))
+          (exposureEnabled &&
+            (!exposureSource.trim() ||
+              !exposureScope.length ||
+              Object.values(multipliers).some(
+                (v) =>
+                  !v.trim() ||
+                  !Number.isFinite(Number(v)) ||
+                  Number(v) <= 0 ||
+                  Number(v) > 100,
+              ))) ||
+          !source.trim() ||
+          (enabled && (!rateSource.trim() || !referenceCount))
         }
         onClick={() =>
           onChange({
@@ -194,6 +280,18 @@ function Inventory({
                 ? {
                     ...v,
                     hardwareLevel: level,
+                    exposure: exposureEnabled
+                      ? {
+                          multipliers: Object.fromEntries(
+                            Object.entries(multipliers).map(([k, v]) => [
+                              k,
+                              Number(v),
+                            ]),
+                          ),
+                          eventIds: exposureScope,
+                          source: exposureSource,
+                        }
+                      : undefined,
                     inventory: {
                       ...(useTopology
                         ? { topologyQuantity: n.inventory?.topologyQuantity }
@@ -426,7 +524,8 @@ export default function AuditHardwareEditor(props: Props) {
           key={
             node.id +
             JSON.stringify(node.inventory) +
-            JSON.stringify(node.rateModel)
+            JSON.stringify(node.rateModel) +
+            JSON.stringify(node.exposure)
           }
           {...props}
           node={node}

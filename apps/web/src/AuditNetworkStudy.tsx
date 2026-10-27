@@ -15,6 +15,11 @@ const fields = [
   ["deviceRepairHours", "L2维修时长 / h"],
   ["cabinetFit", "机柜共因FIT"],
   ["cabinetRepairHours", "机柜恢复时长 / h"],
+  ["opticsPerPath", "每路径光模块数"],
+  ["opticFit", "单光模块原始FIT"],
+  ["opticRepairHours", "光模块维修时长 / h"],
+  ["sharedFit", "超节点内跨柜共享故障FIT"],
+  ["sharedRepairHours", "超节点内跨柜共享恢复时长 / h"],
   ["trials", "蒙特卡洛样本数"],
   ["seed", "随机种子"],
 ] as const;
@@ -36,7 +41,7 @@ export default function AuditNetworkStudy({
       fields.map(([id]) => [
         id,
         saved
-          ? String(saved[id])
+          ? String(saved[id] ?? "")
           : id === "planes" || id === "requiredPlanes"
             ? String(referencePlanes ?? "")
             : id === "cabinets"
@@ -66,16 +71,16 @@ export default function AuditNetworkStudy({
           <span className="workbench-eyebrow">STRUCTURAL STUDY</span>
           <h3>冗余能消除多少结构风险？</h3>
           <p>
-            比较单L2、双L2同柜、双L2跨柜。先明确业务所需平面数，再用BDD与蒙特卡洛交叉核验。
+            比较单L2、双L2同柜、双L2跨柜。纳入路径光模块与跨柜共享故障，明确剩余容量所需平面数，再用BDD与蒙特卡洛交叉核验。
           </p>
         </div>
         <span className="workbench-badge">独立辅助模型</span>
       </div>
       <div className="network-model-cards">
         {[
-          ["01", "单路径", "平面 = L2 ∧ 机柜"],
-          ["02", "同柜冗余", "平面 = (L2₁ ∨ L2₂) ∧ 同一机柜"],
-          ["03", "跨柜冗余", "平面 = (L2₁ ∧ 柜A) ∨ (L2₂ ∧ 柜B)"],
+          ["01", "单路径", "路径 = L2 ∧ 光模块 ∧ 机柜"],
+          ["02", "同柜冗余", "同柜两路径共享机柜故障"],
+          ["03", "跨柜冗余", "跨柜两路径仍受上游共享故障约束"],
         ].map(([i, name, formula]) => (
           <div key={i}>
             <small>{i}</small>

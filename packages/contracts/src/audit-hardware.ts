@@ -25,6 +25,14 @@ export const hardwareLevels = {
   other: "其他",
 } as const;
 export const hardwareNodeFields = {
+  exposure: z
+    .object({
+      multipliers: z.record(scaleKey, z.number().finite().positive().max(100)),
+      eventIds: z.array(identifier).min(1).optional(),
+      source,
+    })
+    .strict()
+    .optional(),
   hardwareLevel: z
     .enum(
       Object.keys(hardwareLevels) as [
@@ -95,16 +103,24 @@ export function hardwareScaleEvents<T extends AuditEventView>(
   a: AuditArchitecture | undefined,
   cards: number,
 ): T[] {
-  if (!a?.nodes.some((n) => n.rateModel)) return events;
+  if (!a?.nodes.some((n) => n.rateModel || n.exposure)) return events;
   return events.map((e) => {
     const owner = a.nodes.find((n) => n.eventIds.includes(e.id));
     const model = owner?.rateModel;
-    if (!owner || !model) return e;
-    const quantity = hardwareCount(a, owner.id, cards);
-    if (quantity === null)
+    if (!owner) return e;
+    const exposure =
+      owner.exposure &&
+      (!owner.exposure.eventIds || owner.exposure.eventIds.includes(e.id))
+        ? (owner.exposure.multipliers[cards] ?? 1)
+        : 1;
+    if (!model && exposure === 1) return e;
+    const quantity = model ? hardwareCount(a, owner.id, cards) : null;
+    if (model && quantity === null)
       throw new Error(`${owner.name}缺少${cards}卡规模的硬件数量`);
     const multiplier =
-      (quantity * model.referenceCards) / (model.referenceCount * cards);
+      (model
+        ? (quantity! * model.referenceCards) / (model.referenceCount * cards)
+        : 1) * exposure;
     const fit = e.fit * multiplier;
     if (!Number.isFinite(fit) || fit > 1e12)
       throw new Error("硬件数量折算FIT超过上限");
@@ -115,8 +131,9 @@ export function hardwareScaleEvents<T extends AuditEventView>(
       evidence: "scenario",
       referenceEquivalentFit: e.fit,
       inventoryCount: quantity,
+      exposureMultiplier: exposure,
       rateMultiplier: multiplier,
-      source: `${e.source ?? "故障库"}；数量折算：${model.source}；${owner.inventory?.source ?? "上级组成数量"}`,
+      source: `${e.source ?? "故障库"}；数量折算：${model?.source ?? "未按数量重标定"}；${owner.inventory?.source ?? "上级组成数量"}；代际暴露×${exposure}：${owner.exposure?.source ?? "无额外倍率"}`,
       rateInterpretation: "参考NPU等效FIT按硬件数量外推，非新增实测器件FIT",
     };
   });
@@ -154,6 +171,15 @@ export function validateHardwareArchitecture(
 ) {
   const known = new Set(events.map((e) => e.id));
   for (const n of a.nodes) {
+    if (
+      n.exposure &&
+      (!n.eventIds.length ||
+        a.nodes.some((c) => c.parentId === n.id) ||
+        n.exposure.eventIds?.some((id) => !n.eventIds.includes(id)) ||
+        (n.exposure.eventIds &&
+          new Set(n.exposure.eventIds).size !== n.exposure.eventIds.length))
+    )
+      throw new Error("代际暴露只能作用于叶节点已有且不重复的故障事件");
     if (
       n.rateModel &&
       (!n.eventIds.length || a.nodes.some((c) => c.parentId === n.id))

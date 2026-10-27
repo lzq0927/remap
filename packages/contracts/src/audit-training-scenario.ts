@@ -32,6 +32,12 @@ export const trainingScenarioSchema = z
     referenceCards: z.number().int().positive().max(1000000),
     mtbfHours: z.number().finite().positive().max(87600),
     mtbfEventIds: z.array(z.string()).max(2000),
+    exposureByScale: z
+      .record(
+        z.string().regex(/^[1-9]\d*$/),
+        z.number().finite().positive().max(100),
+      )
+      .optional(),
     checkpointSeconds: z.number().finite().min(0.000001).nullable(),
     saveSeconds: time,
     detectionSeconds: time,
@@ -73,7 +79,7 @@ export function trainingScenarioPreset(
     referenceAvailabilityCards: 500000,
     referenceAvailabilityByScale: current ? { 10000: 0.985 } : {},
     referenceCards: current ? 10000 : 500000,
-    mtbfHours: current ? 30 : (extended ? 17 : 45) / 60,
+    mtbfHours: current ? 30 : (extended ? 18 : 45) / 60,
     mtbfEventIds: [],
     checkpointSeconds: current ? 600 : null,
     saveSeconds: current ? 4 : 0,
@@ -112,7 +118,10 @@ export function trainingRecoveryBudget(
   target: number,
   hours = 600,
 ) {
-  const mtbfHours = (s.mtbfHours * s.referenceCards) / cards;
+  const mtbfHours =
+    ((s.mtbfHours * s.referenceCards) / cards) *
+    ((s.exposureByScale?.[s.referenceCards] ?? 1) /
+      (s.exposureByScale?.[cards] ?? 1));
   const referenceAvailability = trainingReferenceAvailability(s, cards);
   return {
     cards,
@@ -157,6 +166,36 @@ export function applyTrainingScenario(
   const s = trainingScenarioSchema.parse(input),
     issues = trainingScenarioIssues(s, events);
   if (issues.length) throw new Error(issues.join("；"));
+  const architecture = request.architecture
+    ? structuredClone(request.architecture)
+    : undefined;
+  if (s.exposureByScale) {
+    if (!architecture) throw new Error("代际暴露需要明确事件归属架构");
+    if (
+      s.mtbfEventIds.some(
+        (id) =>
+          architecture.nodes.filter((n) => n.eventIds.includes(id)).length !==
+          1,
+      )
+    )
+      throw new Error("代际暴露要求每个所选事件有唯一硬件归属");
+    for (const n of architecture.nodes) {
+      const ids = n.eventIds.filter((id) => s.mtbfEventIds.includes(id));
+      if (ids.length) {
+        if (
+          n.exposure &&
+          JSON.stringify(n.exposure.eventIds?.slice().sort()) !==
+            JSON.stringify(ids.slice().sort())
+        )
+          throw new Error("代际暴露范围冲突，请分离硬件节点或移除重复倍率");
+        n.exposure = {
+          multipliers: s.exposureByScale,
+          eventIds: ids,
+          source: s.source + "；所选事件代际暴露，硬件数量保持独立",
+        };
+      }
+    }
+  }
   const existing = new Map(
     (request.eventOverrides ?? []).map((e) => [e.id, e]),
   );
@@ -164,8 +203,8 @@ export function applyTrainingScenario(
     .filter((e) => s.mtbfEventIds.includes(e.id))
     .map((e) => ({ ...e, fit: existing.get(e.id)?.fit ?? e.fit }));
   const total = (
-    request.architecture
-      ? hardwareScaleEvents(selected, request.architecture, s.referenceCards)
+    architecture
+      ? hardwareScaleEvents(selected, architecture, s.referenceCards)
       : selected
   ).reduce((v, e) => v + e.fit, 0);
   if (!(total > 0))
@@ -233,8 +272,8 @@ export function applyTrainingScenario(
     trainingScenario: s,
     rateArithmetic: "catalog",
     sensitivity: false,
-    architecture: request.architecture
-      ? { ...request.architecture, budgetMethod: "agree-evidence" }
+    architecture: architecture
+      ? { ...architecture, budgetMethod: "agree-evidence" }
       : undefined,
     eventOverrides,
     candidateFitOverrides: [],

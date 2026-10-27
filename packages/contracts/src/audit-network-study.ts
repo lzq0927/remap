@@ -11,13 +11,42 @@ export const networkStudySchema = z
     deviceRepairHours: z.number().finite().positive().max(87600),
     cabinetFit: z.number().finite().min(0).max(1e9),
     cabinetRepairHours: z.number().finite().positive().max(87600),
+    opticsPerPath: z.number().int().min(0).max(64).optional(),
+    opticFit: z.number().finite().min(0).max(1e9).optional(),
+    opticRepairHours: z.number().finite().positive().max(87600).optional(),
+    sharedFit: z.number().finite().min(0).max(1e9).optional(),
+    sharedRepairHours: z.number().finite().positive().max(87600).optional(),
     trials: z.number().int().min(1000).max(200000),
     seed: z.number().int().min(1).max(2147483647),
     evidence: z.enum(["demonstration", "project"]),
     source: z.string().trim().min(1).max(2000),
   })
   .strict()
-  .refine((x) => x.requiredPlanes <= x.planes, "所需平面不能超过配置平面");
+  .refine((x) => x.requiredPlanes <= x.planes, "所需平面不能超过配置平面")
+  .refine(
+    (x) =>
+      x.opticsPerPath === undefined ||
+      x.cabinets + x.planes * 2 * (1 + x.opticsPerPath) + 1 <= 64,
+    "扩展组网基本事件最多64个，请减少平面或路径光模块数",
+  )
+  .refine(
+    (x) =>
+      [
+        x.opticsPerPath,
+        x.opticFit,
+        x.opticRepairHours,
+        x.sharedFit,
+        x.sharedRepairHours,
+      ].every((v) => v === undefined) ||
+      [
+        x.opticsPerPath,
+        x.opticFit,
+        x.opticRepairHours,
+        x.sharedFit,
+        x.sharedRepairHours,
+      ].every((v) => v !== undefined),
+    "光模块与共享故障参数需完整提供；历史未提供时保持旧模型",
+  );
 export type NetworkStudy = z.infer<typeof networkStudySchema>;
 
 export const networkStudyDemo: NetworkStudy = {
@@ -29,6 +58,11 @@ export const networkStudyDemo: NetworkStudy = {
   deviceRepairHours: 8,
   cabinetFit: 20000,
   cabinetRepairHours: 4,
+  opticsPerPath: 2,
+  opticFit: 50000,
+  opticRepairHours: 4,
+  sharedFit: 10000,
+  sharedRepairHours: 4,
   trials: 50000,
   seed: 20261025,
   evidence: "demonstration",
@@ -37,7 +71,7 @@ export const networkStudyDemo: NetworkStudy = {
 };
 
 export const networkStudyLimits = [
-  "仅包含 L2 设备与互联柜共同故障域；L1、光模块、供电上游、路由、带宽竞争和倒换瞬态需另行建模。",
+  "包含 L2、互联柜；提供完整扩展参数时加入每路径光模块及超节点内共享事件。L1、路由、带宽竞争和倒换瞬态仍需另行建模。",
   "一个平面至少一条 L2 路径存活才算可用；所需平面数是容量成功条件，需项目确认单路径剩余带宽。",
   "不同基本事件独立，重复机柜 ID 为同一共因；设备与机柜故障率需来自互不重叠的原因清单。",
   "BDD 使用 A=1/(1+FIT×10⁻⁹×维修小时)；蒙特卡洛为独立稳态快照抽样，不是动态维修或倒换仿真。",
