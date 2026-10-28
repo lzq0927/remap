@@ -1,7 +1,7 @@
 import { planScaleSections } from "./audit-plan-scales";
 import { auditArchitectureDiagnosis } from "../../analysis/src/audit-architecture";
 import { trainingScenarioComparisonTables } from "./audit-training-scenario";
-import { decisionPagesHtml } from "./audit-decision-pages";
+import { analysisWorkbenchHtml } from "./audit-analysis-workbench";
 import { topologyEstimateDetails } from "./audit-topology-decision";
 import { topologyDecision } from "../../analysis/src/audit-topology-decision";
 import { decisionStudySections } from "./audit-decision-study";
@@ -707,7 +707,7 @@ export function experimentChart(result: any) {
     });
   const decision =
     result.comparisonMode === "training-scenarios"
-      ? `<details open><summary>展开三档分层分配、差距与机制总图</summary><div class="table-wrap">${decisionPagesHtml(result, result.request.cards)}</div></details>${topologyEstimateDetails(result, result.request.cards)}`
+      ? `<details open><summary>展开三档分层分配、差距与机制总图</summary><div class="table-wrap">${analysisWorkbenchHtml(result, result.request.cards)}</div></details>${topologyEstimateDetails(result, result.request.cards)}`
       : "";
   return (
     decision +

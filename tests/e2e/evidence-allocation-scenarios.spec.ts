@@ -189,6 +189,9 @@ for (const width of [1440, 390])
       ).toBeGreaterThan(3);
       if (id === "current") {
         await page
+          .getByText("补充查看原有方案收益、贡献与敏感性", { exact: true })
+          .click();
+        await page
           .getByRole("button", {
             name: "查看分层目标与跨规模薄弱点",
             exact: true,
@@ -278,38 +281,45 @@ for (const width of [1440, 390])
       history.getByRole("link", { name: "下载训练场景比较报告", exact: true }),
     ).toBeVisible({ timeout: 30000 });
     await history
-      .getByRole("button", { name: "全屏查看三档总图", exact: true })
+      .getByRole("button", { name: "全屏分析", exact: true })
       .click();
     const fullComparison = page.getByRole("dialog", {
-      name: "三档决策总图全屏",
+      name: "可靠性分析全屏",
       exact: true,
     });
-    await expect(fullComparison).toContainText("光模块 / 光链路");
-    await expect(fullComparison).toContainText("Leaf / Spine");
+    await expect(fullComparison).toContainText("具体可靠性措施");
+    await expect(fullComparison).toContainText("全类等效FIT");
     await fullComparison
-      .getByRole("button", { name: "损失—措施—参数", exact: true })
+      .getByRole("button", { name: "损失来源与措施", exact: true })
       .click();
-    await expect(fullComparison).toContainText("三阶段逐层对照");
+    await expect(fullComparison).toContainText("逐层损失明细与参数映射");
     await expect(fullComparison).toContainText("M8");
     await fullComparison
-      .getByLabel("决策图规模", { exact: true })
+      .getByLabel("分析规模", { exact: true })
       .selectOption("100000");
-    await expect(fullComparison.getByRole("img")).toContainText("100,000卡");
+    await expect(
+      fullComparison.locator(".analysis-snapshot-label"),
+    ).toContainText("100,000卡");
     await fullComparison
-      .getByRole("button", { name: "跨规模薄弱点", exact: true })
+      .getByRole("button", { name: "分规模与三阶段", exact: true })
       .click();
-    await expect(fullComparison).toContainText("超预算");
+    await expect(fullComparison).toContainText("逐层损失对照");
     await fullComparison
-      .getByRole("button", { name: "业界依据与建议", exact: true })
+      .getByRole("button", { name: "2026实践与资源条件", exact: true })
       .click();
-    await expect(fullComparison).toContainText("ByteCheckpoint");
+    await expect(fullComparison).toContainText("Meta Prometheus");
     await fullComparison
-      .getByRole("button", { name: "架构与指标", exact: true })
+      .getByRole("button", { name: "架构与分配依据", exact: true })
       .click();
     await fullComparison
-      .getByRole("button", { name: "01 计算资源", exact: true })
+      .getByRole("button", { name: "计算资源", exact: true })
       .click();
-    await expect(fullComparison.getByRole("status")).toContainText("计算资源");
+    await expect(
+      page.getByRole("dialog", { name: "子系统分解详情", exact: true }),
+    ).toContainText("计算资源");
+    await page
+      .getByRole("button", { name: "关闭部件详情", exact: true })
+      .click();
     expect(
       await fullComparison.evaluate((el) =>
         el.contains(
@@ -321,7 +331,7 @@ for (const width of [1440, 390])
       path: `artifacts/evidence-allocation/three-fullscreen-${width}.png`,
     });
     await fullComparison
-      .getByRole("button", { name: "退出总图全屏（Esc）", exact: true })
+      .getByRole("button", { name: "退出分析全屏（Esc）", exact: true })
       .click();
     await expect(fullComparison).toHaveCount(0);
     const download = page.waitForEvent("download");

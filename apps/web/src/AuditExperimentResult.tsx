@@ -1,3 +1,4 @@
+import AuditAnalysisWorkbench from "./AuditAnalysisWorkbench";
 import AuditArchitectureResult from "./AuditArchitectureResult";
 import { planScaleChart } from "../../../packages/reports/src/audit-plan-scales";
 import { decisionStudyCharts } from "../../../packages/reports/src/audit-decision-study";
@@ -58,80 +59,90 @@ export default function AuditExperimentResult({
       }
     >
       <style>{auditChartCss + architectureCss}</style>
-      {sections.map((section, index) => (
-        <details key={section.title} open={index === 0 || index === 1}>
-          <summary>{section.title}</summary>
-          {section.paragraphs?.map((p) => (
-            <p key={p}>{p}</p>
-          ))}
-          {section.visual === "plan-set" && (
-            <div dangerouslySetInnerHTML={{ __html: planScaleChart(result) }} />
-          )}
-          {section.visual === "decision-study" && (
-            <div
-              dangerouslySetInnerHTML={{
-                __html: decisionStudyCharts(result, alternativeId),
-              }}
-            />
-          )}
-          {section.visual === "architecture" &&
-            (result.kind === "expert-audit-experiment" ? (
-              <AuditArchitectureResult result={result} cards={cards} />
-            ) : (
-              <div
-                dangerouslySetInnerHTML={{ __html: architectureReport(result) }}
-              />
+      {result.kind === "expert-audit-comparison" && (
+        <AuditAnalysisWorkbench result={result} />
+      )}
+      <details open={result.kind !== "expert-audit-comparison"}>
+        <summary>展开评估曲线、参数与归因明细</summary>
+        {sections.map((section, index) => (
+          <details key={section.title} open={index === 0 || index === 1}>
+            <summary>{section.title}</summary>
+            {section.paragraphs?.map((p) => (
+              <p key={p}>{p}</p>
             ))}
-          {section.visual === "experiment-comparison" && (
-            <div
-              dangerouslySetInnerHTML={{ __html: experimentChart(result) }}
-            />
-          )}
-          {section.tables?.map((table, j) => (
-            <div key={j}>
-              {table.scaleRows && (
-                <label className="optimization-scale">
-                  查看规模{" "}
-                  <select
-                    aria-label={table.scaleLabel}
-                    value={cards}
-                    onChange={(e) => setCards(Number(e.target.value))}
-                  >
-                    {table.scaleRows.map((row) => (
-                      <option key={row.cards} value={row.cards}>
-                        {row.cards.toLocaleString()} 卡
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <div className="table-wrap" tabIndex={0}>
-                <table>
-                  <thead>
-                    <tr>
-                      {table.heads.map((h, k) => (
-                        <th key={k}>{h}</th>
+            {section.visual === "plan-set" && (
+              <div
+                dangerouslySetInnerHTML={{ __html: planScaleChart(result) }}
+              />
+            )}
+            {section.visual === "decision-study" && (
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: decisionStudyCharts(result, alternativeId),
+                }}
+              />
+            )}
+            {section.visual === "architecture" &&
+              (result.kind === "expert-audit-experiment" ? (
+                <AuditArchitectureResult result={result} cards={cards} />
+              ) : (
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: architectureReport(result),
+                  }}
+                />
+              ))}
+            {section.visual === "experiment-comparison" && (
+              <div
+                dangerouslySetInnerHTML={{ __html: experimentChart(result) }}
+              />
+            )}
+            {section.tables?.map((table, j) => (
+              <div key={j}>
+                {table.scaleRows && (
+                  <label className="optimization-scale">
+                    查看规模{" "}
+                    <select
+                      aria-label={table.scaleLabel}
+                      value={cards}
+                      onChange={(e) => setCards(Number(e.target.value))}
+                    >
+                      {table.scaleRows.map((row) => (
+                        <option key={row.cards} value={row.cards}>
+                          {row.cards.toLocaleString()} 卡
+                        </option>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(
-                      table.scaleRows?.find((s) => s.cards === cards)?.rows ??
-                      table.rows
-                    ).map((row, k) => (
-                      <tr key={k}>
-                        {row.map((cell, l) => (
-                          <td key={l}>{String(cell ?? "—")}</td>
+                    </select>
+                  </label>
+                )}
+                <div className="table-wrap" tabIndex={0}>
+                  <table>
+                    <thead>
+                      <tr>
+                        {table.heads.map((h, k) => (
+                          <th key={k}>{h}</th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {(
+                        table.scaleRows?.find((s) => s.cards === cards)?.rows ??
+                        table.rows
+                      ).map((row, k) => (
+                        <tr key={k}>
+                          {row.map((cell, l) => (
+                            <td key={l}>{String(cell ?? "—")}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          ))}
-        </details>
-      ))}
+            ))}
+          </details>
+        ))}
+      </details>
     </section>
   );
 }

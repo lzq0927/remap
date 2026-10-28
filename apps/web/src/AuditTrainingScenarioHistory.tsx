@@ -1,4 +1,3 @@
-import AuditDecisionDiagram from "./AuditDecisionDiagram";
 import { useState } from "react";
 import { useTaskApi } from "./api";
 import AuditExperimentResult from "./AuditExperimentResult";
@@ -168,7 +167,6 @@ export default function AuditTrainingScenarioHistory() {
           <button type="button" onClick={() => exportDiagram(true)}>
             导出三档分层总图 PNG
           </button>
-          <AuditDecisionDiagram result={comparison.result} />
           <AuditExperimentResult result={comparison.result} />
         </>
       )}
