@@ -266,7 +266,7 @@ export function registerWorkflowRoutes(
       reply.raw.write(
         `id: ${event.sequence}\ndata: ${JSON.stringify(event)}\n\n`,
       );
-    past.forEach(write);
+    past.forEach((event) => write({ ...event, replayed: true }));
     service.on("event", write);
     const timer = setInterval(() => reply.raw.write(": keepalive\n\n"), 15000);
     reply.raw.on("close", () => {

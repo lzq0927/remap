@@ -643,7 +643,8 @@ function auditOneRound(
     } = resolved;
   const buildEngine = (catalog: typeof events, config: typeof model) => {
     const base = createEngine(catalog, policy, config);
-    if (!request.architecture?.nodes.some((n) => n.rateModel)) return base;
+    if (!request.architecture?.nodes.some((n) => n.rateModel || n.exposure))
+      return base;
     const cache = new Map<number, any>();
     return {
       ...base,
@@ -718,7 +719,7 @@ function auditOneRound(
     }
     return {
       cards,
-      ...(request.architecture?.nodes.some((n) => n.rateModel)
+      ...(request.architecture?.nodes.some((n) => n.rateModel || n.exposure)
         ? { scaleEvents: selectedEngine.events }
         : {}),
       statistics: stats(values, auditTarget(request, cards)),
@@ -1110,7 +1111,9 @@ function auditOneRound(
             policy,
             recoveryOrder,
             ...(baseline.active ? { baseline } : {}),
-            ...(request.architecture?.nodes.some((n) => n.rateModel)
+            ...(request.architecture?.nodes.some(
+              (n) => n.rateModel || n.exposure,
+            )
               ? { architecture: request.architecture }
               : {}),
           }),

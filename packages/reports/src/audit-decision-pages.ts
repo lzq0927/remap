@@ -19,7 +19,7 @@ export const decisionDomains = [
 ] as const;
 export const decisionLosses = [
   { name: "停机", keys: ["downtime"], mechanisms: "M3·M4·M8" },
-  { name: "回滚", keys: ["rollback"], mechanisms: "M4·M5" },
+  { name: "回滚", keys: ["rollback"], mechanisms: "M4·M5·M6" },
   { name: "降速", keys: ["slowdown", "localLoss"], mechanisms: "M2·M7" },
   { name: "污染", keys: ["terminalInvalid"], mechanisms: "M6" },
   { name: "保存", keys: ["save"], mechanisms: "M5" },

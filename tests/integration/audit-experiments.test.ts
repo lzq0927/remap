@@ -67,6 +67,39 @@ it("freezes task-owned first evidence, starts planning/evaluation separately, an
     });
     expect(compared.statusCode).toBe(200);
     expect(compared.json().result.entries).toHaveLength(2);
+    const withStudy = await app.inject({
+      method: "POST",
+      url: prefix + "/audit/compare",
+      payload: {
+        runIds: [first.id, completed.id],
+        mechanismStudyRunIds: [completed.id],
+      },
+    });
+    expect(withStudy.statusCode).toBe(200);
+    expect(withStudy.json().result.mechanismStudies[0].sourceRunId).toBe(
+      first.id,
+    );
+    expect(withStudy.json().result.entries).toEqual(
+      compared.json().result.entries,
+    );
+    const wrongStudy = await app.inject({
+      method: "POST",
+      url: prefix + "/audit/compare",
+      payload: {
+        runIds: [first.id, completed.id],
+        mechanismStudyRunIds: [first.id],
+      },
+    });
+    expect(wrongStudy.statusCode).toBe(400);
+    const duplicateStudy = await app.inject({
+      method: "POST",
+      url: prefix + "/audit/compare",
+      payload: {
+        runIds: [first.id, completed.id],
+        mechanismStudyRunIds: [completed.id, completed.id],
+      },
+    });
+    expect(duplicateStudy.statusCode).toBe(400);
     const report = await app.inject(
       prefix + `/runs/${compared.json().id}/report?format=html`,
     );

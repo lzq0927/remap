@@ -10,6 +10,8 @@ import {
 } from "../../contracts/src/audit-training-scenario";
 import { compareAuditExperiments } from "../src/audit-experiments";
 import {
+  legacyExposureNotice,
+  stageLossComparison,
   analysisContext,
   analysisWorkbenchHtml,
   domainLossSources,
@@ -20,38 +22,42 @@ import {
 let comparison: any;
 beforeAll(() => {
   const events = getAuditEvents();
-  const runs = (["current", "breakthrough"] as const).map((id, i) => {
-    const input = applyTrainingScenario(
-      {
-        ...getAuditDefaults(),
-        cards: 500000,
-        scales: [10000, 500000],
-        targets: { 10000: 0.985, 500000: 0.985 },
-        trials: 2,
-        attributionTrials: 2,
-        verificationTrials: 2,
-        sensitivity: false,
-        verifyRecommendation: false,
-        optimization: { enabled: false },
-      },
-      {
-        ...trainingScenarioPreset(id),
-        checkpointSeconds: id === "current" ? 600 : 1,
-        sdcCoverage: id === "current" ? 0.8 : 0.9991,
-        mtbfEventIds: events.filter((e) => e.type === "hard").map((e) => e.id),
-        investigationMapping: "sdc-only",
-        assumptionsConfirmed: true,
-      },
-      events,
-    );
-    return {
-      id: "analysis-" + i,
-      status: "succeeded",
-      inputHash: "fixture" + i,
-      createdAt: "2026-10-27",
-      result: audit(input),
-    } as any;
-  });
+  const runs = (["current", "extension", "breakthrough"] as const).map(
+    (id, i) => {
+      const input = applyTrainingScenario(
+        {
+          ...getAuditDefaults(),
+          cards: 500000,
+          scales: [10000, 500000],
+          targets: { 10000: 0.985, 500000: 0.985 },
+          trials: 2,
+          attributionTrials: 2,
+          verificationTrials: 2,
+          sensitivity: false,
+          verifyRecommendation: false,
+          optimization: { enabled: false },
+        },
+        {
+          ...trainingScenarioPreset(id),
+          checkpointSeconds: id === "current" ? 600 : 1,
+          sdcCoverage: id === "current" ? 0.8 : 0.9991,
+          mtbfEventIds: events
+            .filter((e) => e.type === "hard")
+            .map((e) => e.id),
+          investigationMapping: "sdc-only",
+          assumptionsConfirmed: true,
+        },
+        events,
+      );
+      return {
+        id: "analysis-" + i,
+        status: "succeeded",
+        inputHash: "fixture" + i,
+        createdAt: "2026-10-27",
+        result: audit(input),
+      } as any;
+    },
+  );
   comparison = compareAuditExperiments(runs);
 });
 test("default analysis selects the frozen baseline; views preserve all snapshots and budgets", () => {
@@ -131,4 +137,64 @@ test("component provenance escapes untrusted source text and lists only the sele
   expect(html).toContain("&lt;script&gt;unsafe()&lt;/script&gt;");
   expect(html).not.toContain("<script>unsafe");
   expect(html).not.toContain("OPT-hard");
+});
+
+test("three horizontal scenario groups preserve every loss cell and system conservation", () => {
+  const { d, scale } = analysisContext(comparison, 500000)!;
+  const html = stageLossComparison(d, 500000);
+  expect(html.match(/scope="colgroup"/g)).toHaveLength(3);
+  expect(html.indexOf("现状")).toBeLessThan(html.indexOf("延长线"));
+  expect(html.indexOf("延长线")).toBeLessThan(html.indexOf("突破"));
+  const keys = [
+    ["downtime"],
+    ["rollback"],
+    ["slowdown", "localLoss"],
+    ["terminalInvalid"],
+    ["save"],
+    ["mechanismOverhead"],
+  ];
+  for (const id of [
+    "domain-1",
+    "hardware-network",
+    "hardware-storage",
+    "hardware-facility",
+    "hardware-other",
+    "overhead",
+    "system",
+  ]) {
+    const row = html.split(`data-loss-domain="${id}"`)[1].split("</tr>")[0];
+    const values = [...row.matchAll(/data-loss-hours="([^"]+)"/g)].map((m) =>
+      Number(m[1]),
+    );
+    const expected = scale.scenarios.flatMap((s) => {
+      const n = s.nodes.find((n) => n.id === id)!;
+      return keys.map((ks) => ks.reduce((v, k) => v + (n.loss as any)[k], 0));
+    });
+    expect(values).toEqual(expected);
+    expect(row.match(/class="analysis-stage-gap"/g)).toHaveLength(2);
+    for (let i = 0; i < 3; i++)
+      expect(
+        values.slice(i * 6, i * 6 + 6).reduce((a, b) => a + b, 0),
+      ).toBeCloseTo(
+        scale.scenarios[i].nodes.find((n) => n.id === id)!.actualHours,
+        9,
+      );
+  }
+});
+
+test("historical exposure-only results retain their data but visibly require recomputation", () => {
+  const old = {
+    request: {
+      architecture: { nodes: [{ exposure: { multipliers: { 500000: 2 } } }] },
+    },
+    rows: [{ cards: 500000 }],
+  };
+  expect(legacyExposureNotice(old)).toContain("旧达标结论暂不采用");
+  expect(legacyExposureNotice({ ...old, rows: [{ cards: 10000 }] })).toBe("");
+  expect(
+    legacyExposureNotice({
+      ...old,
+      rows: [{ cards: 500000, scaleEvents: [{ id: "CORE-hard", fit: 200 }] }],
+    }),
+  ).toBe("");
 });

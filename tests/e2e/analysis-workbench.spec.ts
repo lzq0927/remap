@@ -1,3 +1,4 @@
+import type { AuditEventView } from "../../packages/contracts/src/audit-objects";
 import { test, expect } from "./task-fixture";
 import { draftFromAuditRequest } from "../../packages/contracts/src/audit-draft";
 test.use({ fullWorkspace: false });
@@ -63,12 +64,14 @@ test("desktop analysis opens with baseline, allocation, horizontal sources and c
     .getByRole("button", { name: "01 可用度目标分解分配", exact: true })
     .click();
   await expect(
-    w.locator(
-      '[data-contains="hardware-rack"] [data-contains="hardware-node"] [data-contains="hardware-board"] [data-contains="hardware-module"] [data-contains="hardware-chip"]',
-    ),
+    w
+      .locator(
+        '[data-contains="hardware-rack"] [data-contains="hardware-node"] [data-contains="hardware-board"] [data-contains="hardware-module"] [data-contains="hardware-chip"]',
+      )
+      .first(),
   ).toBeVisible();
   await expect(
-    w.getByRole("img", { name: "设备通信连接关系", exact: true }),
+    w.getByRole("img", { name: "设备通信连接关系", exact: true }).first(),
   ).toBeVisible();
   await w
     .getByLabel("分析分解层级", { exact: true })
@@ -118,4 +121,133 @@ test("desktop analysis opens with baseline, allocation, horizontal sources and c
     page.getByRole("heading", { name: "单项与组合方案收益对照", exact: true }),
   ).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("saved three-stage comparison survives workflow replay and exposes 126 loss cells", async ({
+  page,
+  request,
+  taskId,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1920, height: 1100 });
+  const defaultsResponse = await (await request.get("/api/defaults")).json();
+  const getAuditDefaults = () => defaultsResponse.audit;
+  const getAuditEvents = () => defaultsResponse.auditEvents as AuditEventView[];
+  const { applyTrainingScenario, trainingScenarioPreset } = await import(
+    "../../packages/contracts/src/audit-training-scenario"
+  );
+  const base = `/api/tasks/${taskId}`;
+  const ids: string[] = [];
+  const defaults = {
+    ...getAuditDefaults(),
+    trials: 2,
+    attributionTrials: 2,
+    verificationTrials: 2,
+    sensitivity: false,
+    verifyRecommendation: false,
+    scales: [10000, 500000],
+    targets: { 10000: 0.985, 500000: 0.985 },
+    optimization: { enabled: false },
+  };
+  const inputs = (["current", "extension", "breakthrough"] as const).map((id) =>
+    applyTrainingScenario(
+      defaults,
+      {
+        ...trainingScenarioPreset(id),
+        checkpointSeconds: id === "current" ? 600 : 1,
+        sdcCoverage: id === "current" ? 0.8 : 0.9991,
+        mtbfEventIds: getAuditEvents()
+          .filter((e) => e.type === "hard")
+          .map((e) => e.id),
+        investigationMapping: "sdc-only",
+        assumptionsConfirmed: true,
+      },
+      getAuditEvents(),
+    ),
+  );
+  for (const input of inputs) {
+    const r = await request.post(base + "/runs", {
+      data: { operation: "audit", input },
+    });
+    expect(r.ok()).toBeTruthy();
+    const id = (await r.json()).id;
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get(base + "/runs/" + id)).json()).status,
+        { timeout: 45000 },
+      )
+      .toBe("succeeded");
+    ids.push(id);
+  }
+  const saved = await (
+    await request.post(base + "/design", {
+      data: {
+        request: {},
+        scenario: "training",
+        activeAssessment: "audit",
+        auditDraft: draftFromAuditRequest(inputs[2]),
+        stage: 0,
+      },
+    })
+  ).json();
+  await request.post(base + "/workflow/automatic", {
+    data: { inputRevision: saved.revision },
+  });
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(base + "/workflow")).json()).steps[3].status,
+      { timeout: 60000 },
+    )
+    .toBe("awaiting-review");
+  const compared = await (
+    await request.post(base + "/audit/compare", { data: { runIds: ids } })
+  ).json();
+  const design = await (await request.get(base + "/design")).json();
+  expect(
+    (
+      await request.post(base + "/design", {
+        data: {
+          ...design,
+          expectedRevision: design.revision,
+          runId: compared.id,
+          stage: 3,
+        },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  await page.goto("/?task=" + taskId);
+  const w = page.getByRole("region", {
+    name: "现状与目标分析工作台",
+    exact: true,
+  });
+  await expect(w).toBeVisible({ timeout: 60000 });
+  const matrix = w.getByRole("table", {
+    name: "三阶段分组损失热力图",
+    exact: true,
+  });
+  await expect(matrix.locator("[scope=colgroup]")).toHaveCount(3);
+  await expect(matrix.locator("[data-loss-hours]")).toHaveCount(126);
+  await expect
+    .poll(
+      async () => (await (await request.get(base + "/design")).json()).runId,
+    )
+    .toBe(compared.id);
+  await page.reload();
+  await expect(matrix.locator("[scope=colgroup]")).toHaveCount(3);
+  await w
+    .getByRole("button", { name: "03 可靠性机制设计", exact: true })
+    .click();
+  const bounds = await matrix.locator("[scope=colgroup]").evaluateAll((els) =>
+    els.map((el) => ({
+      x: el.getBoundingClientRect().x,
+      right: el.getBoundingClientRect().right,
+      y: el.getBoundingClientRect().y,
+    })),
+  );
+  expect(bounds[0].y).toBe(bounds[1].y);
+  expect(bounds[1].y).toBe(bounds[2].y);
+  expect(bounds[1].x - bounds[0].right).toBeGreaterThan(10);
+  expect(bounds[2].x - bounds[1].right).toBeGreaterThan(10);
 });

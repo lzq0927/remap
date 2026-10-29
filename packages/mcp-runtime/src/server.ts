@@ -290,6 +290,13 @@ const roundBodies: Record<string, z.ZodTypeAny> = {
         .min(2)
         .max(12)
         .describe("同一第一轮下已完成评估ID，建议包含第一轮；不能含规划运行"),
+      mechanismStudyRunIds: z
+        .array(z.string().min(1))
+        .max(6)
+        .optional()
+        .describe(
+          "可选：同一现状来源的已完成增量Shapley研究；单独展示，不混入三档总结果",
+        ),
     })
     .strict(),
 };

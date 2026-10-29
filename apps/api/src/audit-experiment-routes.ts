@@ -186,10 +186,18 @@ export function registerAuditExperimentRoutes(
         "请选择2–12次不同的已完成评估",
       );
     const snapshots = ids.map((id: string) => store.getRun(id));
-    const result = compareAuditExperiments(snapshots);
+    const studyIds = req.body?.mechanismStudyRunIds ?? [];
+    if (
+      !Array.isArray(studyIds) ||
+      studyIds.length > 6 ||
+      studyIds.some((id: unknown) => typeof id !== "string")
+    )
+      throw new DomainError("AUDIT_COMPARE_INVALID", "增量收益研究ID格式无效");
+    const studies = studyIds.map((id: string) => store.getRun(id));
+    const result = compareAuditExperiments(snapshots, studies);
     const run = runs.start(
       "audit-compare",
-      { snapshots },
+      { snapshots, mechanismStudies: studies },
       req.headers["idempotency-key"],
     );
     const completed = runs.complete(run.id, result);

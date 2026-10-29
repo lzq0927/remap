@@ -432,7 +432,12 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       }
     };
     void api("/workflow")
-      .then((state) => receive(state))
+      .then((state) =>
+        receive(
+          state,
+          state.steps.some((step: any) => step.status === "running"),
+        ),
+      )
       .catch((e) => !stopped && setError(e.message));
     const stream = new EventSource(url("/workflow/events"));
     stream.onmessage = (event) => {
@@ -440,7 +445,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         const item = JSON.parse(event.data);
         if (item.sequence <= sequence) return;
         sequence = item.sequence;
-        if (item.state) receive(item.state, true);
+        if (item.state) receive(item.state, !item.replayed);
       } catch {
         /* incomplete event is ignored */
       }

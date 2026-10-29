@@ -331,7 +331,7 @@ export function auditOptimization(
         }));
     }
     events = hardwareScaleEvents(events, request.architecture, cards);
-    if (request.architecture?.nodes.some((n) => n.rateModel))
+    if (request.architecture?.nodes.some((n) => n.rateModel || n.exposure))
       model.referenceRateArithmetic = false;
     const engine = createEnhancedAuditEngine(events, policy, model, extensions),
       opts = {
@@ -404,7 +404,7 @@ export function auditOptimization(
     return {
       cards,
       statistics: stats(values, auditTarget(request, cards)),
-      ...(request.architecture?.nodes.some((n) => n.rateModel)
+      ...(request.architecture?.nodes.some((n) => n.rateModel || n.exposure)
         ? { scaleEvents: engine.events }
         : {}),
       ledger,

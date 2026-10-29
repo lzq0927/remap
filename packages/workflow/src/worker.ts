@@ -36,7 +36,7 @@ process.once("message", async (message: any) => {
       const { compareAuditExperiments } = await import(
         "../../reports/src/audit-experiments"
       );
-      result = compareAuditExperiments(input.snapshots);
+      result = compareAuditExperiments(input.snapshots, input.mechanismStudies);
     } else if (message.operation === "audit") {
       const { audit } = await import("../../analysis/src/audit");
       result = audit(input, (done: number, total: number) => {

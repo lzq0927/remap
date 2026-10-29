@@ -25,7 +25,10 @@ export const experimentStatus: Record<string, string> = {
   below: "低于目标",
   uncertain: "区间跨目标，需复核",
 };
-export function compareAuditExperiments(runs: Run[]) {
+export function compareAuditExperiments(
+  runs: Run[],
+  mechanismStudies: Run[] = [],
+) {
   if (
     runs.length < 2 ||
     runs.length > 12 ||
@@ -92,6 +95,21 @@ export function compareAuditExperiments(runs: Run[]) {
         : undefined) ?? bases[0],
     first = runs[0];
   const request = base?.result.request ?? first.result.request;
+  if (
+    mechanismStudies.length > 6 ||
+    new Set(mechanismStudies.map((r) => r.id)).size !==
+      mechanismStudies.length ||
+    mechanismStudies.some(
+      (r) =>
+        r.status !== "succeeded" ||
+        r.result?.kind !== "expert-audit-experiment" ||
+        r.result.sourceRunId !== base?.id ||
+        r.result.sourceInputHash !== base?.inputHash,
+    )
+  )
+    throw new Error(
+      "增量收益研究须来自本比较冻结的现状运行，最多6项且不可重复",
+    );
   const entries = runs.map((run) => ({
     id: run.id,
     name:
@@ -158,6 +176,12 @@ export function compareAuditExperiments(runs: Run[]) {
     comparisonMode: trainingFamily ? "training-scenarios" : "frozen-baseline",
     allocationReferenceRunId: trainingFamily ? base?.id : undefined,
     entries,
+    mechanismStudies: mechanismStudies.map((r) => ({
+      ...r.result,
+      id: r.id,
+      inputHash: r.inputHash,
+      createdAt: r.createdAt,
+    })),
     assumptions: trainingFamily
       ? [
           "这些是分别执行的600小时输入场景，60%/82%/98.5%是用户参考值，结果使用各次实际仿真值。FIT与措施允许不同，不能将跨场景差值解释为单项措施的因果贡献。",

@@ -49,7 +49,8 @@ export const mechanismNames: Record<string, string> = {
   process: "进程重调度",
   elastic: "弹性恢复",
   fast: "检查点保存与周期",
-  recovery: "全局恢复",
+  recovery: "全局恢复与失败升级",
+  silent: "静默漏检后的排查时延",
   detection: "基础检测",
   validation: "新增检测开销",
   checkpoint: "基线检查点",
@@ -92,13 +93,15 @@ export function experimentFactors(
   const groups: Record<string, Record<string, number>> = {};
   for (const [key, value] of Object.entries(configuration.model ?? {})) {
     if (value === resolved.model[key]) continue;
-    const group = /^(detect|timeout|slow)/.test(key)
-      ? "detection"
-      : /^checkpoint/.test(key)
-        ? "checkpoint"
-        : key === "validationOverhead"
-          ? "validation"
-          : "recovery";
+    const group = /^sdc/.test(key)
+      ? "silent"
+      : /^(detect|timeout|slow)/.test(key)
+        ? "detection"
+        : /^checkpoint/.test(key)
+          ? "checkpoint"
+          : key === "validationOverhead"
+            ? "validation"
+            : "recovery";
     (groups[group] ??= {})[key] = value;
   }
   for (const [id, value] of Object.entries(groups))
@@ -282,7 +285,7 @@ export function experimentSampler(source: AuditSource) {
         }));
     }
     events = hardwareScaleEvents(events, request.architecture, cards);
-    if (request.architecture?.nodes.some((n) => n.rateModel))
+    if (request.architecture?.nodes.some((n) => n.rateModel || n.exposure))
       model.referenceRateArithmetic = false;
     const engine = createEnhancedAuditEngine(events, policy, model, extensions);
     const opts = {
@@ -318,7 +321,7 @@ export function experimentSampler(source: AuditSource) {
     );
     return {
       cards,
-      ...(request.architecture?.nodes.some((n) => n.rateModel)
+      ...(request.architecture?.nodes.some((n) => n.rateModel || n.exposure)
         ? { scaleEvents: engine.events }
         : {}),
       statistics,

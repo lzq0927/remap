@@ -1,3 +1,4 @@
+import { physicalTopology } from "./audit-physical-topology";
 import { trainingReferenceAvailability } from "../../contracts/src/audit-training-scenario";
 import { reliabilityStages } from "../../contracts/src/reliability-workflow";
 import {
@@ -318,7 +319,7 @@ export function architectureRelations(
   const network = `<div class="analysis-enclosure analysis-network"><div class="analysis-enclosure-title">网络物理位置与责任归属</div><p>L1、IO、UB网卡位于计算柜；L2位于互联柜。责任预算统一计入02网络域。</p><div class="analysis-enclosure"><b>计算柜内网络设备</b>${["hardware-l1", "hardware-io", "hardware-ubnic"].map((id) => containment(stage, id)).join("")}</div><div class="analysis-enclosure"><b>互联柜 / 域内交换 · 柜数 ${num(counts?.interconnectRacks, 0)}</b>${containment(stage, "hardware-l2")}</div><div class="analysis-enclosure"><b>跨超节点网络 / 光介质</b>${["hardware-leaf-extra", "hardware-spine-extra", "object-OPT"].map((id) => containment(stage, id)).join("")}</div></div>`;
   return card(
     "架构：物理包含与通信连接",
-    `<div class="analysis-relation-key"><span>嵌套框：物理包含</span><span>蓝色连线：通信路径</span><span>共享服务：跨域依赖</span></div><div class="analysis-system-envelope" data-contains="system"><header><b>集群总体 · ${num(get(stage, "system").quantity, 0)}卡</b><span>A ${pct(get(stage, "system").availability)} / 目标 ${pct(get(stage, "system").target)}</span></header><div class="analysis-physical"><div>${compute}</div>${network}</div>${communicationGraph()}<div class="analysis-services">${["hardware-storage", "hardware-facility", "hardware-other"].map((id) => `<span>⇢ ${esc(get(stage, id).name)}<small>${id === "hardware-storage" ? "检查点/训练数据服务，传播范围按输入" : id === "hardware-facility" ? "供电/冷却/管理，需核对公共依赖" : "训练框架/控制面/未归因事件，按事件界定范围"}</small></span>`).join("")}</div></div><p class="analysis-note">图内数量、FIT与A均为当前规模该类部件的责任汇总，不是单件器件指标。框表示包含关系，不表示独立串并联。CPU/DDR/SSD数量可为责任代理单元，光模块/Leaf/Spine可含拓扑估算，需以BOM核对。</p>`,
+    `<div class="analysis-table-scroll">${physicalTopology(stage, counts)}</div><details><summary>展开完整包含层级与部件指标</summary><div class="analysis-relation-key"><span>嵌套框：物理包含</span><span>蓝色连线：通信路径</span><span>共享服务：跨域依赖</span></div><div class="analysis-system-envelope" data-contains="system"><header><b>集群总体 · ${num(get(stage, "system").quantity, 0)}卡</b><span>A ${pct(get(stage, "system").availability)} / 目标 ${pct(get(stage, "system").target)}</span></header><div class="analysis-physical"><div>${compute}</div>${network}</div>${communicationGraph()}<div class="analysis-services">${["hardware-storage", "hardware-facility", "hardware-other"].map((id) => `<span>⇢ ${esc(get(stage, id).name)}<small>${id === "hardware-storage" ? "检查点/训练数据服务，传播范围按输入" : id === "hardware-facility" ? "供电/冷却/管理，需核对公共依赖" : "训练框架/控制面/未归因事件，按事件界定范围"}</small></span>`).join("")}</div></div><p class="analysis-note">图内数量、FIT与A均为当前规模该类部件的责任汇总，不是单件器件指标。框表示包含关系，不表示独立串并联。CPU/DDR/SSD数量可为责任代理单元，光模块/Leaf/Spine可含拓扑估算，需以BOM核对。</p></details>`,
   );
 }
 export function allocationLogic(
@@ -543,33 +544,77 @@ function detailedLoss(d: TopologyDecision, stage: AnalysisStage) {
       `<p class="analysis-note">共用黄色对数色尺；格内为实际小时，损失总和与指标表守恒。正常态开销为0时仍需核对配置假设。</p>`,
   );
 }
-function stageLossComparison(d: TopologyDecision, cards: number) {
+export function stageLossComparison(d: TopologyDecision, cards: number) {
   const scale = d.scales.find((s) => s.cards === cards) ?? d.scales[0];
+  const gap = '<td class="analysis-stage-gap" aria-hidden="true"></td>';
+  const split = (parts: string[]) => parts.join(gap);
+  const cell = (n: TopologyDecisionNode, i: number, stage: string) => {
+    const value = lossHours(n, i);
+    return `<td data-loss-hours="${value}" data-loss-kind="${decisionLosses[i].keys.join("+")}" style="background:${lossFill(value, d.hours)}" title="${esc(stage)} · ${esc(n.name)} · ${decisionLosses[i].name} ${hours(value)} h">${hours(value)}</td>`;
+  };
+  const rows = [
+    ...decisionDomains.map(([id, label]) => ({ id, label })),
+    { id: "system", label: "全系统合计" },
+  ];
   return card(
     "当前规模：三阶段逐层损失对照",
-    table(
-      [
-        "责任域 / 阶段",
-        "可用度 / 目标",
-        ...decisionLosses.map((l) => l.name + " h"),
-        "合计 / 预算 h",
-      ],
-      decisionDomains.flatMap(([id, label]) =>
-        scale.scenarios.map((stage) => {
-          const n = get(stage, id);
-          return [
-            `${label}<small>${esc(stage.name)}</small>`,
-            `${pct(n.availability)}<small>目标 ${pct(n.target)}</small>`,
-            ...decisionLosses.map(
-              (_l, i) =>
-                `<span class="analysis-heat" style="background:${lossFill(lossHours(n, i), d.hours)}">${hours(lossHours(n, i))}</span>`,
+    `<p>横向比较同一责任域与损失路径；每格为 ${d.hours} 小时窗口内的损失小时。分组之间留白，三阶段共用黄色色尺。</p><div class="analysis-table-scroll"><table class="analysis-stage-matrix" aria-label="三阶段分组损失热力图"><thead><tr><th rowspan="2" scope="col">责任域</th>${split(scale.scenarios.map((s, i) => `<th colspan="7" scope="colgroup" class="analysis-stage-head stage-${i}">${esc(s.name)}<span>可用度 ${pct(get(s, "system").availability)} · 损失 ${hours(get(s, "system").actualHours)} h</span></th>`))}</tr><tr>${split(scale.scenarios.map(() => decisionLosses.map((l) => `<th scope="col">${l.name}<small>${l.mechanisms}</small></th>`).join("") + '<th scope="col">合计<br/>/ 预算</th>'))}</tr></thead><tbody>${rows
+      .map(
+        ({ id, label }) =>
+          `<tr data-loss-domain="${id}" class="${id === "system" ? "analysis-total-row" : ""}"><th scope="row"><button type="button" data-analysis-node="${id}">${label}</button></th>${split(
+            scale.scenarios.map((s) => {
+              const n = get(s, id);
+              return (
+                decisionLosses.map((_, i) => cell(n, i, s.name)).join("") +
+                `<td class="analysis-domain-total ${(n.gapHours ?? 0) > 0 ? "analysis-gap" : "analysis-within"}"><b>${hours(n.actualHours)}</b><small>/ ${hours(n.allowedHours)}</small></td>`
+              );
+            }),
+          )}</tr>`,
+      )
+      .join(
+        "",
+      )}</tbody></table></div><div class="analysis-heat-legend"><b>损失小时</b>${[0, 1 / 60, 0.1, 1, 10, 100, 600].map((v) => `<span style="background:${lossFill(v, d.hours)}">${v === 1 / 60 ? "1分钟" : num(v) + "h"}</span>`).join("")}<span>log(1 + 小时 / 1分钟)</span></div><p class="analysis-note">合计旁标注冻结预算；棕色表示超预算。停机含检测、恢复及失败升级；降速含局部降容；污染为窗口末仍未挽回的进度。回滚可能来自静默故障，需结合 M6 共同处理。保存/检测开销统一归06，避免跨域重复计数。</p>` +
+      `<details><summary>展开三阶段关键参数与损失路径映射</summary>${table(
+        ["措施 / 分类", "对应损失", ...scale.scenarios.map((s) => esc(s.name))],
+        [
+          [
+            "M3 中断检测 · MTTR",
+            "停机",
+            ...scale.scenarios.map((s) => parameter(s, "D-HARD")),
+          ],
+          [
+            "M4 自动恢复 · MTTR",
+            "停机 / 回滚",
+            ...scale.scenarios.map((s) => parameter(s, "recovery")),
+          ],
+          [
+            "M5 检查点 · 回滚/开销",
+            "回滚 / 保存",
+            ...scale.scenarios.map((s) => parameter(s, "C-FAST")),
+          ],
+          [
+            "M6 静默检测与排查 · 正确性",
+            "回滚 / 污染",
+            ...scale.scenarios.map(
+              (s) =>
+                parameter(s, "D-SDC") +
+                "；漏检排查 " +
+                num(s.configuration?.model?.sdcDelayHours) +
+                "h",
             ),
-            `${hours(n.actualHours)} / ${hours(n.allowedHours)}`,
-          ];
-        }),
-      ),
-    ) +
-      `<p class="analysis-note">本表并列本规模全部已保存快照；冻结预算一致。黄色色尺跨阶段一致，格内为实际小时；总损失与快照账本守恒。</p>`,
+          ],
+          [
+            "M7 亚健康处理 · MTTR",
+            "降速",
+            ...scale.scenarios.map((s) => parameter(s, "D-SLOW")),
+          ],
+          [
+            "M8 失败升级 · MTTR",
+            "停机",
+            ...scale.scenarios.map((s) => parameter(s, "manual")),
+          ],
+        ],
+      )}</details>`,
   );
 }
 function scaleComparison(d: TopologyDecision) {
@@ -691,36 +736,107 @@ export function analysisNodeDetail(
   );
 }
 export function mechanismContributions(result: any, cards: number) {
-  const entries = result.entries ?? [
-    {
-      ...result,
-      name: result.name ?? result.request?.trainingScenario?.name ?? "本轮",
-      round: result.kind === "expert-audit-experiment" ? "scenario" : "current",
-    },
-  ];
+  const studies = result.mechanismStudies ?? [];
+  const entries = studies.length
+    ? studies
+    : (result.entries ?? [
+        {
+          ...result,
+          name: result.name ?? result.request?.trainingScenario?.name ?? "本轮",
+          round:
+            result.kind === "expert-audit-experiment" ? "scenario" : "current",
+        },
+      ]);
+  const labels: Record<string, string> = {
+    fit: "M1 故障源FIT改进",
+    "policy:D-HARD": "M3 中断检测",
+    "model:recovery": "M4/M8 恢复链与失败升级",
+    "policy:C-FAST": "M5 检查点周期与保存",
+    "policy:D-SDC": "M6 静默检出",
+    "model:silent": "M6 漏检后排查",
+    "policy:D-SLOW": "M7 亚健康检测",
+  };
   return card(
     "Shapley：各轮机制收益与对应基线",
     entries
       .map((entry: any) => {
         const attr = entry.attribution?.find((a: any) => a.cards === cards);
         if (!attr)
-          return `<p>${esc(entry.name)}：本快照未记录Shapley，不能从热力图减损倒推单项贡献。</p>`;
+          return `<p>${esc(entry.name)}：未记录增量Shapley，不能从热力图差值倒推单项贡献。</p>`;
         const incremental =
-          entry.round === "scenario" &&
-          result.comparisonMode !== "training-scenarios";
-        return `<h4>${esc(entry.name)} · ${incremental ? "相对冻结第一轮的改进增量" : "相对本快照固定基线的所选措施贡献"}</h4><p>归因采样 ${num(attr.trials, 0)} 条；同批组合增益 ${pct(attr.gain)}（可用度增量）。</p>${table(
-          ["措施", "Shapley增量 pp", "95%采样区间 pp"],
-          [...attr.contributions]
-            .sort((a: any, b: any) => b.statistics.mean - a.statistics.mean)
-            .map((c: any) => [
-              esc(c.name ?? c.id),
-              num(c.statistics.mean * 100, 3),
-              `${num(c.statistics.ciLow * 100, 3)}–${num(c.statistics.ciHigh * 100, 3)}`,
-            ]),
-        )}`;
+          studies.length > 0 ||
+          (entry.round === "scenario" &&
+            result.comparisonMode !== "training-scenarios");
+        const ranked = [...attr.contributions].sort(
+          (a: any, b: any) => b.statistics.mean - a.statistics.mean,
+        );
+        const max = Math.max(
+          1e-9,
+          ...ranked.map((c: any) =>
+            Math.max(
+              Math.abs(c.statistics.mean),
+              Math.abs(c.statistics.ciLow),
+              Math.abs(c.statistics.ciHigh),
+            ),
+          ),
+        );
+        return `<figure class="analysis-gain-chart" aria-label="${esc(entry.name)}措施收益排序"><figcaption><b>${esc(entry.name)}</b> · ${incremental ? "相对冻结现状的改进增量" : "相对本快照固定基线的所选措施贡献"}</figcaption><p>配对 ${num(attr.trials, 0)} 条轨迹${attr.permutations ? " × " + num(attr.permutations, 0) + " 个排列" : ""}；组合增量 ${num(attr.gain * 100, 3)} pp（${num(attr.gain * (result.request?.hours ?? 600), 2)} h减损）。</p>${ranked.map((c: any, i: number) => `<div class="analysis-gain-row"><span>${i + 1}. ${esc(labels[c.id] ?? c.name ?? c.id)}</span><div class="analysis-gain-track"><i style="width:${(Math.abs(c.statistics.mean) / max) * 100}%;background:${c.statistics.mean < 0 ? "#b77946" : "#4a8a82"}"></i></div><b>${c.statistics.mean >= 0 ? "+" : ""}${num(c.statistics.mean * 100, 3)} pp<small>${num(c.statistics.mean * (result.request?.hours ?? 600), 2)} h · 95% [${num(c.statistics.ciLow * 100, 3)}, ${num(c.statistics.ciHigh * 100, 3)}]</small></b></div>`).join("")}<p class="analysis-note">${incremental ? "来源现状运行 " + esc(entry.sourceRunId) + "；增量研究独立采样，组合增量与主表跨档差值可能略有不同。" : "这是本轮已选能力的贡献，尚非现状→改进的参数增量。"} 排列采样区间未包含参数、模型及全部排列误差；区间重叠时不强判排名。</p></figure>`;
       })
       .join("") +
-      '<p class="analysis-note">三阶段组合差值与单项Shapley使用各自明确的基线；不能相加，也不把不同基线的排名直接相减。区间跨零时收益证据有限。</p>',
+      '<p class="analysis-note">正值表示减少损失；负值表示增加损失。组合收益与单项分摊使用明确的冻结基线，不能跨研究重复相加。M2冗余/PAFT等未建模候选不领取收益。</p>',
+  );
+}
+
+export function optimizationAdvice(
+  result: any,
+  d: TopologyDecision,
+  cards: number,
+) {
+  const scale = d.scales.find((s) => s.cards === cards)!,
+    last = scale.scenarios.at(-1)!;
+  const root = get(last, "system"),
+    weak = domainLossSources(last).filter((x) => (x.node.gapHours ?? 0) > 0);
+  return card(
+    "可靠性措施优化建议",
+    `<p><b>先兑现已计算参数，再验证新增结构措施。</b>${esc(last.name)}整体损失 ${hours(root.actualHours)} / ${hours(root.allowedHours)} h；${weak.length ? weak.map((x) => x.name + "超预算 " + hours(x.node.gapHours) + "h").join("，") : "各责任域均在已分配预算内"}。</p>` +
+      table(
+        ["优先方向 / 依据", "精确情景参数或候选条件", "验收方式"],
+        [
+          [
+            "M6 静默检测与可信恢复：同时压低回滚及污染",
+            parameter(last, "D-SDC") +
+              "；漏检排查 " +
+              num(last.configuration?.model?.sdcDelayHours) +
+              "h",
+            "注入静默错误，记录检出/误报、发现延时、污染回退与干净进度。",
+          ],
+          [
+            "M5 异步多层检查点：减少回滚与正常态开销",
+            parameter(last, "C-FAST") + "；零阻塞是情景假设",
+            "验证持久化滞后、共享存储故障与恢复带宽，不能仅测保存接口返回时间。",
+          ],
+          [
+            "M3/M4/M8 检测与恢复链：决定剩余停机",
+            parameter(last, "D-HARD") +
+              "；" +
+              parameter(last, "recovery") +
+              "；" +
+              parameter(last, "manual"),
+            "端到端故障注入，同时检验恢复时长、成功率、失败升级尾部和状态正确性。",
+          ],
+          [
+            "M1 故障源治理 / M7 亚健康处理：优先薄弱责任域",
+            parameter(last, "D-SLOW") + "；FIT改善仍需按代际与负载校准",
+            "选定中断范围MTBF与全系统MTBF分别验收；记录事件暴露卡时，避免数量与倍率重复翻倍。",
+          ],
+          [
+            "M2 新增冗余 / 备用池 / 副本级恢复：作为下一轮候选",
+            "容量门、光链路与跨域共因；TP/PP/DP映射、备用耗尽及维修补回",
+            "先用RBD/BDD验证结构与容量，再以相同故障样本做DES对照；并列报告有效GPU·小时与备用成本。",
+          ],
+        ],
+      ) +
+      '<p class="analysis-note">上方排序是当前假设下的配对增量贡献，并不直接等于投入产出优先级；尚缺工程成本和能力证据。新增机制未计入当前达标结果。</p>',
   );
 }
 
@@ -797,6 +913,25 @@ export function verificationSummary(
   );
 }
 
+/** Older snapshots without per-scale rates can omit generation-only exposure. Keep them traceable, but flag their conclusion. */
+export function legacyExposureNotice(result: any) {
+  const entries = result.entries ?? [result];
+  return entries.some((e: any) => {
+    const architecture =
+      e.request?.architecture ?? result.request?.architecture;
+    return e.rows?.some(
+      (row: any) =>
+        !row.scaleEvents &&
+        architecture?.nodes?.some(
+          (n: any) =>
+            n.exposure && (n.exposure.multipliers?.[row.cards] ?? 1) !== 1,
+        ),
+    );
+  })
+    ? '<p class="analysis-reference" role="alert"><b>此旧快照缺少逐规模暴露率记录：</b>它可能受已确认的暴露倍率漏用问题影响，请用当前引擎重新评估。原值保留供追溯，旧达标结论暂不采用。</p>'
+    : "";
+}
+
 export function analysisWorkbenchHtml(
   result: any,
   cards: number,
@@ -817,6 +952,7 @@ export function analysisWorkbenchHtml(
     body =
       systemMetrics(d, stage, root) +
       assessmentReading(d, stage, cards) +
+      stageLossComparison(d, cards) +
       lossMeasureMap(d, stage) +
       lossSourceCharts(d, stage, cards) +
       allocationMetrics(stage) +
@@ -833,7 +969,8 @@ export function analysisWorkbenchHtml(
       stageLossComparison(d, cards) +
       lossMeasureMap(d, stage) +
       mechanismContributions(result, cards) +
-      detailedLoss(d, stage);
+      optimizationAdvice(result, d, cards) +
+      `<details><summary>当前选中快照的独立损失明细</summary>${detailedLoss(d, stage)}</details>`;
   if (view === "verification") body = verificationSummary(result, d, cards);
   if (view === "scales")
     body = scaleComparison(d) + stageLossComparison(d, cards);
@@ -852,5 +989,5 @@ export function analysisWorkbenchHtml(
   const method = phase
     ? `<div class="analysis-method"><b>${phase.name}</b><span>方法：${phase.methods}</span><p>${phase.hint}</p>${view === "overview" ? "<p>本训练结果采用逐事件离散事件仿真的正确进度损失账；RBD/BDD可用于结构成功门辅助评估，其稳态可用度单独记录。</p>" : ""}<details><summary>Agent执行依据</summary>同一个ReMAP Agent · Skill：${phase.skill} · ${phase.toolset}<br/>${phase.tools.join(" / ")}</details></div>`
     : "";
-  return `<div class="reliability-analysis" data-analysis-view="${view}"><div class="analysis-snapshot-label"><b>${num(ctx.scale.cards, 0)}卡 · ${esc(stage.name)}</b><span>${ctx.scale.reference === stage.name ? "分配参照快照" : `预算沿用 ${esc(ctx.scale.reference)}`} · ${d.hours}小时</span></div>${method}${basis}${body}</div>`;
+  return `<div class="reliability-analysis" data-analysis-view="${view}"><div class="analysis-snapshot-label"><b>${num(ctx.scale.cards, 0)}卡 · ${esc(stage.name)}</b><span>${ctx.scale.reference === stage.name ? "分配参照快照" : `预算沿用 ${esc(ctx.scale.reference)}`} · ${d.hours}小时</span></div>${legacyExposureNotice(result)}${method}${basis}${body}</div>`;
 }
