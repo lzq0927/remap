@@ -161,15 +161,19 @@ test("native OpenCode sessions are named and scoped to task directories", async 
     expect(config.permission.external_directory).toBe("deny");
     const skillDirectory = join(
       a.workspacePath,
-      ".opencode/skills/sd-dfr-remap",
+      ".opencode/skills/remap-target-allocation",
     );
     const skill = await readFile(join(skillDirectory, "SKILL.md"), "utf8");
-    expect(skill).toBe(await readFile("skills/sd-dfr-remap/SKILL.md", "utf8"));
+    expect(skill).toBe(
+      await readFile("skills/remap-target-allocation/SKILL.md", "utf8"),
+    );
     const manifest = JSON.parse(
       await readFile(join(skillDirectory, "manifest.json"), "utf8"),
     );
-    expect(manifest.version).toBe("0.5.0");
-    expect(manifest.primaryScenario).toBe("training.retained-clean-progress");
+    expect(manifest.version).toBe("1.0.0");
+    expect(config.default_agent).toBe("remap");
+    expect(config.agent.remap.tools.task).toBe(false);
+    expect(manifest.stage).toBe("target-allocation");
     for (const reference of manifest.references)
       expect(await readFile(join(skillDirectory, reference), "utf8")).toBe(
         await readFile(join("skills/sd-dfr-remap", reference), "utf8"),
@@ -374,11 +378,14 @@ test("prepares the task Skill and scoped MCP while the native Agent is unavailab
     expect(configuration.mcp.reliability.enabled).toBe(true);
     const manifest = JSON.parse(
       await readFile(
-        join(task.workspacePath, ".opencode/skills/sd-dfr-remap/manifest.json"),
+        join(
+          task.workspacePath,
+          ".opencode/skills/remap-target-allocation/manifest.json",
+        ),
         "utf8",
       ),
     );
-    expect(manifest.tools).toContain("audit_evaluate");
+    expect(manifest.tools).toContain("allocation_preview");
     expect(
       app.taskServices.resolve(task.id).store.documents("agent-binding")[0]
         .sessionId,

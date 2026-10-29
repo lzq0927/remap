@@ -5,7 +5,7 @@ import {
   analysisWorkbenchHtml,
   analysisNodeDetail,
   analysisViews,
-  type AnalysisView,
+  type WorkflowAnalysisView as AnalysisView,
 } from "../../../packages/reports/src/audit-analysis-workbench";
 import { analysisWorkbenchCss } from "../../../packages/reports/src/audit-analysis-styles";
 export default function AuditAnalysisWorkbench({
@@ -88,7 +88,7 @@ export default function AuditAnalysisWorkbench({
             }}
           >
             {ctx.scale.scenarios.map((s) => (
-              <option key={s.name}>
+              <option key={s.name} value={s.name}>
                 {s.name}
                 {s.name === ctx.scale.reference ? "（分配参照）" : ""}
               </option>
@@ -116,6 +116,23 @@ export default function AuditAnalysisWorkbench({
             {v.name}
           </button>
         ))}
+        <label>
+          更多分析
+          <select
+            aria-label="更多分析视图"
+            value={["scales", "research"].includes(view) ? view : ""}
+            onChange={(e) => {
+              setView(e.target.value as AnalysisView);
+              setDetail("");
+            }}
+          >
+            <option value="" disabled>
+              选择补充视图
+            </option>
+            <option value="scales">分规模与三阶段</option>
+            <option value="research">2026实践与资源条件</option>
+          </select>
+        </label>
       </div>
       {view === "architecture" && (
         <label>

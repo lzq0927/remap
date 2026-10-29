@@ -12,6 +12,8 @@ export type WorkflowState = {
   resumedFrom?: { confirmedSteps: number };
   runId?: string;
   mode?: string;
+  runStepId?: string;
+  assessmentRunId?: string;
   steps: {
     id: string;
     status: string;
@@ -32,6 +34,9 @@ const labels: Record<string, string> = {
   cancelled: "已取消",
 };
 const artifactNames: Record<string, string> = {
+  "target-allocation": "架构目标与AGREE分配",
+  "evidence-allocation": "评估证据分配建议",
+  verification: "独立DES验证与精确参数",
   design: "设计快照",
   evaluation: "评估结果",
   brief: "目标说明",
@@ -83,7 +88,7 @@ export default function WorkflowTimeline({
     state.status === "active" &&
     !state.stale &&
     state.steps.some((s) => ["completed", "running"].includes(s.status)) &&
-    state.steps[5]?.status !== "awaiting-review" &&
+    state.steps.at(-1)?.status !== "awaiting-review" &&
     !state.steps.some((s) => s.status === "failed");
   useEffect(() => {
     const element = dock.current,
@@ -114,7 +119,12 @@ export default function WorkflowTimeline({
   return (
     <>
       <div className="workflow-dock" ref={dock}>
-        <nav className="workflow-navigation" aria-label="六阶段评估流程">
+        <nav
+          className="workflow-navigation"
+          aria-label={
+            steps.length === 4 ? "四部分可靠性工作流" : "六阶段评估流程"
+          }
+        >
           <div className="workflow-steps" ref={rail}>
             {steps.map((step, i) => {
               const status = state?.steps[i]?.status ?? "pending",

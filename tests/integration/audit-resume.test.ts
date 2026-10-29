@@ -117,6 +117,7 @@ test.each(changes)(
         await post("/workflow/start", {
           inputRevision: original.revision,
           mode: "manual",
+          version: "legacy-six",
         })
       ).json();
       for (const stepId of ["clarify", "describe", "select", "prepare"]) {
@@ -179,7 +180,12 @@ test.each(changes)(
       const agent = (
         await post(
           "/workflow/start",
-          { inputRevision: revised.revision, mode: "manual", resume: true },
+          {
+            inputRevision: revised.revision,
+            mode: "manual",
+            version: "legacy-six",
+            resume: true,
+          },
           true,
         )
       ).json();

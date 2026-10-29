@@ -3,7 +3,7 @@ import { buildApp } from "../../apps/api/src/server";
 import { getAuditDefaults } from "../../packages/analysis/src/audit";
 import { draftFromAuditRequest } from "../../packages/contracts/src/audit-draft";
 
-test("audit design revision, formal workflow and delivery share exactly one saved assessment", async () => {
+test("legacy audit design revision, formal workflow and delivery share exactly one saved assessment", async () => {
   const app = await buildApp({ dataDir: ":memory:", seed: false });
   try {
     const task = app.taskServices.create("Audit acceptance · synthetic");
@@ -36,7 +36,10 @@ test("audit design revision, formal workflow and delivery share exactly one save
       ).json().revision,
     ).toBe(design.revision);
     let flow = (
-      await post("/workflow/start", { inputRevision: design.revision })
+      await post("/workflow/start", {
+        inputRevision: design.revision,
+        version: "legacy-six",
+      })
     ).json();
     for (const stepId of ["clarify", "describe", "select", "prepare"]) {
       const res = await post("/workflow", {
@@ -108,7 +111,10 @@ test("audit design revision, formal workflow and delivery share exactly one save
     expect(invalid.assessment.valid).toBe(false);
     expect(invalid.assessment.input).toBeUndefined();
     flow = (
-      await post("/workflow/start", { inputRevision: invalid.revision })
+      await post("/workflow/start", {
+        inputRevision: invalid.revision,
+        version: "legacy-six",
+      })
     ).json();
     expect(
       (

@@ -280,7 +280,9 @@ test("internal Agent preparation replaces inherited providers, MCP and secrets",
     expect(config.share).toBe("disabled");
     expect(config.autoupdate).toBe(false);
     expect(config.plugin).toEqual([]);
-    expect(config.agent).toEqual({});
+    expect(Object.keys(config.agent)).toEqual(["remap"]);
+    expect(config.default_agent).toBe("remap");
+    expect(config.agent.remap.tools.task).toBe(false);
     expect(config.command).toEqual({});
     expect(config.provider.enterprise.options.apiKey).toBe(
       "{env:SYNTHETIC_MODEL_KEY}",

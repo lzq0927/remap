@@ -1,12 +1,12 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile, rename } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { projectRoot } from "./runtime.mjs";
 
 /** One maintained source; refresh owned files while preserving unchanged timestamps. */
 export async function installProjectSkill(
-  target = join(projectRoot, ".opencode/skills/sd-dfr-remap"),
+  target = join(projectRoot, ".opencode/skills"),
 ) {
-  const source = join(projectRoot, "skills/sd-dfr-remap");
+  const source = join(projectRoot, "skills");
   target = resolve(target);
   if (target === source) throw new Error("Skill 安装目录不能是源目录");
   let updated = 0;
@@ -31,6 +31,24 @@ export async function installProjectSkill(
       }
     }
   };
-  await copy(source, target);
+  const manifest = JSON.parse(
+    await readFile(join(source, "workflow.json"), "utf8"),
+  );
+  for (const name of manifest.skills) {
+    await copy(join(source, name), join(target, name));
+    await copy(
+      join(source, manifest.sharedReferences),
+      join(target, name, "references"),
+    );
+  }
+  // Keep all old content outside native Skill discovery; never discard user edits.
+  try {
+    await rename(
+      join(target, "sd-dfr-remap"),
+      join(target, "../remap-legacy-reference-" + Date.now()),
+    );
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
   return { target, updated };
 }

@@ -66,16 +66,18 @@ test("MCP executes separate rounds, preserves evidence and exports selected comp
     await vi.waitFor(
       async () => {
         state = await call("workflow_state");
-        expect(state.steps[5].status).toBe("awaiting-review");
+        expect(state.steps[3].status).toBe("awaiting-review");
       },
       { timeout: 15000, interval: 50 },
     );
-    const first = await wait(state.runId),
+    const first = await wait(state.assessmentRunId),
       frozen = JSON.stringify(first);
     expect(first.result.config.policy["D-SDC"].coverage).toBe(0.95);
     expect(first.result.optimization).toBeNull();
     const discovery = await call("run_list", { query: { operation: "audit" } });
-    expect(discovery.items.map((r: any) => r.id)).toEqual([first.id]);
+    expect(discovery.items.map((r: any) => r.id).sort()).toEqual(
+      [first.id, state.runId].sort(),
+    );
     expect(discovery.items[0].input).toBeUndefined();
     expect(discovery.items[0].result).toBeUndefined();
     const planQueued = await call("audit_plan", {

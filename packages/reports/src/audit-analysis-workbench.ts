@@ -1,4 +1,5 @@
 import { trainingReferenceAvailability } from "../../contracts/src/audit-training-scenario";
+import { reliabilityStages } from "../../contracts/src/reliability-workflow";
 import {
   topologyDecision,
   type TopologyDecision,
@@ -26,14 +27,14 @@ export type AnalysisView =
   | "loss"
   | "scales"
   | "research";
+export type WorkflowAnalysisView = AnalysisView | "verification";
 export type AnalysisStage =
   TopologyDecision["scales"][number]["scenarios"][number];
 export const analysisViews = [
-  { id: "overview", name: "现状与分解目标" },
-  { id: "architecture", name: "架构与分配依据" },
-  { id: "loss", name: "损失来源与措施" },
-  { id: "scales", name: "分规模与三阶段" },
-  { id: "research", name: "2026实践与资源条件" },
+  { id: "architecture", name: "01 可用度目标分解分配" },
+  { id: "overview", name: "02 可用度评估" },
+  { id: "loss", name: "03 可靠性机制设计" },
+  { id: "verification", name: "04 可靠性机制验证" },
 ] as const;
 const hours = (v: number | null | undefined) =>
   v == null
@@ -247,7 +248,7 @@ function containment(
 ) {
   const n = get(stage, id);
   if (!n) return "";
-  return `<div class="analysis-enclosure ${className}" data-contains="${id}"><div class="analysis-enclosure-title"><button type="button" data-analysis-node="${id}">${esc(n.name)}</button><span>数量 ${num(n.quantity, 0)}</span></div><small>A ${pct(n.availability)} → ${pct(n.target)} · 损失 ${hours(n.actualHours)} / ${hours(n.allowedHours)} h</small>${n.hardFit > 0 ? `<small class="analysis-node-metrics">等效FIT ${num(n.fit, 2)} · MTBF ${period(n.mtbfHours)} · MTTR ${num(n.mttrSeconds, 1)}s</small>` : ""}${children}</div>`;
+  return `<div class="analysis-enclosure ${className}" data-contains="${id}" data-budget-status="${n.allowedHours == null ? "unallocated" : (n.gapHours ?? 0) > 1e-8 ? "gap" : "within"}"><div class="analysis-enclosure-title"><button type="button" data-analysis-node="${id}">${esc(n.name)}</button><span>数量 ${num(n.quantity, 0)}</span></div><small>A ${pct(n.availability)} → ${pct(n.target)} · 损失 ${hours(n.actualHours)} / ${hours(n.allowedHours)} h</small><b class="analysis-node-gap">${n.allowedHours == null ? "目标待分配" : (n.gapHours ?? 0) > 1e-8 ? `超预算 ${hours(n.gapHours)} h` : `预算余量 ${hours(-(n.gapHours ?? 0))} h`}</b>${n.hardFit > 0 ? `<small class="analysis-node-metrics">等效FIT ${num(n.fit, 2)} · MTBF ${period(n.mtbfHours)} · MTTR ${num(n.mttrSeconds, 1)}s</small>` : ""}${children}</div>`;
 }
 function communicationGraph() {
   const t = (x: number, y: number, v: string) =>
@@ -689,10 +690,117 @@ export function analysisNodeDetail(
       ),
   );
 }
+export function mechanismContributions(result: any, cards: number) {
+  const entries = result.entries ?? [
+    {
+      ...result,
+      name: result.name ?? result.request?.trainingScenario?.name ?? "本轮",
+      round: result.kind === "expert-audit-experiment" ? "scenario" : "current",
+    },
+  ];
+  return card(
+    "Shapley：各轮机制收益与对应基线",
+    entries
+      .map((entry: any) => {
+        const attr = entry.attribution?.find((a: any) => a.cards === cards);
+        if (!attr)
+          return `<p>${esc(entry.name)}：本快照未记录Shapley，不能从热力图减损倒推单项贡献。</p>`;
+        const incremental =
+          entry.round === "scenario" &&
+          result.comparisonMode !== "training-scenarios";
+        return `<h4>${esc(entry.name)} · ${incremental ? "相对冻结第一轮的改进增量" : "相对本快照固定基线的所选措施贡献"}</h4><p>归因采样 ${num(attr.trials, 0)} 条；同批组合增益 ${pct(attr.gain)}（可用度增量）。</p>${table(
+          ["措施", "Shapley增量 pp", "95%采样区间 pp"],
+          [...attr.contributions]
+            .sort((a: any, b: any) => b.statistics.mean - a.statistics.mean)
+            .map((c: any) => [
+              esc(c.name ?? c.id),
+              num(c.statistics.mean * 100, 3),
+              `${num(c.statistics.ciLow * 100, 3)}–${num(c.statistics.ciHigh * 100, 3)}`,
+            ]),
+        )}`;
+      })
+      .join("") +
+      '<p class="analysis-note">三阶段组合差值与单项Shapley使用各自明确的基线；不能相加，也不把不同基线的排名直接相减。区间跨零时收益证据有限。</p>',
+  );
+}
+
+export function verificationSummary(
+  result: any,
+  d: TopologyDecision,
+  cards: number,
+) {
+  const scale = d.scales.find((s) => s.cards === cards)!;
+  const rows = scale.scenarios.map((s) => {
+    const n = get(s, "system"),
+      st = s.statistics;
+    const local = domainLossSources(s)
+      .filter((v) => (v.node.gapHours ?? 0) > 1e-8)
+      .sort((a, b) => b.node.gapHours! - a.node.gapHours!);
+    return [
+      esc(s.name),
+      `${pct(n.availability)} / ${pct(n.target)}`,
+      st ? `${pct(st.ciLow)}–${pct(st.ciHigh)}` : "未保存",
+      num(st?.n, 0),
+      st?.achievementProbability == null
+        ? "未保存"
+        : pct(st.achievementProbability),
+      n.target == null || !st
+        ? "待核验"
+        : st.ciLow >= n.target
+          ? "均值区间高于目标"
+          : st.ciHigh < n.target
+            ? "未达目标"
+            : "区间跨目标",
+      local.length
+        ? local.map((v) => `${v.name}超 ${hours(v.node.gapHours)} h`).join("；")
+        : "责任域内无超预算项",
+    ];
+  });
+  const params: [string, (s: AnalysisStage) => string][] = [
+    ["M3 中断检出 / 时延", (s) => parameter(s, "D-HARD")],
+    ["M7 亚健康检出 / 时延", (s) => parameter(s, "D-SLOW")],
+    ["M6 静默检出 / 时延", (s) => parameter(s, "D-SDC")],
+    ["M4 恢复成功 / 尝试总时长", (s) => parameter(s, "recovery")],
+    ["M5 检查点周期 / 保存阻塞", (s) => parameter(s, "C-FAST")],
+    ["M8 自动失败后人工追加", (s) => parameter(s, "manual")],
+  ];
+  const provenance = result.workflowContext?.verification;
+  return (
+    card(
+      "DES验证结果与达成情况",
+      table(
+        [
+          "方案",
+          "可用度 / 目标",
+          "均值95%采样区间",
+          "轨迹数",
+          "窗口达标比例",
+          "总体判定",
+          "局部未达项",
+        ],
+        rows,
+      ) +
+        `<p class="analysis-note">${provenance ? `独立验证：来源运行 ${esc(provenance.sourceRunId)}，种子 ${num(provenance.seed, 0)}；精确参数哈希 ${esc(provenance.parameterHash)}。` : "以下读取各方案已保存的真实DES快照；独立复核运行及种子由任务运行记录追溯。"}均值区间仅含采样误差；窗口达标比例是另一项统计，不等于均值置信度。</p>`,
+    ) +
+    card(
+      "验证采用的精确生效参数",
+      table(
+        ["机制 / 参数", ...scale.scenarios.map((s) => esc(s.name))],
+        params.map(([name, value]) => [name, ...scale.scenarios.map(value)]),
+      ) +
+        '<p class="analysis-note">参数来自各轮冻结配置；启用范围仍以原输入开关为准。恢复尝试总时长不包含另列的检测和失败升级；零保存阻塞不消除持久化滞后风险。</p>',
+    ) +
+    card(
+      "优化或新增机制建议与验证条件",
+      '<ol><li><b>优化已有检测恢复与检查点：</b>按未达责任域及停机、回滚、污染路径，选择上表参数的独立对照；保持目标和基线不变。</li><li><b>新增有限备用与副本级恢复：</b>需补充TP/PP/DP映射、拓扑可替换性、备用占用/耗尽及维修补回；当前容量等效近似不能证明PAFT能力。</li><li><b>新增跨故障域冗余与异步多层检查点：</b>BDD验证容量门与共享原因，DES验证倒换、加载带宽、持久化滞后和持续降容；在满足这些条件前保留为候选。</li></ol><p class="analysis-note">模型达标给出精确情景参数，产品能力还需测量与故障注入验证。建议不是已取得的额外收益。</p>',
+    )
+  );
+}
+
 export function analysisWorkbenchHtml(
   result: any,
   cards: number,
-  view: AnalysisView = "overview",
+  view: WorkflowAnalysisView = "overview",
   stageName?: string,
   parentId = "system",
 ) {
@@ -722,9 +830,11 @@ export function analysisWorkbenchHtml(
       allocationLogic(d, stage, baseline, cards, architecture);
   if (view === "loss")
     body =
-      lossSourceCharts(d, stage, cards) +
+      stageLossComparison(d, cards) +
       lossMeasureMap(d, stage) +
+      mechanismContributions(result, cards) +
       detailedLoss(d, stage);
+  if (view === "verification") body = verificationSummary(result, d, cards);
   if (view === "scales")
     body = scaleComparison(d) + stageLossComparison(d, cards);
   if (view === "research") body = research();
@@ -735,5 +845,12 @@ export function analysisWorkbenchHtml(
     reference == null
       ? ""
       : `<p class="analysis-reference">情景参考 ${pct(reference)} / 本轮计算 ${pct(root.availability)} · 差 ${num((root.availability - reference) * 100, 3)} pp。参考点未作为强制拟合输出，需核对事件与参数口径。</p>`;
-  return `<div class="reliability-analysis" data-analysis-view="${view}"><div class="analysis-snapshot-label"><b>${num(ctx.scale.cards, 0)}卡 · ${esc(stage.name)}</b><span>${ctx.scale.reference === stage.name ? "分配参照快照" : `预算沿用 ${esc(ctx.scale.reference)}`} · ${d.hours}小时</span></div>${basis}${body}</div>`;
+  const phase =
+    reliabilityStages[
+      ["architecture", "overview", "loss", "verification"].indexOf(view)
+    ];
+  const method = phase
+    ? `<div class="analysis-method"><b>${phase.name}</b><span>方法：${phase.methods}</span><p>${phase.hint}</p>${view === "overview" ? "<p>本训练结果采用逐事件离散事件仿真的正确进度损失账；RBD/BDD可用于结构成功门辅助评估，其稳态可用度单独记录。</p>" : ""}<details><summary>Agent执行依据</summary>同一个ReMAP Agent · Skill：${phase.skill} · ${phase.toolset}<br/>${phase.tools.join(" / ")}</details></div>`
+    : "";
+  return `<div class="reliability-analysis" data-analysis-view="${view}"><div class="analysis-snapshot-label"><b>${num(ctx.scale.cards, 0)}卡 · ${esc(stage.name)}</b><span>${ctx.scale.reference === stage.name ? "分配参照快照" : `预算沿用 ${esc(ctx.scale.reference)}`} · ${d.hours}小时</span></div>${method}${basis}${body}</div>`;
 }

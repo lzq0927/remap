@@ -65,6 +65,7 @@ test("default analysis selects the frozen baseline; views preserve all snapshots
     "overview",
     "architecture",
     "loss",
+    "verification",
     "scales",
     "research",
   ] as const)

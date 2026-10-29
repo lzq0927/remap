@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto";
 import { Store } from "../../assets/src/store";
 import { DomainError } from "../../contracts/src/errors";
 import { changedAuditStage } from "./design-changes";
+import { hash } from "../../assets/src/hash";
+import {
+  isFourPart,
+  reliabilityStepIds,
+} from "../../contracts/src/reliability-workflow";
 
 export const steps = [
   "clarify",
@@ -45,6 +50,9 @@ export interface WorkflowState {
     updatedAt?: string;
   }[];
   runId?: string;
+  assessmentRunId?: string;
+  runStepId?: string;
+  deferRunReview?: boolean;
 }
 export interface WorkflowEvent {
   eventId: string;
@@ -82,6 +90,12 @@ export class WorkflowService extends EventEmitter {
         .at(-1)?.revision ?? 0
     );
   }
+  private stepIds(version?: string): readonly string[] {
+    const design = this.store.documents("design").at(-1);
+    return version !== "legacy-six" && design?.activeAssessment === "audit"
+      ? reliabilityStepIds
+      : steps;
+  }
   get(): WorkflowState {
     const current = this.store.documents("workflow-state").at(-1);
     const state: WorkflowState = current ?? {
@@ -92,7 +106,7 @@ export class WorkflowService extends EventEmitter {
       inputRevision: this.inputRevision(),
       mode: "manual",
       status: "idle",
-      steps: steps.map((id, index) => ({
+      steps: this.stepIds().map((id, index) => ({
         id,
         status: index === 0 ? "ready" : "waiting-input",
         artifacts: [],
@@ -108,10 +122,16 @@ export class WorkflowService extends EventEmitter {
   }
   private changedFrom(state: WorkflowState) {
     const designs = this.store.documents("design");
-    return changedAuditStage(
-      designs.find((d) => d.revision === state.inputRevision),
-      designs.at(-1),
-    );
+    const before = designs.find((d) => d.revision === state.inputRevision),
+      after = designs.at(-1);
+    const changed = changedAuditStage(before, after);
+    if (!isFourPart(state)) return changed;
+    if (
+      hash(before?.assessment?.input ?? null) ===
+      hash(after?.assessment?.input ?? null)
+    )
+      return 3;
+    return [0, 0, 0, 2, 1][changed] ?? 0;
   }
   events(after = 0): WorkflowEvent[] {
     if (!Number.isSafeInteger(after) || after < 0)
@@ -122,7 +142,12 @@ export class WorkflowService extends EventEmitter {
       .sort((a, b) => a.sequence - b.sequence);
   }
   start(
-    input: { inputRevision: number; mode?: string; resume?: boolean },
+    input: {
+      inputRevision: number;
+      mode?: string;
+      resume?: boolean;
+      version?: string;
+    },
     actor = "user",
   ) {
     if (input.inputRevision !== this.inputRevision())
@@ -135,11 +160,22 @@ export class WorkflowService extends EventEmitter {
     if (!["manual", "assisted", "auto-to-review"].includes(mode))
       throw new DomainError("SCHEMA_INVALID", "未知执行模式");
     const previous = this.get();
+    const ids = this.stepIds(
+      input.version ??
+        (input.resume && previous.executionId && !isFourPart(previous)
+          ? "legacy-six"
+          : undefined),
+    );
     let retained = 0;
-    if (input.resume && actor === "user" && mode === "manual") {
+    if (
+      input.resume &&
+      actor === "user" &&
+      mode === "manual" &&
+      previous.steps[0].id === ids[0]
+    ) {
       const changed = this.changedFrom(previous);
       while (
-        retained < Math.min(changed, 4) &&
+        retained < Math.min(changed, ids.length === 4 ? 3 : 4) &&
         previous.steps[retained]?.status === "confirmed" &&
         previous.steps[retained]?.confirmedBy === "user"
       )
@@ -160,7 +196,8 @@ export class WorkflowService extends EventEmitter {
             confirmedSteps: retained,
           }
         : undefined,
-      steps: steps.map((id, index) =>
+      assessmentRunId: retained > 1 ? previous.assessmentRunId : undefined,
+      steps: ids.map((id, index) =>
         index < retained
           ? structuredClone(previous.steps[index])
           : {
@@ -216,7 +253,7 @@ export class WorkflowService extends EventEmitter {
         "设计已改变，请继续当前版本并复核受影响的阶段",
         409,
       );
-    const index = steps.findIndex((id) => id === input.stepId);
+    const index = state.steps.findIndex((s) => s.id === input.stepId);
     if (
       index < 0 ||
       ![
@@ -230,11 +267,11 @@ export class WorkflowService extends EventEmitter {
       throw new DomainError("SCHEMA_INVALID", "未知阶段或状态");
     if (
       input.status === "completed" &&
-      (state.mode !== "auto-to-review" || index === 5)
+      (state.mode !== "auto-to-review" || index === state.steps.length - 1)
     )
       throw new DomainError(
         "WORKFLOW_ORDER",
-        "自动完成只适用于自动模式的前五个阶段；交付需要审核",
+        "自动模式可完成前序部分；最终验证结论需要审核",
         409,
       );
     if (input.status === "confirmed" && actor !== "user")
@@ -291,7 +328,13 @@ export class WorkflowService extends EventEmitter {
     return this.persist(state, "workflow.cancelled", actor);
   }
   /** Solver events update progress, never assert a human-approved conclusion. */
-  attachRun(runId: string, executionId: string, inputRevision: number) {
+  attachRun(
+    runId: string,
+    executionId: string,
+    inputRevision: number,
+    stepId?: string,
+    deferReview = false,
+  ) {
     const state = this.get();
     if (
       state.executionId !== executionId ||
@@ -300,33 +343,60 @@ export class WorkflowService extends EventEmitter {
       state.status !== "active"
     )
       throw new DomainError("INPUT_REVISION_CONFLICT", "运行对应过期流程", 409);
-    if (state.steps.slice(0, 4).some((s) => !stageFinished(state, s)))
+    const index = isFourPart(state)
+      ? stepId === "mechanism-verification"
+        ? 3
+        : 1
+      : 4;
+    if (
+      state.steps.slice(0, index).some((s) => !stageFinished(state, s)) ||
+      stageFinished(state, state.steps[index])
+    )
       throw new DomainError("WORKFLOW_ORDER", "请先确认参数阶段", 409);
     this.store.getRun(runId);
     state.runId = runId;
-    state.steps[4].status = "running";
+    state.runStepId = state.steps[index].id;
+    state.deferRunReview = deferReview;
+    if (isFourPart(state) && index === 1) state.assessmentRunId = runId;
+    state.steps[index].status = "running";
     state.revision++;
-    return this.persist(state, "run.attached", "solver", "evaluate");
+    return this.persist(state, "run.attached", "solver", state.runStepId);
   }
   runEvent(runId: string, status: string) {
     const state = this.get();
+    const index = state.steps.findIndex(
+      (s) => s.id === (state.runStepId ?? "evaluate"),
+    );
     if (
       state.runId !== runId ||
       state.stale ||
       state.status !== "active" ||
-      state.steps[4].status !== "running"
+      index < 0 ||
+      state.steps[index].status !== "running"
     )
       return;
     if (!["succeeded", "failed", "cancelled"].includes(status)) return;
-    state.steps[4].status =
+    state.steps[index].status =
       status === "succeeded"
-        ? "awaiting-review"
+        ? state.deferRunReview
+          ? "running"
+          : "awaiting-review"
         : status === "failed"
           ? "failed"
           : "cancelled";
-    state.steps[4].artifacts = [{ type: "evaluation", runId }];
+    state.steps[index].artifacts = [
+      {
+        type: isFourPart(state) && index === 3 ? "verification" : "evaluation",
+        runId,
+      },
+    ];
     state.revision++;
-    return this.persist(state, "run." + status, "solver", "evaluate");
+    return this.persist(
+      state,
+      "run." + status,
+      "solver",
+      state.steps[index].id,
+    );
   }
   private persist(
     state: WorkflowState,

@@ -1,0 +1,10 @@
+{
+  "agent": "remap",
+  "skills": [
+    "remap-target-allocation",
+    "remap-availability-assessment",
+    "remap-mechanism-design",
+    "remap-mechanism-verification"
+  ],
+  "sharedReferences": "sd-dfr-remap/references"
+}

@@ -3,7 +3,9 @@ name: sd-dfr-remap
 description: Help users set reliability goals, assess current mechanisms, allocate improvements with AGREE and Shapley evidence, compare independent scenarios, and deliver traceable reports; also supports architecture, RBD/FTA and other product models.
 ---
 
-# 可靠性设计与评估
+# 可靠性设计与评估（历史兼容参考）
+
+2026-10-29起，正式工作流由一个ReMAP Agent调用四个Skill完成：`remap-target-allocation`、`remap-availability-assessment`、`remap-mechanism-design`、`remap-mechanism-verification`。以各自SKILL.md及[四部分工作流](references/workflow.md)为准。本文件保留旧任务操作细节，不再作为第五个活动Skill安装；下文六阶段说明仅用于历史执行。
 
 新模板默认按故障损失与适用机制贡献进行分层AGREE工程分配，600小时三档输入与独立比较见[证据分配与训练场景](references/evidence-allocation-training.md)。区分工程重要度投影、经典条件概率和真实Shapley；不再替用户默认均分，也不把参考百分比写成结果。
 

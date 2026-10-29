@@ -1,3 +1,8 @@
+import AllocationPreview from "./AllocationPreview";
+import {
+  reliabilityStages,
+  isFourPart,
+} from "../../../packages/contracts/src/reliability-workflow";
 import AuditExperiments from "./AuditExperiments";
 import {
   assessmentModels,
@@ -600,12 +605,30 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       assetSnapshot: undefined,
       sourceSnapshot: undefined,
     }) !== pretty({ ...request, model: JSON.parse(modelJson || "{}") });
+  const fourPartMode =
+    scenario === "training" &&
+    designMode === "audit" &&
+    (!workflow?.executionId || isFourPart(workflow));
+  useEffect(() => {
+    if (fourPartMode && stage > 3) setStage(0);
+  }, [fourPartMode, stage]);
   let auditChanged = false;
   if (run?.operation === "audit" && auditDraft) {
     try {
       auditChanged = Object.entries(auditDraftInput(auditDraft)).some(
         ([key, value]) =>
-          JSON.stringify(value) !== JSON.stringify(run.input?.[key]),
+          !(
+            workflow?.runStepId === "mechanism-verification" &&
+            workflow.runId === run.id &&
+            [
+              "seed",
+              "trials",
+              "samplingProfile",
+              "attribution",
+              "sensitivity",
+              "verifyRecommendation",
+            ].includes(key)
+          ) && JSON.stringify(value) !== JSON.stringify(run.input?.[key]),
       );
     } catch {
       auditChanged = true;
@@ -632,21 +655,33 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         state.status === "active" &&
         !state.stale &&
         state.inputRevision === saved.revision &&
-        state.steps.slice(0, 4).every((s: any) => s.status === "confirmed");
+        state.steps
+          .slice(0, fourPartMode ? (stage === 3 ? 3 : 1) : 4)
+          .every(
+            (s: any) =>
+              s.status === "confirmed" ||
+              (state.mode === "auto-to-review" && s.status === "completed"),
+          );
       const formal =
         ready &&
         scenario === "training" &&
         op === (saved.assessment?.operation ?? "training");
-      const r = await api("/runs", {
-        operation: op,
-        input: data,
-        inputRevision: saved.revision,
-        ...(formal ? { executionId: state.executionId } : {}),
-      });
+      const r =
+        fourPartMode && stage === 3 && op === "audit"
+          ? await api("/workflow/verify", {
+              executionId: state.executionId,
+              inputRevision: saved.revision,
+            })
+          : await api("/runs", {
+              operation: op,
+              input: data,
+              inputRevision: saved.revision,
+              ...(formal ? { executionId: state.executionId } : {}),
+            });
       if (!formal)
         setNotice(
           op === "audit"
-            ? "本次为专家口径试算，输入已冻结保存；正式交付需先确认前四个阶段，再计算并审核。"
+            ? "本次为独立试算，输入已冻结保存；正式流程从目标分配开始，现状与机制验证分别运行。"
             : "本次为独立评估；正式流程需先人工确认前四个阶段，再计算并审核。",
         );
       setRun(r);
@@ -724,7 +759,9 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     setAuditEpoch((n) => n + 1);
     setDesignMode("audit");
     setPage("workbench");
-    setStage(strategyChanged ? 2 : 3);
+    setStage(
+      fourPartMode ? (strategyChanged ? 0 : 2) : strategyChanged ? 2 : 3,
+    );
     setNotice(
       strategyChanged
         ? "第二轮方案已载入。固定候选参数后，请从可用度分配确认本次策略，再核对措施并复算；目标和故障模式的确认可沿用。"
@@ -733,33 +770,35 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
   }
   const activeSteps =
     scenario === "training" && designMode === "audit"
-      ? workflowSteps.map((step, i) => ({
-          ...step,
-          name: [
-            "可用度目标",
-            "故障模式",
-            "可用度分配",
-            "可靠性措施",
-            "计算与权衡",
-            "验证与交付",
-          ][i],
-          hint: [
-            "明确各规模可用度目标与评估窗口，沿用专家计算口径。",
-            "按对象与故障类型核对 FIT、来源及影响范围。",
-            "确认分层目标参照与现状评估策略；完成后按薄弱点、措施贡献和目标缺口分配改进要求。",
-            "确认第一轮现状措施，选择第二轮参数改进及专家机制候选。",
-            "先计算现状与 Shapley，再进行 AGREE 分配、候选复评和贡献排序。",
-            "检查独立复核和待校准项，导出报告并人工确认交付。",
-          ][i],
-          anchor: [
-            "audit-scope",
-            "audit-evidence",
-            "audit-budget",
-            "audit-mechanisms",
-            "audit-run",
-            "design-result",
-          ][i],
-        }))
+      ? fourPartMode
+        ? reliabilityStages.map((step) => ({ ...step }))
+        : workflowSteps.map((step, i) => ({
+            ...step,
+            name: [
+              "可用度目标",
+              "故障模式",
+              "可用度分配",
+              "可靠性措施",
+              "计算与权衡",
+              "验证与交付",
+            ][i],
+            hint: [
+              "明确各规模可用度目标与评估窗口，沿用专家计算口径。",
+              "按对象与故障类型核对 FIT、来源及影响范围。",
+              "确认分层目标参照与现状评估策略；完成后按薄弱点、措施贡献和目标缺口分配改进要求。",
+              "确认第一轮现状措施，选择第二轮参数改进及专家机制候选。",
+              "先计算现状与 Shapley，再进行 AGREE 分配、候选复评和贡献排序。",
+              "检查独立复核和待校准项，导出报告并人工确认交付。",
+            ][i],
+            anchor: [
+              "audit-scope",
+              "audit-evidence",
+              "audit-budget",
+              "audit-mechanisms",
+              "audit-run",
+              "design-result",
+            ][i],
+          }))
       : workflowSteps;
   const [confirming, setConfirming] = useState(false);
   function selectStep(index: number) {
@@ -799,6 +838,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     selectStep(index);
   }, [workflow?.revision, workflow?.executionId, page, scenario, designMode]);
   async function confirmStep() {
+    const resultStep = fourPartMode ? stage === 1 || stage === 3 : stage >= 4;
     const auditMode = scenario === "training" && designMode === "audit";
     if (
       !auditMode &&
@@ -826,12 +866,12 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
     )
       throw new Error("目标或窗口已变更，请重新确认预算。");
     if (
-      stage >= 4 &&
+      resultStep &&
       (run?.status !== "succeeded" || (auditMode ? auditChanged : changed))
     )
       throw new Error("请先完成一次评估，再审视结果并交付。");
     if (
-      stage >= 4 &&
+      resultStep &&
       scenario === "training" &&
       run.operation !== (auditMode ? "audit" : "training")
     )
@@ -861,8 +901,8 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         `请先复核“${activeSteps[first].name}”；未受影响的前序确认已保留。`,
       );
     }
-    if (stage >= 4 && state.runId !== run?.id) {
-      throw new Error("请在当前流程确认前四个阶段后重新执行正式评估。");
+    if (resultStep && state.runId !== run?.id) {
+      throw new Error("请在当前部分重新执行正式评估或独立验证。");
     }
     const step = activeSteps[stage];
     const next = await api("/workflow", {
@@ -873,19 +913,18 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
       status: "confirmed",
       artifacts: [
         {
-          type: stage >= 4 ? "evaluation" : "design",
-          data:
-            stage >= 4
-              ? { runId: run.id, inputHash: run.inputHash }
-              : auditMode
-                ? saved.assessment.input
-                : currentDesign(),
+          type: resultStep ? "evaluation" : "design",
+          data: resultStep
+            ? { runId: run.id, inputHash: run.inputHash }
+            : auditMode
+              ? saved.assessment.input
+              : currentDesign(),
         },
       ],
       notes: "用户确认当前阶段；产品模型与参数证据需独立验证。",
     });
     setWorkflow(next);
-    selectStep(Math.min(5, stage + 1));
+    selectStep(Math.min(activeSteps.length - 1, stage + 1));
   }
   function openAllocation() {
     setOperation("allocate");
@@ -1230,7 +1269,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                           setStage(0);
                           setError("");
                           setNotice(
-                            "评估模型已切换，使用同一套六阶段流程。旧结果与报告保留原口径；新计算需按当前模型重新确认。",
+                            "评估模型已切换，专家口径使用四部分流程，V4保留历史流程。旧结果与报告保留原口径；新计算需按当前模型重新确认。",
                           );
                         }}
                       >
@@ -1298,6 +1337,15 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                     aria-labelledby={`config-${task.id}-${configView}`}
                     tabIndex={0}
                   >
+                    {fourPartMode && (configView === "all" || stage === 0) && (
+                      <AllocationPreview
+                        key={JSON.stringify(auditDraft)}
+                        calculate={async () => {
+                          await flushDesign();
+                          return api("/reliability/allocation");
+                        }}
+                      />
+                    )}
                     {defaults.audit && (
                       <AuditWorkbench
                         key={auditEpoch}
@@ -1316,6 +1364,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                         lastResult={
                           run?.operation === "audit" ? run.result : undefined
                         }
+                        fourPart={fourPartMode}
                         stage={configView === "step" ? stage : undefined}
                         busy={
                           busy ||
@@ -1324,7 +1373,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                         }
                         onRun={(input) =>
                           void solve("audit", input).then(() => {
-                            setStage(4);
+                            setStage(fourPartMode ? (stage === 3 ? 3 : 1) : 4);
                             requestAnimationFrame(() =>
                               document
                                 .getElementById("design-result")
@@ -1693,9 +1742,60 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                 scenario === "training" &&
                 designMode === "audit" &&
                 configView === "step" &&
-                stage < 4
+                (fourPartMode ? false : stage < 4)
               }
             >
+              {fourPartMode && workflow?.assessmentRunId && (
+                <div className="actions" aria-label="评估与验证独立快照">
+                  <span>本流程结果：</span>
+                  <button
+                    onClick={() =>
+                      attempt(async () =>
+                        setRun(await api("/runs/" + workflow.assessmentRunId)),
+                      )
+                    }
+                  >
+                    查看评估与Shapley快照
+                  </button>
+                  {workflow.runStepId === "mechanism-verification" &&
+                    workflow.runId && (
+                      <button
+                        onClick={() =>
+                          attempt(async () =>
+                            setRun(await api("/runs/" + workflow.runId)),
+                          )
+                        }
+                      >
+                        查看独立验证快照
+                      </button>
+                    )}
+                  {runs.some(
+                    (r) =>
+                      r.operation === "audit-compare" &&
+                      r.status === "succeeded",
+                  ) && (
+                    <button
+                      onClick={() =>
+                        attempt(async () => {
+                          const compared = [...runs]
+                            .filter(
+                              (r) =>
+                                r.operation === "audit-compare" &&
+                                r.status === "succeeded",
+                            )
+                            .sort((a, b) =>
+                              b.createdAt.localeCompare(a.createdAt),
+                            )[0];
+                          setRun(await api("/runs/" + compared.id));
+                        })
+                      }
+                    >
+                      查看最近横向比较
+                    </button>
+                  )}
+                  <small>输入和结果分别保留；查看快照不会更改当前参数。</small>
+                </div>
+              )}
               {scenario === "training" &&
                 run &&
                 runAssessmentModel(run) &&
@@ -1708,15 +1808,19 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                     的历史结果，与当前设计口径不同；查看历史不会替代本次正式评估。
                   </p>
                 )}
-              {!run && stage === 5 && scenario === "training" && (
-                <section className="paper">
-                  <h2>尚无可交付的评估结果</h2>
-                  <p>
-                    先完成前四步核对并执行评估，再检查结果、导出报告和确认交付。
-                  </p>
-                  <button onClick={() => selectStep(4)}>前往计算</button>
-                </section>
-              )}
+              {!run &&
+                stage === (fourPartMode ? 3 : 5) &&
+                scenario === "training" && (
+                  <section className="paper">
+                    <h2>尚无可交付的评估结果</h2>
+                    <p>
+                      先分解目标、评估现状并确定机制，再独立验证参数与达成情况。
+                    </p>
+                    <button onClick={() => selectStep(fourPartMode ? 1 : 4)}>
+                      前往计算
+                    </button>
+                  </section>
+                )}
               {auditChanged && designMode === "audit" && (
                 <p className="audit-verdict uncertain" role="status">
                   审核输入已改变；下方结果与下载报告保留上次运行快照，请重新运行后比较。
@@ -2704,7 +2808,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
                   : "request",
               inputRevision: designRevision.current,
             },
-            step: workflowSteps[stage].id,
+            step: activeSteps[stage]?.id,
             assessment: designMode,
             runId: run?.id,
           }}

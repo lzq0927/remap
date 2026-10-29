@@ -6,6 +6,30 @@ import {
 } from "../../runtime-policy/src/index";
 export const registry = [
   [
+    "reliability_capabilities",
+    "读取统一Agent、四个Skill和四个专业工具集及方法边界",
+    "GET",
+    "/reliability/capabilities",
+  ],
+  [
+    "allocation_preview",
+    "目标分解分配工具集：读取当前950架构的AGREE设计分配；provisional表示等待现状证据，不能称为已验证能力",
+    "GET",
+    "/reliability/allocation",
+  ],
+  [
+    "assessment_run",
+    "可用度评估工具集：body={operation,input,inputRevision?,executionId?}；RBD/BDD显式选择指标，训练audit使用design_get.assessment.input。正式评估在目标分配后运行，返回runId",
+    "POST",
+    "/runs",
+  ],
+  [
+    "verification_run",
+    "可靠性机制验证工具集：body={executionId,inputRevision}；前三部分完成后，保持当前机制参数，用独立种子及保存的verificationTrials做DES复核。新增机制先保存独立方案，不能把建议当结果",
+    "POST",
+    "/workflow/verify",
+  ],
+  [
     "engineering_schema",
     "读取工程建模完整示例结构与约束；示例为合成数据，不自动写入任务",
     "GET",
@@ -94,7 +118,7 @@ export const registry = [
   ["workflow_state", "读取当前阶段和过程资产", "GET", "/workflow"],
   [
     "workflow_automatic",
-    "用户明确选择自动执行后，按已保存版本完成六阶段第一轮现状评估，报告停在待审核。不会自动启动独立AGREE分配或改进轮。body.inputRevision 必填；用 workflow_state / run_status 查询进展",
+    "按已保存版本运行四部分：AGREE目标设计分配、现状评估、Shapley机制建议、已选参数的独立种子DES验证，结论停在待审核。不会擅自采用建议或改写参数。body.inputRevision必填；workflow_state/run_status读取两轮独立结果",
     "POST",
     "/workflow/automatic",
   ],
@@ -138,7 +162,7 @@ export const registry = [
   ],
   [
     "analysis_solve",
-    "执行专业求解。operation=audit 使用 design_get.assessment.input 评估当前配置的故障数据、措施集合及参数；新建任务optimization.enabled=false；历史输入遵从保存口径。独立改进使用 audit_plan / audit_evaluate。正式六阶段需 executionId,inputRevision；返回runId，用run_status读取结果",
+    "执行专业求解。operation=audit使用design_get.assessment.input；operation=allocate用于明确指标的AGREE等分配；rbd/bdd用于结构指标。正式工作流需executionId,inputRevision；返回runId，run_status读结果。独立改进使用audit_plan/audit_evaluate",
     "POST",
     "/runs",
   ],
@@ -156,7 +180,7 @@ export const registry = [
   ],
   [
     "audit_evaluate",
-    "在用户要求评估时独立执行改进轮。body={sourceRunId,name,configuration,planRunId?,planCards?,planAlternativeId?}。configuration为相对第一轮的完整改动集合（不是上次改进的补丁）；支持policy/model/extensions/checkpointPeriods/有来源fitTargets。参数名、单位和当前值先从run_status读取，按用户明确的目标设置。采用分配建议时传计划configuration及planRunId；选备选方案还须传planAlternativeId与其完整configuration；先展示要求，再按用户意图执行。结果、输入和增量Shapley独立保存，不改变第一轮或六阶段确认",
+    "在用户要求评估时独立执行改进轮。body={sourceRunId,name,configuration,planRunId?,planCards?,planAlternativeId?}。configuration为相对第一轮的完整改动集合（不是上次改进的补丁）；支持policy/model/extensions/checkpointPeriods/有来源fitTargets。参数名、单位和当前值先从run_status读取，按用户明确的目标设置。采用分配建议时传计划configuration及planRunId；选备选方案还须传planAlternativeId与其完整configuration；先展示要求，再按用户意图执行。结果、输入和增量Shapley独立保存，不改变第一轮或工作流确认",
     "POST",
     "/audit/evaluate",
   ],
@@ -197,6 +221,12 @@ export const registry = [
   ],
 ] as const;
 const roundBodies: Record<string, z.ZodTypeAny> = {
+  verification_run: z
+    .object({
+      executionId: z.string().min(1),
+      inputRevision: z.number().int().positive(),
+    })
+    .strict(),
   audit_plan: z
     .object({
       sourceRunId: z
@@ -347,6 +377,8 @@ export function createMcpServer(
           if (
             [
               "analysis_solve",
+              "assessment_run",
+              "verification_run",
               "engineering_run",
               "audit_plan",
               "audit_plan_scales",

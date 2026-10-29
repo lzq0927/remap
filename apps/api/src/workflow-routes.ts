@@ -10,6 +10,17 @@ import type {
 } from "../../../packages/tasks/src/service";
 import { DomainError } from "../../../packages/contracts/src/errors";
 import { hash } from "../../../packages/assets/src/hash";
+import {
+  isFourPart,
+  reliabilityAgent,
+  reliabilityStages,
+} from "../../../packages/contracts/src/reliability-workflow";
+import {
+  allocationPreview,
+  mechanismEvidence,
+  parameterHash,
+  verificationInput,
+} from "./reliability-artifacts";
 
 export const currentWorkflow = (context: TaskContext) =>
   new WorkflowService(context.task.id, context.store).get();
@@ -36,6 +47,92 @@ export function registerWorkflowRoutes(
   );
   const base = "/api/tasks/:taskId";
   registerAutomaticWorkflow(app, tasks, flow, stageDisplayMs);
+  app.get(base + "/reliability/capabilities", async (req: any) => {
+    tasks.resolve(req.params.taskId);
+    return {
+      agent: reliabilityAgent.name,
+      agentCount: 1,
+      stages: reliabilityStages,
+      sharedTools: [
+        "task_current",
+        "design_get",
+        "design_update",
+        "workflow_state",
+        "workflow_start",
+        "workflow_save",
+        "run_list",
+        "run_status",
+      ],
+    };
+  });
+  app.get(base + "/reliability/allocation", async (req: any) => {
+    const design = tasks
+      .resolve(req.params.taskId)
+      .store.documents("design")
+      .at(-1);
+    if (!design?.assessment?.valid)
+      throw new DomainError("INPUT_UNCONFIRMED", "请先保存有效的评估设计");
+    return {
+      inputRevision: design.revision,
+      ...allocationPreview(design.assessment.input),
+    };
+  });
+  app.post(base + "/workflow/verify", async (req: any) => {
+    const context = tasks.authorize(req, req.params.taskId),
+      service = flow(context.task.id),
+      state = service.get();
+    if (
+      !isFourPart(state) ||
+      state.status !== "active" ||
+      state.stale ||
+      state.executionId !== req.body?.executionId ||
+      state.inputRevision !== req.body?.inputRevision ||
+      state.steps.slice(0, 3).some((s) => !stageFinished(state, s)) ||
+      !["ready", "failed", "awaiting-review"].includes(state.steps[3].status)
+    )
+      throw new DomainError(
+        "WORKFLOW_ORDER",
+        "请先完成当前版本的目标、评估与机制设计",
+        409,
+      );
+    const design = context.store.documents("design").at(-1);
+    if (!design?.assessment?.valid)
+      throw new DomainError("INPUT_UNCONFIRMED", "设计参数无效");
+    const source = context.store.getRun(state.assessmentRunId ?? "");
+    if (source.status !== "succeeded")
+      throw new DomainError("INPUT_UNCONFIRMED", "现状评估尚未完成");
+    const input = verificationInput({
+        ...source.input,
+        ...design.assessment.input,
+      }),
+      run = context.runs.start("audit", input);
+    context.store.putDocument(
+      "run-binding",
+      {
+        runId: run.id,
+        inputRevision: design.revision,
+        executionId: state.executionId,
+        stepId: "mechanism-verification",
+        reviewRequired: true,
+        verification: {
+          sourceRunId: source.id,
+          parameterHash: parameterHash(input),
+          trials: input.trials,
+          seed: input.seed,
+          independent: true,
+        },
+      },
+      run.id + ".binding",
+    );
+    service.attachRun(
+      run.id,
+      state.executionId,
+      design.revision,
+      "mechanism-verification",
+    );
+    service.runEvent(run.id, context.store.getRun(run.id).status);
+    return run;
+  });
   app.get(base + "/workflow", async (req: any) =>
     flow(req.params.taskId).get(),
   );
@@ -56,7 +153,9 @@ export function registerWorkflowRoutes(
       if (!savedDesign.assessment?.valid)
         throw new DomainError("INPUT_UNCONFIRMED", "请修正审核草稿后确认");
       if (
-        ["select", "prepare"].includes(req.body.stepId) &&
+        ["select", "prepare", "target-allocation", "mechanism-design"].includes(
+          req.body.stepId,
+        ) &&
         !savedDesign.assessment.input.lossBudgetWeights &&
         !["none", "equal", "baseline-proportional"].includes(
           savedDesign.assessment.input.lossBudgetMethod,
@@ -66,7 +165,12 @@ export function registerWorkflowRoutes(
     }
     if (
       ["confirmed", "completed"].includes(req.body?.status) &&
-      ["evaluate", "validate-deliver"].includes(req.body.stepId)
+      [
+        "evaluate",
+        "validate-deliver",
+        "availability-assessment",
+        "mechanism-verification",
+      ].includes(req.body.stepId)
     ) {
       const artifact = req.body.artifacts?.find(
         (a: any) => a.data?.runId || a.runId,
@@ -93,7 +197,9 @@ export function registerWorkflowRoutes(
         !binding ||
         binding.inputRevision !== req.body.inputRevision ||
         binding.executionId !== req.body.executionId ||
-        flow(context.task.id).get().runId !== run.id
+        flow(context.task.id).get().runId !== run.id ||
+        (isFourPart(flow(context.task.id).get()) &&
+          binding.stepId !== req.body.stepId)
       )
         throw new DomainError(
           "INPUT_REVISION_CONFLICT",
@@ -101,7 +207,41 @@ export function registerWorkflowRoutes(
           409,
         );
     }
-    return flow(context.task.id).record(req.body, context.actor);
+    const body = { ...req.body };
+    if (
+      isFourPart(flow(context.task.id).get()) &&
+      ["confirmed", "completed"].includes(body.status)
+    ) {
+      if (body.stepId === "target-allocation")
+        body.artifacts = [
+          ...(body.artifacts ?? []),
+          {
+            type: "target-allocation",
+            data: allocationPreview(savedDesign.assessment.input),
+          },
+        ];
+      if (body.stepId === "mechanism-design") {
+        const source = context.store.getRun(
+          flow(context.task.id).get().assessmentRunId ?? "",
+        );
+        if (source.status !== "succeeded")
+          throw new DomainError(
+            "INPUT_UNCONFIRMED",
+            "机制设计需要已完成的现状评估依据",
+          );
+        body.artifacts = [
+          ...(body.artifacts ?? []),
+          {
+            type: "mechanism-plan",
+            data: mechanismEvidence(source, {
+              ...source.input,
+              ...savedDesign.assessment.input,
+            }),
+          },
+        ];
+      }
+    }
+    return flow(context.task.id).record(body, context.actor);
   });
   app.post(base + "/workflow/cancel", async (req: any) => {
     const context = tasks.authorize(req, req.params.taskId),
@@ -153,7 +293,13 @@ export function registerWorkflowRoutes(
         "输入或执行已改变，请读取当前任务",
         409,
       );
-    if (state.steps.slice(0, 4).some((s) => !stageFinished(state, s)))
+    const assessmentIndex = isFourPart(state) ? 1 : 4;
+    if (
+      state.steps
+        .slice(0, assessmentIndex)
+        .some((s) => !stageFinished(state, s)) ||
+      (isFourPart(state) && stageFinished(state, state.steps[1]))
+    )
       throw new DomainError("WORKFLOW_ORDER", "请先确认参数阶段", 409);
     const design = tasks
       .resolve(req.params.taskId)
@@ -193,6 +339,9 @@ export function registerWorkflowRoutes(
           runId: run.id,
           inputRevision: req.body.inputRevision ?? design?.revision ?? 0,
           executionId: req.body.executionId,
+          stepId: isFourPart(flow(context.task.id).get())
+            ? "availability-assessment"
+            : "evaluate",
         },
         run.id + ".binding",
       );

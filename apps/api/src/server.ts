@@ -631,9 +631,17 @@ export async function buildApp(options: BuildAppOptions = {}) {
         );
     },
   );
-  app.get("/api/tasks/:taskId/runs/:id", async (req: any) =>
-    tasks.authorize(req, req.params.taskId).store.getRun(req.params.id),
-  );
+  app.get("/api/tasks/:taskId/runs/:id", async (req: any) => {
+    const { store } = tasks.authorize(req, req.params.taskId);
+    const run = store.getRun(req.params.id);
+    // Presentation provenance and frozen allocation targets are derived on read;
+    // the solver's input and result in storage remain immutable.
+    return store
+      .documents("run-binding")
+      .some((b) => b.runId === run.id && b.verification)
+      ? workflowReportRun(store, run)
+      : run;
+  });
   app.post("/api/tasks/:taskId/runs/:id/cancel", async (req: any) =>
     tasks.authorize(req, req.params.taskId).runs.cancel(req.params.id),
   );

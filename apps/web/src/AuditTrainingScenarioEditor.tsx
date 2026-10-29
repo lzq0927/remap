@@ -309,7 +309,7 @@ export default function AuditTrainingScenarioEditor({
             if (issues.length) throw Error(issues.join("；"));
             onApply(applyTrainingScenario(request, s, events));
             setError("");
-            setMessage("场景已载入；请核对六阶段输入后单独运行评估。");
+            setMessage("场景已载入；请核对四部分工作流输入后单独运行评估。");
           } catch (e) {
             setError((e as Error).message);
           }

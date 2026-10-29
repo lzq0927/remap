@@ -125,7 +125,9 @@ function simulate(cards,stage,seed,p=config,opts={}){
   function advance(dt){
     if(t<downUntil-1e-9){ledger.downtime+=dt;return;}
     const end=phase+dt,commits=Math.floor((end+1e-10)/L);
-    const train=x=>Math.floor(x/L)*tau+Math.min(x%L,tau);
+    // Use the same quotient for the remainder: floating division may round to
+    // an integer while `% L` returns almost L, crediting a spurious full cycle.
+    const train=x=>{const cycles=Math.floor(x/L);return cycles*tau+Math.min(Math.max(0,x-cycles*L),tau);};
     const compute=Math.max(0,train(end)-train(phase)),slowFactor=Math.pow(1-p.slowLoss,slows.length),localFactor=1-locals.length/P['R-ELASTIC'].domains,degradeFactor=degrades.reduce((f,d)=>f*(1-d.loss),1),factor=slowFactor*localFactor*degradeFactor*(1-overhead);
     if(commits){const saved=progress+(commits*tau-Math.min(phase,tau))*factor;if(lag>0)pending.push({due:t+dt+lag,progress:saved,dirty:!!dirty});else{cp=saved;cpDirty=!!dirty;if(!dirty)cleanCp=cp;}}
     progress+=compute*factor;

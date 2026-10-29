@@ -1,4 +1,8 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import {
+  reliabilityStages,
+  reliabilityAgent,
+} from "../../contracts/src/reliability-workflow";
+import { mkdir, readFile, readdir, writeFile, rename } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { resolve, join } from "node:path";
@@ -116,10 +120,25 @@ async function prepare(
       }
     }
   };
-  await install(
-    join(projectRoot, "skills/sd-dfr-remap"),
-    join(workspace, ".opencode/skills/sd-dfr-remap"),
-  );
+  for (const stage of reliabilityStages) {
+    await install(
+      join(projectRoot, "skills", stage.skill),
+      join(workspace, ".opencode/skills", stage.skill),
+    );
+    await install(
+      join(projectRoot, "skills/sd-dfr-remap/references"),
+      join(workspace, ".opencode/skills", stage.skill, "references"),
+    );
+  }
+  const legacySkill = join(workspace, ".opencode/skills/sd-dfr-remap");
+  if (existsSync(legacySkill)) {
+    const archive = join(
+      workspace,
+      ".opencode/remap-legacy-reference-" + Date.now(),
+    );
+    assertConfigPath(archive);
+    await rename(legacySkill, archive);
+  }
   await install(
     join(projectRoot, ".opencode/commands"),
     join(workspace, ".opencode/commands"),
@@ -133,6 +152,7 @@ async function prepare(
   const config = {
     ...previous,
     $schema: "https://opencode.ai/config.json",
+    default_agent: reliabilityAgent.name,
     ...(policy.profile === "internal"
       ? internalOpenCodeConfig(policy)
       : {
@@ -141,6 +161,15 @@ async function prepare(
             ...previous.provider,
           },
         }),
+    agent: {
+      ...previous.agent,
+      [reliabilityAgent.name]: {
+        description: reliabilityAgent.description,
+        mode: reliabilityAgent.mode,
+        prompt: reliabilityAgent.prompt,
+        tools: reliabilityAgent.tools,
+      },
+    },
     mcp: {
       ...previous.mcp,
       reliability: {

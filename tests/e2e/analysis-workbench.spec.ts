@@ -44,7 +44,7 @@ test("desktop analysis opens with baseline, allocation, horizontal sources and c
   });
   await expect(w).toBeVisible({ timeout: 60000 });
   await expect(
-    w.getByRole("button", { name: "现状与分解目标", exact: true }),
+    w.getByRole("button", { name: "02 可用度评估", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(
     w.getByRole("heading", { name: "损失 → 具体可靠性措施", exact: true }),
@@ -59,7 +59,9 @@ test("desktop analysis opens with baseline, allocation, horizontal sources and c
     w.getByRole("heading", { name: "子系统现状与分解目标", exact: true }),
   ).toBeVisible();
   await expect(w).toContainText("全类等效FIT");
-  await w.getByRole("button", { name: "架构与分配依据", exact: true }).click();
+  await w
+    .getByRole("button", { name: "01 可用度目标分解分配", exact: true })
+    .click();
   await expect(
     w.locator(
       '[data-contains="hardware-rack"] [data-contains="hardware-node"] [data-contains="hardware-board"] [data-contains="hardware-module"] [data-contains="hardware-chip"]',
@@ -80,15 +82,13 @@ test("desktop analysis opens with baseline, allocation, horizontal sources and c
   await expect(dialog).toContainText("等效FIT");
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await w
-    .getByRole("button", { name: "2026实践与资源条件", exact: true })
-    .click();
+  await w.getByLabel("更多分析视图", { exact: true }).selectOption("research");
   await expect(w).toContainText("2026-10-19");
   await expect(w).toContainText("FTAR");
   await expect(w).toContainText("37,656");
   await expect(w).toContainText("14.92%");
   await w.getByLabel("分析规模", { exact: true }).selectOption("10000");
-  await w.getByRole("button", { name: "分规模与三阶段", exact: true }).click();
+  await w.getByLabel("更多分析视图", { exact: true }).selectOption("scales");
   await expect(w).toContainText("10,000卡");
   await expect(w).toContainText("500,000卡");
   await w.getByRole("button", { name: "全屏分析", exact: true }).click();

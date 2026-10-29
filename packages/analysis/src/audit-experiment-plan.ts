@@ -692,7 +692,7 @@ function guidedExperimentPlan(
     architectureDiagnosis,
     topologyDecision:
       source.result.topologyDecision ??
-      topologyDecision({ ...source.result, architectureDiagnosis }),
+      topologyDecision({ ...source.result, request, architectureDiagnosis }),
     networkStudyResult: structuredClone(
       source.result.networkStudyResult ?? null,
     ),

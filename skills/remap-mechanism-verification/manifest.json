@@ -1,0 +1,12 @@
+{
+  "name": "remap-mechanism-verification",
+  "version": "1.0.0",
+  "entry": "SKILL.md",
+  "agent": "remap",
+  "stage": "mechanism-verification",
+  "toolset": "可靠性机制验证工具集",
+  "tools": ["verification_run", "audit_evaluate", "report_export"],
+  "references": ["references/workflow.md", "references/supernode-topology.md"],
+  "protocol": "MCP",
+  "taskBinding": true
+}

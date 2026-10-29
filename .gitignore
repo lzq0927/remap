@@ -18,6 +18,7 @@ playwright-report/
 *.log
 .opencode/auth.json
 .opencode/skills/
+.opencode/remap-legacy-reference-*/
 系统可靠性工作计划.md
 config/*.local.*
 *.sqlite

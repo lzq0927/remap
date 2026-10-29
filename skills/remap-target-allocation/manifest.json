@@ -1,0 +1,12 @@
+{
+  "name": "remap-target-allocation",
+  "version": "1.0.0",
+  "entry": "SKILL.md",
+  "agent": "remap",
+  "stage": "target-allocation",
+  "toolset": "目标分解分配工具集",
+  "tools": ["allocation_preview", "analysis_solve"],
+  "references": ["references/workflow.md", "references/supernode-topology.md"],
+  "protocol": "MCP",
+  "taskBinding": true
+}

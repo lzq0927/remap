@@ -71,16 +71,9 @@ it("automatic stages expose real artifacts for reading and can be cancelled befo
       },
       { interval: 10 },
     );
-    expect(state.steps[0].artifacts[0].type).toBe("task-brief");
+    expect(state.steps[0].artifacts[0].type).toBe("target-allocation");
     expect(state.steps[0].notes).toContain("已保存需求");
-    await vi.waitFor(
-      async () => {
-        state = (await app.inject(base + "/workflow")).json();
-        expect(state.steps[1].status).toBe("running");
-      },
-      { interval: 10 },
-    );
-    expect(Date.now() - start).toBeGreaterThanOrEqual(200);
+    expect(Date.now() - start).toBeLessThan(2000);
     await post("/workflow/cancel", { executionId: started.executionId }, false);
     await new Promise((resolve) => setTimeout(resolve, 250));
     state = (await app.inject(base + "/workflow")).json();
@@ -106,26 +99,41 @@ it("MCP/Agent launches actual audit, exposes sequential artifacts, generates rep
     await vi.waitFor(
       async () => {
         state = (await app.inject(base + "/workflow")).json();
-        expect(state.steps[5].status).toBe("awaiting-review");
+        expect(state.steps[3].status).toBe("awaiting-review");
       },
       { timeout: 10000 },
     );
     expect(state.executionId).toBe(flow.executionId);
     expect(
       state.steps
-        .slice(0, 5)
+        .slice(0, 3)
         .every((s: any) => s.status === "completed" && !s.confirmedBy),
     ).toBe(true);
     const run = (await app.inject(base + "/runs/" + state.runId)).json();
     expect(run.status).toBe("succeeded");
     expect(run.result.allocationPlan.lossBudgets[0].method).toBe("none");
-    expect(run.result.attribution[0].contributions).toHaveLength(2);
+    const assessed = (
+      await app.inject(base + "/runs/" + state.assessmentRunId)
+    ).json();
+    expect(assessed.result.attribution[0].contributions).toHaveLength(2);
+    expect(run.id).not.toBe(assessed.id);
+    expect(run.input.seed).not.toBe(assessed.input.seed);
+    expect(run.input.model).toEqual(assessed.input.model);
+    expect(run.input.policy).toEqual(assessed.input.policy);
+    expect(run.input.trials).toBe(4);
+    const caps = (await app.inject(base + "/reliability/capabilities")).json();
+    expect(caps.agentCount).toBe(1);
+    expect(caps.stages).toHaveLength(4);
     const history = (await app.inject(base + "/workflow/history")).json();
     expect(
       history
         .filter((e: any) => e.type === "step.completed")
         .map((e: any) => e.stepId),
-    ).toEqual(["clarify", "describe", "select", "prepare", "evaluate"]);
+    ).toEqual([
+      "target-allocation",
+      "availability-assessment",
+      "mechanism-design",
+    ]);
     const reports = app.taskServices
       .resolve(task.id)
       .store.documents("pipeline-report");
@@ -135,7 +143,7 @@ it("MCP/Agent launches actual audit, exposes sequential artifacts, generates rep
       executionId: state.executionId,
       expectedRevision: state.revision,
       inputRevision: state.inputRevision,
-      stepId: "validate-deliver",
+      stepId: "mechanism-verification",
       status: "confirmed",
       artifacts: [{ type: "report", runId: state.runId }],
     };
@@ -200,6 +208,44 @@ it("cancels an automatic run only for the matching execution", async () => {
     expect(
       (await app.inject(base + "/runs/" + state.runId)).json().status,
     ).toBe("cancelled");
+  } finally {
+    await app.close();
+  }
+});
+
+it("a user can independently rerun validation after an automatic workflow reaches review", async () => {
+  const { app, base, post, design } = await setup();
+  try {
+    await post("/workflow/automatic", { inputRevision: design.revision });
+    let state: any;
+    await vi.waitFor(
+      async () => {
+        state = (await app.inject(base + "/workflow")).json();
+        expect(state.steps[3].status).toBe("awaiting-review");
+      },
+      { timeout: 10000 },
+    );
+    const previous = state.runId;
+    const rerun = await post(
+      "/workflow/verify",
+      {
+        executionId: state.executionId,
+        inputRevision: state.inputRevision,
+      },
+      false,
+    );
+    expect(rerun.statusCode, rerun.body).toBe(200);
+    await vi.waitFor(
+      async () => {
+        state = (await app.inject(base + "/workflow")).json();
+        expect(state.steps[3].status).toBe("awaiting-review");
+        expect(state.runId).toBe(rerun.json().id);
+      },
+      { timeout: 10000 },
+    );
+    expect(state.runId).not.toBe(previous);
+    expect(state.steps[3].confirmedBy).toBeUndefined();
+    expect(state.status).toBe("active");
   } finally {
     await app.close();
   }

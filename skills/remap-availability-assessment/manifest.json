@@ -1,0 +1,17 @@
+{
+  "name": "remap-availability-assessment",
+  "version": "1.0.0",
+  "entry": "SKILL.md",
+  "agent": "remap",
+  "stage": "availability-assessment",
+  "toolset": "可用度评估工具集",
+  "tools": [
+    "assessment_run",
+    "engineering_validate",
+    "engineering_run",
+    "engineering_tools"
+  ],
+  "references": ["references/workflow.md", "references/supernode-topology.md"],
+  "protocol": "MCP",
+  "taskBinding": true
+}

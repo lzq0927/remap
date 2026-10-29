@@ -45,6 +45,7 @@ export default function AuditWorkbench({
   busy,
   onRun,
   stage,
+  fourPart = false,
 }: {
   defaults: AuditRequest;
   draft?: AuditDraft;
@@ -55,6 +56,7 @@ export default function AuditWorkbench({
   onRun: (request: AuditRequest) => void;
   /** Undefined retains the complete configuration editor. */
   stage?: number;
+  fourPart?: boolean;
   lastResult?: any;
 }) {
   const [request, setRequest] = useState<AuditRequest>(() =>
@@ -126,7 +128,7 @@ export default function AuditWorkbench({
     <section
       className="paper audit-workbench"
       aria-label="故障事件与机制收益审核"
-      hidden={stage === 5}
+      hidden={!fourPart && stage === 5}
     >
       <div hidden={stage !== undefined} className="audit-intro">
         <div className="section-head">
@@ -323,7 +325,7 @@ export default function AuditWorkbench({
       </div>
       <div className="audit-stage" hidden={stage !== undefined && stage !== 1}>
         <h3 className="audit-step-title" id="audit-evidence">
-          02 / 故障模式
+          02 / 可用度评估 · 故障模式
         </h3>
         <label>
           故障模式基准
@@ -353,11 +355,13 @@ export default function AuditWorkbench({
             / 2% / 1.4%，万卡中断 MTBF 约30小时。逐项更新仍优先使用你填写的值。
           </p>
         )}
-        <AuditArchitectureEditor
-          request={scopedRequest}
-          events={currentEvents}
-          onChange={setRequest}
-        />
+        {!fourPart && (
+          <AuditArchitectureEditor
+            request={scopedRequest}
+            events={currentEvents}
+            onChange={setRequest}
+          />
+        )}
         <AuditEventCatalog
           events={currentEvents}
           onEdit={(id) => {
@@ -404,9 +408,14 @@ export default function AuditWorkbench({
           </details>
         </details>
       </div>
-      <div className="audit-stage" hidden={stage !== undefined && stage !== 2}>
+      <div
+        className="audit-stage"
+        hidden={stage !== undefined && stage !== (fourPart ? 0 : 2)}
+      >
         <section id="audit-budget" aria-label="损失预算分配">
-          <h3 className="audit-step-title">03 / 可用度分配</h3>
+          <h3 className="audit-step-title">
+            {fourPart ? "01 / 可用度目标分解分配" : "03 / 可用度分配"}
+          </h3>
           <div className="round-flow">
             <div>
               <b>第一轮 · 评估现状</b>
@@ -421,6 +430,13 @@ export default function AuditWorkbench({
           <p>
             现状评估按当前配置计算，改进要求在后续方案中独立设置。评估完成后，可在“分轮评估与横向比较”中调整或新增措施，逐次计算与导出报告。
           </p>
+          {fourPart && (
+            <AuditArchitectureEditor
+              request={scopedRequest}
+              events={currentEvents}
+              onChange={setRequest}
+            />
+          )}
           <AuditArchitectureEditor
             request={scopedRequest}
             events={currentEvents}
@@ -557,9 +573,12 @@ export default function AuditWorkbench({
           </details>
         </section>
       </div>
-      <div className="audit-stage" hidden={stage !== undefined && stage !== 3}>
+      <div
+        className="audit-stage"
+        hidden={stage !== undefined && stage !== (fourPart ? 2 : 3)}
+      >
         <h3 className="audit-step-title" id="audit-mechanisms">
-          04 / 可靠性措施
+          {fourPart ? "03 / 可靠性机制设计" : "04 / 可靠性措施"}
         </h3>
         <p className="note">
           第一轮固定现有措施与参数，评估现状。第二轮再比较参数改进和新增机制。
@@ -775,10 +794,22 @@ export default function AuditWorkbench({
           {error}
         </p>
       )}
-      <div className="audit-stage" hidden={stage !== undefined && stage !== 4}>
+      <div
+        className="audit-stage"
+        hidden={
+          stage !== undefined &&
+          (fourPart ? stage !== 1 && stage !== 3 : stage !== 4)
+        }
+      >
         <div className="audit-run-summary" id="audit-run">
           <div>
-            <strong>05 / 第一轮现状评估</strong>
+            <strong>
+              {fourPart
+                ? stage === 3
+                  ? "04 / 可靠性机制验证 · 独立DES"
+                  : "02 / 可用度评估"
+                : "05 / 第一轮现状评估"}
+            </strong>
             <p>
               {
                 (request.mechanisms ?? []).filter(
@@ -815,17 +846,21 @@ export default function AuditWorkbench({
               }
             }}
           >
-            {busy ? "正在计算第一轮…" : "运行可靠性评估"}
+            {busy
+              ? "正在计算…"
+              : fourPart && stage === 3
+                ? "独立验证机制参数"
+                : "运行可靠性评估"}
           </button>
         </div>
         <p className="note">
-          本次只计算第一轮现状；不会自动生成或评估第二轮。前四步确认后，运行将关联正式流程。结果保留输入快照，
+          目标分配后运行现状评估；机制设计后以独立种子验证所选精确参数。结果各自保留输入快照，
           在“实验与报告”下载完整 HTML。正式交付仍需人工确认。
         </p>
       </div>
       <div
         className="audit-stage audit-parameter-stage"
-        hidden={stage !== undefined && stage !== 4}
+        hidden={stage !== undefined && (fourPart ? stage === 0 : stage !== 4)}
       >
         <details id="audit-parameters" className="parameter-review">
           <summary>

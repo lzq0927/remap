@@ -1,0 +1,12 @@
+{
+  "name": "remap-mechanism-design",
+  "version": "1.0.0",
+  "entry": "SKILL.md",
+  "agent": "remap",
+  "stage": "mechanism-design",
+  "toolset": "可靠性机制设计工具集",
+  "tools": ["audit_plan", "audit_plan_scales", "audit_compare"],
+  "references": ["references/workflow.md", "references/supernode-topology.md"],
+  "protocol": "MCP",
+  "taskBinding": true
+}

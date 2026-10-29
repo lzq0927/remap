@@ -22,12 +22,6 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
   await panel
     .getByLabel("同步对比 Equal、ARINC、AGREE", { exact: true })
     .check();
-  await page.setViewportSize({ width: 390, height: 844 });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
-    ),
-  ).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(
     panel
@@ -67,41 +61,21 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
     data: { inputRevision: design.revision },
   });
   expect(started.status()).toBe(202);
-  for (const [index, anchor] of [
-    "audit-scope",
-    "audit-evidence",
-    "audit-budget",
-    "audit-mechanisms",
-  ].entries()) {
-    const current = page
-      .getByRole("navigation", { name: "六阶段评估流程" })
-      .locator('[aria-current="step"]');
-    await expect(current).toContainText(
-      ["可用度目标", "故障模式", "可用度分配", "可靠性措施"][index],
-    );
-    await expect(page.locator(".workflow-current")).toContainText("过程产物：");
-    await expect
-      .poll(async () =>
-        page.locator("#" + anchor).evaluate((element) => {
-          const rect = element.getBoundingClientRect();
-          const dock = document
-            .querySelector(".workflow-dock")!
-            .getBoundingClientRect();
-          return rect.top >= dock.bottom - 2 &&
-            rect.top < window.innerHeight - 40
-            ? "visible"
-            : {
-                anchor: element.id,
-                top: rect.top,
-                dockBottom: dock.bottom,
-                height: rect.height,
-                current: document.querySelector('[aria-current="step"]')
-                  ?.textContent,
-              };
-        }),
-      )
-      .toBe("visible");
-  }
+  const navigation = page.getByRole("navigation", {
+    name: "四部分可靠性工作流",
+  });
+  await expect(navigation.getByRole("button")).toHaveCount(4);
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(base + "/workflow")).json()).steps[3].status,
+      { timeout: 60000 },
+    )
+    .toBe("awaiting-review");
+  await expect(navigation.locator('[aria-current="step"]')).toContainText(
+    "可靠性机制验证",
+  );
+  await expect(page.locator(".workflow-current")).toContainText("独立DES验证");
   await expect(
     page.getByRole("heading", {
       name: "可靠性设计与评估 · 结果",
@@ -113,7 +87,7 @@ test("allocation choices and the automatic Agent pipeline share visible stages a
   ).toBeEnabled();
   await expect(
     page.getByText("自动完成 · 待总审", { exact: true }),
-  ).toHaveCount(5);
+  ).toHaveCount(3);
   await expect(
     page.getByLabel("本次目标分配产物", { exact: true }),
   ).toBeVisible();

@@ -1,6 +1,9 @@
-import { auditReferenceOnly } from "../../../packages/contracts/src/audit-presets";
-import { resolveAuditArchitecture } from "../../../packages/contracts/src/audit-architecture";
-import { architectureBudgets } from "../../../packages/analysis/src/audit-architecture";
+import {
+  allocationPreview,
+  mechanismEvidence,
+  parameterHash,
+  verificationInput,
+} from "./reliability-artifacts";
 import {
   setTimeout as pause,
   setImmediate as yieldStage,
@@ -9,7 +12,6 @@ import type { FastifyInstance } from "fastify";
 import type { TaskServices } from "../../../packages/tasks/src/service";
 import type { WorkflowService } from "../../../packages/workflow/src/service";
 import { DomainError } from "../../../packages/contracts/src/errors";
-import { resolveAudit } from "../../../packages/analysis/src/audit";
 import { report } from "../../../packages/reports/src/report";
 import { workflowReportRun } from "../../../packages/reports/src/workflow-context";
 
@@ -53,8 +55,7 @@ export function registerAutomaticWorkflow(
         "当前流程仍在执行或待审核；请继续或取消后重启",
         409,
       );
-    const input = structuredClone(design.assessment.input),
-      resolved = resolveAudit(input);
+    const input = structuredClone(design.assessment.input);
     if (
       !input.lossBudgetWeights &&
       !["none", "equal", "baseline-proportional"].includes(
@@ -106,182 +107,146 @@ export function registerAutomaticWorkflow(
       };
       try {
         await yieldStage();
-        const stages = [
-          {
-            id: "clarify",
-            type: "task-brief",
-            data: {
-              target: input.target,
-              targets: input.targets,
-              cards: input.cards,
-              hours: input.hours,
-              metricId: design.assessment.metricId,
-            },
-            note: "采用当前已保存需求；自动完成不表示人工确认，参考数据仍需复核。",
-          },
-          {
-            id: "describe",
-            type: "architecture",
-            data: {
-              architecture: resolveAuditArchitecture(
-                input.architecture,
-                resolved.events,
-              ),
-              events: resolved.events,
-              baseline: {
-                resolvedEvents: resolved.baseline.resolvedEvents,
-                note: resolved.baseline.note,
-              },
-            },
-            note: "冻结当前故障对象、类型、FIT 与来源；没有架构文件时使用参考场景，不能视作真实架构已校验。",
-          },
-          {
-            id: "select",
-            type: "method-plan",
-            data: {
-              architectureBudget: {
-                method: input.architecture?.budgetMethod ?? "equal",
-                basis: input.architecture?.basis ?? "功能分组模板，待确认",
-                scales: resolved.scales.map((cards) => ({
-                  cards,
-                  budgets: Object.fromEntries(
-                    architectureBudgets(
-                      resolveAuditArchitecture(
-                        input.architecture,
-                        resolved.events,
-                      ),
-                      cards,
-                      input.hours,
-                      auditReferenceOnly(input, cards) ||
-                        input.architecture?.budgetMethod === "none"
-                        ? null
-                        : (1 -
-                            (cards === input.cards
-                              ? input.target
-                              : (input.targets?.[cards] ?? input.target))) *
-                            input.hours,
-                    ),
-                  ),
-                })),
-              },
-              submodel: resolved.submodelPlan,
-              lossBudgetMethod: input.lossBudgetMethod ?? "custom",
-              optimization: input.optimization,
-              lossBudgetWeights: input.lossBudgetWeights,
-            },
-            note: "冻结架构与分层目标参照，保留现状FIT和措施；完成各规模薄弱点诊断与Shapley后，再按适用范围进行AGREE改进分配。",
-          },
-          {
-            id: "prepare",
-            type: "mechanism-plan",
-            data: {
-              mechanisms: resolved.mechanisms,
-              deployedMechanisms: resolved.baseline.mechanisms,
-              candidateFitOverrides: input.candidateFitOverrides,
-              recoveryOrder: resolved.recoveryOrder,
-              model: input.model,
-              policy: input.policy,
-              costs: input.costs,
-            },
-            note: "冻结硬件目标、已部署与新增措施、机制参数及物理恢复顺序；源 FIT 与故障后果分开计算。",
-          },
-        ];
-        for (const stage of stages) {
-          record(
-            stage.id,
-            "running",
-            [{ type: stage.type, data: stage.data }],
-            stage.note,
-          );
-          // Minimum reading time, independent of solver precision or computational cost.
-          await pause(stageDisplayMs, undefined, { signal: controller.signal });
-          current();
-          record(
-            stage.id,
-            "completed",
-            [{ type: stage.type, data: stage.data }],
-            stage.note,
-          );
-          await yieldStage();
-        }
-        current();
-        const run = context.runs.start("audit", input);
-        context.store.putDocument(
-          "run-binding",
-          {
-            runId: run.id,
-            inputRevision: design.revision,
-            executionId: started.executionId,
-            reviewRequired: true,
-          },
-          run.id + ".binding",
-        );
-        service.attachRun(run.id, started.executionId, design.revision);
-        let completed = context.store.getRun(run.id);
-        while (["queued", "running"].includes(completed.status)) {
-          await pause(100, undefined, { signal: controller.signal });
-          try {
-            current();
-          } catch (error) {
-            context.runs.cancel(run.id);
-            throw error;
-          }
-          completed = context.store.getRun(run.id);
-        }
-        current();
-        if (completed.status !== "succeeded")
-          throw new Error(
-            "求解未成功：" + (completed.error?.message ?? completed.status),
-          );
-        service.runEvent(run.id, completed.status);
+        const allocation = allocationPreview(input);
         record(
-          "evaluate",
+          "target-allocation",
+          "running",
+          [{ type: "target-allocation", data: allocation }],
+          "按已保存需求在架构上分解目标；AGREE设计先验与评估后的证据分配分别留存。",
+        );
+        await pause(stageDisplayMs, undefined, { signal: controller.signal });
+        record(
+          "target-allocation",
+          "completed",
+          [{ type: "target-allocation", data: allocation }],
+          "目标与设计分配已保存；暂定重要度及BOM仍需工程核验。",
+        );
+        const evaluate = async (
+          runInput: any,
+          stepId: string,
+          sourceRunId?: string,
+        ) => {
+          current();
+          const run = context.runs.start("audit", runInput);
+          context.store.putDocument(
+            "run-binding",
+            {
+              runId: run.id,
+              inputRevision: design.revision,
+              executionId: started.executionId,
+              reviewRequired: true,
+              stepId,
+              ...(sourceRunId
+                ? {
+                    verification: {
+                      sourceRunId,
+                      parameterHash: parameterHash(runInput),
+                      trials: runInput.trials,
+                      seed: runInput.seed,
+                      independent: true,
+                    },
+                  }
+                : {}),
+            },
+            run.id + ".binding",
+          );
+          service.attachRun(
+            run.id,
+            started.executionId,
+            design.revision,
+            stepId,
+            stepId === "mechanism-verification",
+          );
+          let completed = context.store.getRun(run.id);
+          while (["queued", "running"].includes(completed.status)) {
+            await pause(100, undefined, { signal: controller.signal });
+            try {
+              current();
+            } catch (error) {
+              context.runs.cancel(run.id);
+              throw error;
+            }
+            completed = context.store.getRun(run.id);
+          }
+          current();
+          if (completed.status !== "succeeded")
+            throw new Error(
+              "求解未成功：" + (completed.error?.message ?? completed.status),
+            );
+          service.runEvent(run.id, completed.status);
+          return completed;
+        };
+        const assessed = await evaluate(input, "availability-assessment");
+        record(
+          "availability-assessment",
           "completed",
           [
-            { type: "parameter-table", data: input },
+            { type: "evaluation", runId: assessed.id },
             {
-              type: "evaluation",
-              runId: run.id,
+              type: "evidence-allocation",
+              runId: assessed.id,
               data: {
-                runId: run.id,
-                allocationPlan: completed.result.allocationPlan,
+                method: assessed.result.topologyDecision?.allocationLabel,
               },
             },
           ],
-          "真实仿真已完成；单项、组合、Shapley、敏感性与复核记录见结果。仍需评审参数适用性。",
+          "现状可用度、结构辅助结果及目标差距已计算；训练损失使用逐事件账本，RBD/BDD按各自指标解释。",
         );
         await pause(stageDisplayMs, undefined, { signal: controller.signal });
-        current();
+        const designEvidence = mechanismEvidence(assessed);
+        record(
+          "mechanism-design",
+          "running",
+          [{ type: "mechanism-plan", data: designEvidence }],
+          "按本轮Shapley与损失来源形成机制建议；冻结当前所选参数用于独立复核。",
+        );
+        await pause(stageDisplayMs, undefined, { signal: controller.signal });
+        record(
+          "mechanism-design",
+          "completed",
+          [{ type: "mechanism-plan", data: designEvidence }],
+          "所选机制参数已冻结；新增建议仍需单独选择和复评，不自动换成预测更优的参数。",
+        );
+        const verifiedInput = verificationInput(input);
+        const completed = await evaluate(
+          verifiedInput,
+          "mechanism-verification",
+          assessed.id,
+        );
         const reportRun = workflowReportRun(context.store, completed);
-        const html = report(reportRun, "html"),
-          markdown = report(reportRun, "md");
         context.store.putDocument(
           "pipeline-report",
           {
-            runId: run.id,
+            runId: completed.id,
+            assessmentRunId: assessed.id,
             executionId: started.executionId,
             inputRevision: design.revision,
-            html,
-            markdown,
+            html: report(reportRun, "html"),
+            markdown: report(reportRun, "md"),
             reviewRequired: true,
           },
-          run.id + ".pipeline-report",
+          completed.id + ".pipeline-report",
         );
         record(
-          "validate-deliver",
+          "mechanism-verification",
           "awaiting-review",
           [
             {
-              type: "report",
-              runId: run.id,
+              type: "verification",
+              runId: completed.id,
               data: {
-                runId: run.id,
-                formats: ["html", "md", "json", "zip"],
+                runId: completed.id,
+                sourceRunId: assessed.id,
+                parameterHash: parameterHash(input),
+                trials: verifiedInput.trials,
+                seed: verifiedInput.seed,
+                independent: true,
                 checks: completed.result.reviewChecks,
+                formats: ["html", "md", "json", "zip"],
               },
             },
           ],
-          "报告已生成，待审核。请核对目标分配、参数证据、守恒检查和机制前置条件后记录交付确认。",
+          "独立种子的离散事件复核已完成；输出均值、采样区间及精确参数。模型达成与产品工程能力分别审核。",
         );
       } catch (error) {
         if (!controller.signal.aborted) {
