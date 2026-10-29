@@ -1,4 +1,8 @@
-import { physicalTopology } from "./audit-physical-topology";
+import {
+  mechanismBenefitHtml,
+  recoveryEvolutionHtml,
+} from "./audit-mechanism-evolution";
+import { physicalTopology, scaleWeaknessHtml } from "./audit-physical-topology";
 import { trainingReferenceAvailability } from "../../contracts/src/audit-training-scenario";
 import { reliabilityStages } from "../../contracts/src/reliability-workflow";
 import {
@@ -287,6 +291,9 @@ function communicationGraph() {
 export function architectureRelations(
   stage: AnalysisStage,
   counts?: TopologyDecision["scales"][number]["counts"],
+  architecture?: any,
+  decision?: TopologyDecision,
+  events: any[] = [],
 ) {
   const chip = containment(
     stage,
@@ -319,7 +326,7 @@ export function architectureRelations(
   const network = `<div class="analysis-enclosure analysis-network"><div class="analysis-enclosure-title">网络物理位置与责任归属</div><p>L1、IO、UB网卡位于计算柜；L2位于互联柜。责任预算统一计入02网络域。</p><div class="analysis-enclosure"><b>计算柜内网络设备</b>${["hardware-l1", "hardware-io", "hardware-ubnic"].map((id) => containment(stage, id)).join("")}</div><div class="analysis-enclosure"><b>互联柜 / 域内交换 · 柜数 ${num(counts?.interconnectRacks, 0)}</b>${containment(stage, "hardware-l2")}</div><div class="analysis-enclosure"><b>跨超节点网络 / 光介质</b>${["hardware-leaf-extra", "hardware-spine-extra", "object-OPT"].map((id) => containment(stage, id)).join("")}</div></div>`;
   return card(
     "架构：物理包含与通信连接",
-    `<div class="analysis-table-scroll">${physicalTopology(stage, counts)}</div><details><summary>展开完整包含层级与部件指标</summary><div class="analysis-relation-key"><span>嵌套框：物理包含</span><span>蓝色连线：通信路径</span><span>共享服务：跨域依赖</span></div><div class="analysis-system-envelope" data-contains="system"><header><b>集群总体 · ${num(get(stage, "system").quantity, 0)}卡</b><span>A ${pct(get(stage, "system").availability)} / 目标 ${pct(get(stage, "system").target)}</span></header><div class="analysis-physical"><div>${compute}</div>${network}</div>${communicationGraph()}<div class="analysis-services">${["hardware-storage", "hardware-facility", "hardware-other"].map((id) => `<span>⇢ ${esc(get(stage, id).name)}<small>${id === "hardware-storage" ? "检查点/训练数据服务，传播范围按输入" : id === "hardware-facility" ? "供电/冷却/管理，需核对公共依赖" : "训练框架/控制面/未归因事件，按事件界定范围"}</small></span>`).join("")}</div></div><p class="analysis-note">图内数量、FIT与A均为当前规模该类部件的责任汇总，不是单件器件指标。框表示包含关系，不表示独立串并联。CPU/DDR/SSD数量可为责任代理单元，光模块/Leaf/Spine可含拓扑估算，需以BOM核对。</p></details>`,
+    `<div class="analysis-table-scroll">${physicalTopology(stage, counts, architecture, events)}</div>${decision ? scaleWeaknessHtml(decision, stage.name) : ""}<details><summary>展开完整包含层级与部件指标</summary><div class="analysis-relation-key"><span>嵌套框：物理包含</span><span>蓝色连线：通信路径</span><span>共享服务：跨域依赖</span></div><div class="analysis-system-envelope" data-contains="system"><header><b>集群总体 · ${num(get(stage, "system").quantity, 0)}卡</b><span>A ${pct(get(stage, "system").availability)} / 目标 ${pct(get(stage, "system").target)}</span></header><div class="analysis-physical"><div>${compute}</div>${network}</div>${communicationGraph()}<div class="analysis-services">${["hardware-storage", "hardware-facility", "hardware-other"].map((id) => `<span>⇢ ${esc(get(stage, id).name)}<small>${id === "hardware-storage" ? "检查点/训练数据服务，传播范围按输入" : id === "hardware-facility" ? "供电/冷却/管理，需核对公共依赖" : "训练框架/控制面/未归因事件，按事件界定范围"}</small></span>`).join("")}</div></div><p class="analysis-note">图内数量、FIT与A均为当前规模该类部件的责任汇总，不是单件器件指标。框表示包含关系，不表示独立串并联。CPU/DDR/SSD数量可为责任代理单元，光模块/Leaf/Spine可含拓扑估算，需以BOM核对。</p></details>`,
   );
 }
 export function allocationLogic(
@@ -541,7 +548,7 @@ function detailedLoss(d: TopologyDecision, stage: AnalysisStage) {
         ];
       }),
     ) +
-      `<p class="analysis-note">共用黄色对数色尺；格内为实际小时，损失总和与指标表守恒。正常态开销为0时仍需核对配置假设。</p>`,
+      `<p class="analysis-note">共用粉橙色对数色尺；格内为实际小时，损失总和与指标表守恒。正常态开销为0时仍需核对配置假设。</p>`,
   );
 }
 export function stageLossComparison(d: TopologyDecision, cards: number) {
@@ -558,7 +565,7 @@ export function stageLossComparison(d: TopologyDecision, cards: number) {
   ];
   return card(
     "当前规模：三阶段逐层损失对照",
-    `<p>横向比较同一责任域与损失路径；每格为 ${d.hours} 小时窗口内的损失小时。分组之间留白，三阶段共用黄色色尺。</p><div class="analysis-table-scroll"><table class="analysis-stage-matrix" aria-label="三阶段分组损失热力图"><thead><tr><th rowspan="2" scope="col">责任域</th>${split(scale.scenarios.map((s, i) => `<th colspan="7" scope="colgroup" class="analysis-stage-head stage-${i}">${esc(s.name)}<span>可用度 ${pct(get(s, "system").availability)} · 损失 ${hours(get(s, "system").actualHours)} h</span></th>`))}</tr><tr>${split(scale.scenarios.map(() => decisionLosses.map((l) => `<th scope="col">${l.name}<small>${l.mechanisms}</small></th>`).join("") + '<th scope="col">合计<br/>/ 预算</th>'))}</tr></thead><tbody>${rows
+    `<p>横向比较同一责任域与损失路径；每格为 ${d.hours} 小时窗口内的损失小时。分组之间留白，三阶段共用粉橙色色尺。</p><div class="analysis-table-scroll"><table class="analysis-stage-matrix" aria-label="三阶段分组损失热力图"><thead><tr><th rowspan="2" scope="col">责任域</th>${split(scale.scenarios.map((s, i) => `<th colspan="7" scope="colgroup" class="analysis-stage-head stage-${i}">${esc(s.name)}<span>可用度 ${pct(get(s, "system").availability)} · 损失 ${hours(get(s, "system").actualHours)} h</span></th>`))}</tr><tr>${split(scale.scenarios.map(() => decisionLosses.map((l) => `<th scope="col">${l.name}<small>${l.mechanisms}</small></th>`).join("") + '<th scope="col">合计<br/>/ 预算</th>'))}</tr></thead><tbody>${rows
       .map(
         ({ id, label }) =>
           `<tr data-loss-domain="${id}" class="${id === "system" ? "analysis-total-row" : ""}"><th scope="row"><button type="button" data-analysis-node="${id}">${label}</button></th>${split(
@@ -736,55 +743,7 @@ export function analysisNodeDetail(
   );
 }
 export function mechanismContributions(result: any, cards: number) {
-  const studies = result.mechanismStudies ?? [];
-  const entries = studies.length
-    ? studies
-    : (result.entries ?? [
-        {
-          ...result,
-          name: result.name ?? result.request?.trainingScenario?.name ?? "本轮",
-          round:
-            result.kind === "expert-audit-experiment" ? "scenario" : "current",
-        },
-      ]);
-  const labels: Record<string, string> = {
-    fit: "M1 故障源FIT改进",
-    "policy:D-HARD": "M3 中断检测",
-    "model:recovery": "M4/M8 恢复链与失败升级",
-    "policy:C-FAST": "M5 检查点周期与保存",
-    "policy:D-SDC": "M6 静默检出",
-    "model:silent": "M6 漏检后排查",
-    "policy:D-SLOW": "M7 亚健康检测",
-  };
-  return card(
-    "Shapley：各轮机制收益与对应基线",
-    entries
-      .map((entry: any) => {
-        const attr = entry.attribution?.find((a: any) => a.cards === cards);
-        if (!attr)
-          return `<p>${esc(entry.name)}：未记录增量Shapley，不能从热力图差值倒推单项贡献。</p>`;
-        const incremental =
-          studies.length > 0 ||
-          (entry.round === "scenario" &&
-            result.comparisonMode !== "training-scenarios");
-        const ranked = [...attr.contributions].sort(
-          (a: any, b: any) => b.statistics.mean - a.statistics.mean,
-        );
-        const max = Math.max(
-          1e-9,
-          ...ranked.map((c: any) =>
-            Math.max(
-              Math.abs(c.statistics.mean),
-              Math.abs(c.statistics.ciLow),
-              Math.abs(c.statistics.ciHigh),
-            ),
-          ),
-        );
-        return `<figure class="analysis-gain-chart" aria-label="${esc(entry.name)}措施收益排序"><figcaption><b>${esc(entry.name)}</b> · ${incremental ? "相对冻结现状的改进增量" : "相对本快照固定基线的所选措施贡献"}</figcaption><p>配对 ${num(attr.trials, 0)} 条轨迹${attr.permutations ? " × " + num(attr.permutations, 0) + " 个排列" : ""}；组合增量 ${num(attr.gain * 100, 3)} pp（${num(attr.gain * (result.request?.hours ?? 600), 2)} h减损）。</p>${ranked.map((c: any, i: number) => `<div class="analysis-gain-row"><span>${i + 1}. ${esc(labels[c.id] ?? c.name ?? c.id)}</span><div class="analysis-gain-track"><i style="width:${(Math.abs(c.statistics.mean) / max) * 100}%;background:${c.statistics.mean < 0 ? "#b77946" : "#4a8a82"}"></i></div><b>${c.statistics.mean >= 0 ? "+" : ""}${num(c.statistics.mean * 100, 3)} pp<small>${num(c.statistics.mean * (result.request?.hours ?? 600), 2)} h · 95% [${num(c.statistics.ciLow * 100, 3)}, ${num(c.statistics.ciHigh * 100, 3)}]</small></b></div>`).join("")}<p class="analysis-note">${incremental ? "来源现状运行 " + esc(entry.sourceRunId) + "；增量研究独立采样，组合增量与主表跨档差值可能略有不同。" : "这是本轮已选能力的贡献，尚非现状→改进的参数增量。"} 排列采样区间未包含参数、模型及全部排列误差；区间重叠时不强判排名。</p></figure>`;
-      })
-      .join("") +
-      '<p class="analysis-note">正值表示减少损失；负值表示增加损失。组合收益与单项分摊使用明确的冻结基线，不能跨研究重复相加。M2冗余/PAFT等未建模候选不领取收益。</p>',
-  );
+  return mechanismBenefitHtml(result, cards);
 }
 
 export function optimizationAdvice(
@@ -947,6 +906,10 @@ export function analysisWorkbenchHtml(
     result.architectureDiagnosis?.architecture ??
     result.entries?.[0]?.architectureDiagnosis?.architecture ??
     result.request?.architecture;
+  const events =
+    result.entries?.find((e: any) => e.name === stage.name)?.events ??
+    result.events ??
+    [];
   let body = "";
   if (view === "overview")
     body =
@@ -957,11 +920,11 @@ export function analysisWorkbenchHtml(
       lossSourceCharts(d, stage, cards) +
       allocationMetrics(stage) +
       allocationLogic(d, stage, baseline, cards, architecture) +
-      architectureRelations(stage, ctx.scale.counts);
+      architectureRelations(stage, ctx.scale.counts, architecture, d, events);
   if (view === "architecture")
     body =
       systemMetrics(d, stage, root) +
-      architectureRelations(stage, ctx.scale.counts) +
+      architectureRelations(stage, ctx.scale.counts, architecture, d, events) +
       allocationMetrics(stage, parentId) +
       allocationLogic(d, stage, baseline, cards, architecture);
   if (view === "loss")
@@ -969,9 +932,12 @@ export function analysisWorkbenchHtml(
       stageLossComparison(d, cards) +
       lossMeasureMap(d, stage) +
       mechanismContributions(result, cards) +
+      recoveryEvolutionHtml(d, cards) +
       optimizationAdvice(result, d, cards) +
       `<details><summary>当前选中快照的独立损失明细</summary>${detailedLoss(d, stage)}</details>`;
-  if (view === "verification") body = verificationSummary(result, d, cards);
+  if (view === "verification")
+    body =
+      verificationSummary(result, d, cards) + recoveryEvolutionHtml(d, cards);
   if (view === "scales")
     body = scaleComparison(d) + stageLossComparison(d, cards);
   if (view === "research") body = research();

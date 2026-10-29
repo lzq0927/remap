@@ -69,7 +69,7 @@ test("four desktop stages show allocation, assessment, mechanism evidence and a 
   await analysis
     .getByRole("button", { name: "03 可靠性机制设计", exact: true })
     .click();
-  await expect(analysis).toContainText("Shapley：各轮机制收益与对应基线");
+  await expect(analysis).toContainText("措施收益热力图 · Shapley 分摊 / pp");
   await next.click();
   await expect(nav.locator('[aria-current="step"]')).toContainText(
     "可靠性机制验证",

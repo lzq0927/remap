@@ -63,15 +63,16 @@ test("desktop analysis opens with baseline, allocation, horizontal sources and c
   await w
     .getByRole("button", { name: "01 可用度目标分解分配", exact: true })
     .click();
+  const topology = w.getByRole("img", {
+    name: "Atlas 950参考架构与六层目标分配",
+    exact: true,
+  });
+  await expect(topology).toBeVisible();
+  await expect(topology.locator("[data-allocation-domain]")).toHaveCount(6);
+  await expect(topology).toContainText("2+2 光模块保护组");
+  await expect(topology).toContainText("缺口定位");
   await expect(
-    w
-      .locator(
-        '[data-contains="hardware-rack"] [data-contains="hardware-node"] [data-contains="hardware-board"] [data-contains="hardware-module"] [data-contains="hardware-chip"]',
-      )
-      .first(),
-  ).toBeVisible();
-  await expect(
-    w.getByRole("img", { name: "设备通信连接关系", exact: true }).first(),
+    w.getByRole("table", { name: "四规模六层分配缺口" }),
   ).toBeVisible();
   await w
     .getByLabel("分析分解层级", { exact: true })
@@ -250,4 +251,22 @@ test("saved three-stage comparison survives workflow replay and exposes 126 loss
   expect(bounds[1].y).toBe(bounds[2].y);
   expect(bounds[1].x - bounds[0].right).toBeGreaterThan(10);
   expect(bounds[2].x - bounds[1].right).toBeGreaterThan(10);
+  const benefits = w.getByRole("table", {
+    name: "三阶段四规模措施收益热力图",
+    exact: true,
+  });
+  await expect(benefits.locator("[scope=colgroup]")).toHaveCount(3);
+  await expect(benefits.locator("[data-benefit-pp]")).toHaveCount(96);
+  await expect(
+    benefits.locator(
+      '[data-benefit-measure="redundancy"] [data-benefit-status="missing"]',
+    ),
+  ).toHaveCount(12);
+  await expect(
+    w.getByRole("figure", { name: "单次中断期望恢复链" }),
+  ).toBeVisible();
+  await expect(
+    w.getByRole("table", { name: "三阶段机制参数演进" }),
+  ).toContainText("失败时");
+  await expect(w).toContainText("归因基线不同");
 });

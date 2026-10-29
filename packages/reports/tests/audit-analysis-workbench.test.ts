@@ -10,6 +10,12 @@ import {
 } from "../../contracts/src/audit-training-scenario";
 import { compareAuditExperiments } from "../src/audit-experiments";
 import {
+  mechanismBenefitMatrix,
+  matchesBenefitStudy,
+  recoveryEvolution,
+} from "../src/audit-mechanism-evolution";
+import { domainGapDetail } from "../src/audit-physical-topology";
+import {
   legacyExposureNotice,
   stageLossComparison,
   analysisContext,
@@ -197,4 +203,131 @@ test("historical exposure-only results retain their data but visibly require rec
       rows: [{ cards: 500000, scaleEvents: [{ id: "CORE-hard", fit: 200 }] }],
     }),
   ).toBe("");
+});
+
+test("benefit blocks match frozen source, target parameters and FIT; missing is distinct from unchanged", () => {
+  const c = structuredClone(comparison),
+    baseline = c.entries[0],
+    target = c.entries[1];
+  const study = {
+    kind: "expert-audit-experiment",
+    sourceRunId: baseline.id,
+    sourceInputHash: baseline.inputHash,
+    configuration: {
+      policy: target.configuration.policy,
+      model: target.configuration.model,
+      fitTargets: [],
+    },
+    attribution: [
+      {
+        cards: 500000,
+        gain: 0.03,
+        contributions: [
+          {
+            id: "policy:D-SDC",
+            statistics: { mean: 0.03, ciLow: 0.01, ciHigh: 0.05 },
+          },
+        ],
+      },
+    ],
+  };
+  target.events = structuredClone(baseline.events);
+  expect(matchesBenefitStudy(study, baseline, target)).toBe(true);
+  c.mechanismStudies = [study];
+  const before = structuredClone(c),
+    matrix = mechanismBenefitMatrix(c);
+  expect(matrix.scales).toEqual([10000, 100000, 200000, 500000]);
+  const row = (id: string) => matrix.rows.findIndex((r) => r.id === id);
+  expect(matrix.stages[1].cells[row("policy:D-SDC")][3]).toMatchObject({
+    pp: 3,
+    low: 1,
+    high: 5,
+    status: "measured",
+  });
+  expect(matrix.stages[1].cells[row("fit")][3]).toMatchObject({
+    pp: 0,
+    status: "unchanged",
+  });
+  expect(matrix.stages[1].cells[row("redundancy")][3]).toMatchObject({
+    pp: null,
+    status: "missing",
+  });
+  expect(matrix.stages[0].cells[row("policy:D-SDC")][1].pp).toBeNull();
+  expect(matrix.stages[2].cells.flat().every((c) => c.pp === null)).toBe(true);
+  expect(matrix.stages[0].gains[3]).toBeCloseTo(
+    baseline.attribution.find((a: any) => a.cards === 500000).gain * 100,
+    10,
+  );
+  expect(c).toEqual(before);
+  const wrong = structuredClone(study);
+  wrong.sourceInputHash = "different";
+  expect(matchesBenefitStudy(wrong, baseline, target)).toBe(false);
+  wrong.sourceInputHash = baseline.inputHash;
+  wrong.configuration.model = {
+    ...wrong.configuration.model,
+    recoveryAttemptSeconds: 12345,
+  };
+  expect(matchesBenefitStudy(wrong, baseline, target)).toBe(false);
+  const wrongFit = structuredClone(target);
+  wrongFit.events[0].fit += 1;
+  expect(matchesBenefitStudy(study, baseline, wrongFit)).toBe(false);
+  const wrongArchitecture = structuredClone(target);
+  wrongArchitecture.architectureDiagnosis.architecture.topology.cardsPerRack *= 2;
+  expect(matchesBenefitStudy(study, baseline, wrongArchitecture)).toBe(false);
+  const unsupported = structuredClone(study);
+  unsupported.attribution[0].contributions[0].id = "unmodeled-factor";
+  expect(matchesBenefitStudy(unsupported, baseline, target)).toBe(false);
+});
+
+test("time evolution weights misses and failed recovery, keeping engineering chain separate from equivalent MTTR", () => {
+  const { d } = analysisContext(comparison, 500000)!;
+  const input = structuredClone(d),
+    stages = input.scales.find((s) => s.cards === 500000)!.scenarios;
+  const settings = [
+    [0.95, 60, 130, 0.99, 16200],
+    [0.99, 20, 40, 0.99, 7200],
+    [0.998, 1, 15, 0.999, 3600],
+  ];
+  stages.forEach((s, i) => {
+    const [
+      coverage,
+      detectSeconds,
+      recoveryAttemptSeconds,
+      recoverySuccess,
+      manualAdditionalSeconds,
+    ] = settings[i];
+    s.configuration.policy["D-HARD"] = { coverage, detectSeconds };
+    Object.assign(s.configuration.model, {
+      timeoutSeconds: 60,
+      detectSeconds: 987,
+      recoveryAttemptSeconds,
+      recoverySuccess,
+      manualAdditionalSeconds,
+    });
+  });
+  const before = structuredClone(input),
+    values = recoveryEvolution(input, 500000);
+  [352, 132.4, 19.718].forEach((v, i) =>
+    expect(values[i].total).toBeCloseTo(v, 9),
+  );
+  expect(values[2].detection).toBeCloseTo(1.118, 9);
+  expect(values[2].escalation).toBeCloseTo(3.6, 9);
+  expect(values[2].equivalentMttrSeconds).toBe(
+    stages[2].nodes.find((n) => n.id === "system")!.mttrSeconds,
+  );
+  expect(input).toEqual(before);
+  delete stages[2].configuration.model.manualAdditionalSeconds;
+  expect(recoveryEvolution(input, 500000)[2].total).toBeNull();
+});
+
+test("gap annotations name the largest leaf deficits, never sum parent and child gaps", () => {
+  const { stage } = analysisContext(comparison, 500000)!;
+  const { weak, path } = domainGapDetail(stage, "domain-1");
+  expect(weak.length).toBeGreaterThan(0);
+  expect(weak.every((n) => !stage.nodes.some((c) => c.parentId === n.id))).toBe(
+    true,
+  );
+  expect(weak.every((n) => n.gapHours! > 0)).toBe(true);
+  expect(weak[0].gapHours!).toBeGreaterThanOrEqual(weak[1]?.gapHours ?? 0);
+  expect(path.hours).toBeGreaterThan(0);
 });

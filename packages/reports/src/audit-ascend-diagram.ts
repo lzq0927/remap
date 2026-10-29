@@ -48,7 +48,7 @@ export function ascendTopologySvg(a: AuditAtlas, o: AtlasViewOptions) {
   const line = (d: string, color = blue, dashed = false) =>
     o.links === false
       ? ""
-      : `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.5"${dashed ? ' stroke-dasharray="5 4"' : ""}/>`;
+      : `<path d="${d}" fill="none" stroke="${color}" stroke-width="2.5"${dashed ? ' stroke-dasharray="5 4"' : ""}/>`;
   const metric = (n?: AtlasNode) => {
     if (!n || pure) return "";
     if (o.metric === "fit") return `等效FIT ${num(n.npuEquivalentFit)}`;
@@ -172,23 +172,24 @@ export function ascendTopologySvg(a: AuditAtlas, o: AtlasViewOptions) {
   ${text(46, 233, `代表性超节点 · ${t.cardsPerSupernode} NPU模组`, 16, ink, 700)}
   ${text(772, 233, `${num(t.planesPerSupernode)}平面 · L2总数 ${num(lookup("hardware-l2")?.quantity)}（全规模）`, 14, blue, 650)}
   ${group("hardware-rack", rect(44, 246, 656, 130, "#f4f9f6", "#d5e6dc") + racks + text(60, 371, `每超节点 ${t.cardsPerSupernode / t.cardsPerRack} 计算柜 × ${t.cardsPerRack} 模组；当前全规模 ${num(lookup("hardware-rack")?.quantity)} 柜`, 11, green))}
-  ${group("hardware-node", rect(44, 393, 656, 337, "#fff", "#bed6ca", 9) + text(60, 418, `计算柜展开 · ${t.cardsPerRack / t.cardsPerNode} 个节点/框 × ${t.cardsPerNode} 模组（节点密度为设计输入）`, 13, green, 650))}
+  ${group("hardware-node", rect(44, 393, 656, 355, "#fff", "#bed6ca", 9) + text(60, 418, `计算柜展开 · ${t.cardsPerRack / t.cardsPerNode} 个节点/框 × ${t.cardsPerNode} 模组（节点密度为设计输入）`, 13, green, 650))}
   ${group("hardware-board", rect(60, 436, 256, 138, "#f5faf7", "#bed6ca") + text(72, 460, `代表性计算板 · ${t.cardsPerBoard}模组/板`, 13, green, 650) + npuCells)}
   ${group("hardware-l1", rect(338, 436, 344, 89, "#f4f6fc", "#bccbe9") + text(352, 460, `L1刀片 × ${num(t.scaleUpSwitchesPerRack)}/柜`, 14, blue, 650) + equipment(354, 478, 144, "L1 / P1,P2") + equipment(516, 478, 144, "…P7,P8") + (pure ? "" : text(352, 520, metric(lookup("hardware-l1")), 11, muted)))}
   ${group("hardware-io", rect(338, 548, 344, 90, "#f4f6fc", "#bccbe9") + text(352, 572, `IO转换刀片 × ${num(t.ioBladesPerRack)}/柜`, 14, blue, 650) + equipment(354, 588, 144, "IO 1") + equipment(516, 588, 144, "IO 2") + (pure ? "" : text(352, 632, metric(lookup("hardware-io")), 11, muted)))}
   ${group("hardware-ubnic", rect(338, 653, 344, 61, "#fff", "#cdd9ea") + text(352, 677, `UB NIC × ${num(t.ubNicsPerIoBlade)}/IO`, 14, blue, 650) + text(352, 700, `全规模 ${num(lookup("hardware-ubnic")?.quantity)} 张 · 通过IO接入参数面`, 12, muted))}
-  ${group("hardware-chip", rect(60, 590, 256, 124, "#eef7f2", "#bed6ca") + text(74, 615, "NPU模组内部", 14, green, 650) + ["Core", "SRAM", "IOD"].map((name, i) => rect(74 + i * 75, 628, 66, 31, "#fff", "#9dbfb0", 5) + text(84 + i * 75, 649, name, 12, green)).join("") + (pure ? text(74, 688, "含HBM等对象 · 点击继续下钻", 12, muted) : badge("hardware-chip", 74, 689)))}
+  ${group("hardware-chip", rect(60, 590, 256, 124, "#eef7f2", "#bed6ca") + text(74, 615, "NPU模组内部", 14, green, 650) + ["CORE", "SRAM", "IOD", "HBM"].map((name, i) => group("object-" + name, rect(70 + i * 60, 628, 54, 31, "#fff", "#9dbfb0", 5) + text(76 + i * 60, 649, name, 11, green))).join("") + (pure ? text(74, 688, "器件与内存路径 · 点击查看指标", 12, muted) : badge("hardware-chip", 74, 689)))}
+  ${["CPU", "DDR", "SSD"].map((name, i) => group("object-" + name, rect(60 + i * 210, 721, 202, 22, "#f3f8f5", "#bed6ca", 3) + text(72 + i * 210, 737, name === "SSD" ? "本地SSD / 启动与状态" : name + " / 主机侧", 12, green))).join("")}
   ${group("hardware-l2", rect(756, 249, 398, 323, "#fff", "#cbd6e6") + (pure ? "" : text(772, 267, metric(lookup("hardware-l2")), 11, muted)) + cabinets)}
   ${group("hardware-scaleup", rect(756, 580, 398, 67, "#eef2fb", "#c8d3ed") + text(772, 603, "L1 ↔ L2 · 超节点内互联", 14, blue, 650) + text(772, 629, pure ? `L1 ${num(lookup("hardware-l1")?.quantity)} / L2 ${num(lookup("hardware-l2")?.quantity)}（全规模）` : metric(lookup("hardware-scaleup")), 12, muted))}
   ${group("object-OPT", rect(756, 663, 398, 67, "#fff", "#cbd6e6") + text(772, 686, "2+2 光模块保护组", 14, blue, 650) + text(772, 712, pure ? `光模块总数 ${num(lookup("object-OPT")?.quantity)} · 完整BOM待补` : metric(lookup("object-OPT")), 12, muted))}
   ${line("M316 495H338", green)}${line("M682 491H727V270H756")}${line("M727 491V614H756")}
-  ${line("M510 638V653")}${line("M682 681H714V178H746", blue, true)}
+  ${line("M955 647V663")}${line("M984 189V207", blue, true)}${line("M160 755V774", muted, true)}${line("M450 755V774", muted, true)}${line("M510 638V653")}${line("M682 681H714V178H746", blue, true)}
   ${text(706, 525, "UB", 10, blue)}
   ${footerBox("hardware-facility", 28, "基础设施支撑", "供电 · 冷却 · 管理 · 共同故障域", "#728295")}
   ${footerBox("hardware-other", 318, "软件与业务", "算子 · 任务编排 · 未归因事件", "#8f76ad")}
   ${footerBox("overhead", 608, "保存与检测开销", "与故障损失分账，避免重复计入", "#c2924d")}
-  ${rect(898, 774, 274, 94, "#f5f8fc", "#d9e2eb")}${text(914, 800, "目标 → 差距 → 机制", 15, ink, 650)}${text(914, 825, "Shapley归因 → 预算分配", 12, muted)}${text(914, 849, "确认参数 → 独立复评", 12, muted)}
-  ${text(28, 896, pure ? "连线：实线 UB / 示意连接，虚线 IO以太出口；不表示全互联或已验证满带宽。点击区域查看组成、数量与关联。" : "连线：实线 UB / 示意连接，虚线 IO以太出口；不表示全互联或已验证满带宽。区域点击后查看数量、FIT、目标与损失。", 12, muted)}
+  ${rect(898, 774, 274, 94, "#f5f8fc", "#d9e2eb")}${text(914, 800, "目标 → 差距 → 机制", 15, ink, 650)}${text(914, 825, "AGREE分配 → 损失诊断", 12, muted)}${text(914, 849, "Shapley设计 → DES复核", 12, muted)}
+  ${text(28, 896, pure ? "连线：实线 UB / 示意连接，虚线 IO出口/共享依赖；不表示全互联或已验证满带宽。点击区域查看组成、数量与关联。" : "连线：实线 UB / 示意连接，虚线 IO出口/共享依赖；不表示全互联或已验证满带宽。区域点击后查看数量、FIT、目标与损失。", 12, muted)}
   ${text(28, 920, pure ? "证据差异：正文2互联柜×8台L2；图1画到4柜×4台L2。当前采用所填柜数，需按BOM确认共同故障域。" : "* 数据含待补项。区域可用度是损失责任投影；等效FIT × 实际卡数 = 区域总事件FIT，不再乘设备数量。", 12, muted)}
   ${text(28, 944, pure ? "全规模数量优先采用清单覆写；代表单元按拓扑配置绘制。模组/芯片、板/节点密度和端口清单需项目校准。" : "模组/芯片须校准；板/节点密度为工程输入。L1/L2残余事件已含保护，网络辅助模型不能再次扣减同一冗余收益。", 12, muted)}
   ${text(28, 967, a.evaluated ? `结果快照 · ${num(a.provenance.hours)} h窗口 · 主采样 ${num(a.provenance.statistics?.n ?? a.provenance.trials)} 次；置信区间见评估结论。` : "配置预览 · 当前可用度待独立计算 · 华为云指定页面及用户提供PDF（2026-10-21版）", 11, muted)}

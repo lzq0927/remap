@@ -2,185 +2,156 @@ import type {
   TopologyDecision,
   TopologyDecisionNode,
 } from "../../analysis/src/audit-topology-decision";
-import { esc } from "./audit-decision-pages";
+import type { AuditArchitecture } from "../../contracts/src/audit-architecture";
+import type { AuditEventView } from "../../contracts/src/audit-objects";
+import { auditAtlas } from "../../analysis/src/audit-atlas";
+import { ascendTopologySvg } from "./audit-ascend-diagram";
+import {
+  decisionDomains,
+  decisionLosses,
+  lossHours,
+  lossFill,
+  esc,
+} from "./audit-decision-pages";
 import {
   auditNumber as num,
   auditPercent as pct,
 } from "../../contracts/src/audit-recovery-budget";
 type Stage = TopologyDecision["scales"][number]["scenarios"][number];
-/** Representative physical topology. Device counts and every metric are read from the selected snapshot. */
+
+export function domainGapDetail(stage: Stage, id: string) {
+  const parent = stage.nodes.find((n) => n.id === id)!;
+  const children = (node: TopologyDecisionNode): TopologyDecisionNode[] => {
+    const direct = stage.nodes.filter((n) => n.parentId === node.id);
+    return direct.length ? direct.flatMap(children) : [node];
+  };
+  const weak = children(parent)
+    .filter((n) => (n.gapHours ?? 0) > 0)
+    .sort((a, b) => b.gapHours! - a.gapHours!)
+    .slice(0, 2);
+  const path = decisionLosses
+    .map((l, i) => ({ name: l.name, hours: lossHours(parent, i) }))
+    .sort((a, b) => b.hours - a.hours)[0];
+  return { weak, path };
+}
+
+/** Reuse the Atlas 950 reference geometry; responsibility budgets are an explicit companion panel. */
 export function physicalTopology(
   stage: Stage,
   counts?: TopologyDecision["scales"][number]["counts"],
+  architecture?: AuditArchitecture,
+  events: AuditEventView[] = [],
 ) {
-  const n = (id: string) => stage.nodes.find((v) => v.id === id)!;
-  const box = (
+  const root = stage.nodes.find((n) => n.id === "system")!;
+  const text = (
+    x: number,
+    y: number,
+    value: string,
+    size = 15,
+    fill = "#28495e",
+    bold = false,
+  ) =>
+    `<text x="${x}" y="${y}" font-size="${size}" fill="${fill}" font-weight="${bold ? 650 : 400}">${esc(value)}</text>`;
+  const rect = (
     x: number,
     y: number,
     w: number,
     h: number,
-    fill = "#fff",
-    stroke = "#b2c7d6",
+    fill: string,
+    stroke = "#c5d5df",
   ) =>
-    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${fill}" stroke="${stroke}"/>`;
-  const t = (
-    x: number,
-    y: number,
-    s: string,
-    size = 14,
-    color = "#28495e",
-    bold = false,
-  ) =>
-    `<text x="${x}" y="${y}" fill="${color}" font-size="${size}" font-weight="${bold ? 650 : 400}">${esc(s)}</text>`;
-  const tm = (v: number | null) =>
-    v == null ? "—" : v >= 1 ? num(v, 1) + "h" : num(v * 60, 1) + "min";
-  const metric = (
-    v: TopologyDecisionNode,
-    x: number,
-    y: number,
-    w: number,
-    color = "#316b9a",
-  ) =>
-    `<g data-analysis-node="${v.id}" role="button" tabindex="0" aria-label="${esc(v.name)}">${box(x, y, w, 86, "#fff", color)}${t(x + 12, y + 21, v.name, 15, color, true)}${t(x + 12, y + 44, `A ${pct(v.availability)} → ${pct(v.target)}`, 13)}${t(x + 12, y + 64, `损失 ${num(v.actualHours, 2)} / ${num(v.allowedHours, 2)}h`, 12, (v.gapHours ?? 0) > 0 ? "#a85a32" : "#267b6a")}${t(x + 12, y + 80, `FIT ${num(v.fit, 1)} · MTBF ${tm(v.mtbfHours)}`, 11)}</g>`;
-  let s =
-    box(10, 10, 1270, 610, "#f8fafb", "#9bb4c6") +
-    t(
-      28,
-      38,
-      `Atlas 950 代表性超节点 · ${num(counts?.supernodes, 0)}个超节点 / ${num(counts?.racks, 0)}个计算柜 / ${num(n("system").quantity, 0)}卡`,
-      18,
-      "#264f6b",
-      true,
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${fill}" stroke="${stroke}"/>`;
+  const duration = (v: number | null) =>
+    v == null ? "—" : v >= 1 ? num(v, 2) + " h" : num(v * 60, 2) + " min";
+  const atlas = architecture?.topology
+    ? auditAtlas({ architecture, events }, root.quantity ?? 0)
+    : null;
+  // The decision snapshot includes topology-estimated inventory absent from the generic preview.
+  if (atlas)
+    for (const node of atlas.nodes) {
+      const measured = stage.nodes.find((n) => n.id === node.id);
+      if (measured?.quantity != null) node.quantity = measured.quantity;
+    }
+  let reference = atlas
+    ? ascendTopologySvg(atlas, { metric: "structure", links: true })
+    : "";
+  reference = reference
+    .replace(/<svg[^>]*>/, "")
+    .replace(/<\/svg>\s*$/, "")
+    .replace(
+      /data-atlas-node="([^"]+)"/g,
+      'data-atlas-node="$1" data-analysis-node="$1"',
     );
-  s += t(
-    28,
-    62,
-    "实线为双向通信；虚线为共享依赖；嵌套为物理包含。数量为全规模汇总，单超节点按本快照配置展示。",
-    12,
-    "#60798b",
-  );
-  s +=
-    box(28, 82, 856, 436, "#eaf2f8", "#8daec7") +
-    t(
-      42,
-      107,
-      "超节点：16计算柜；展开1柜中的1个计算框 / 8 NPU板",
-      16,
-      "#316b9a",
-      true,
+  reference = reference
+    .replace("计算柜展开 ·", "01 计算柜展开 ·")
+    .replace("跨超节点参数面", "02 网络 · 跨超节点参数面")
+    .replace("VPC / 存储面", "03 VPC / 存储面")
+    .replace("基础设施支撑", "04 基础设施支撑")
+    .replace("软件与业务", "05 软件与业务")
+    .replaceAll("保存与检测开销", "06 保存与检测开销")
+    .replace(
+      "配置预览 · 当前可用度待独立计算",
+      "结构参考 · 六域责任指标见右侧冻结快照",
     );
-  for (let i = 0; i < 16; i++)
-    s +=
-      box(42 + i * 33, 121, 27, 29, i === 0 ? "#8bb4d1" : "#fff", "#8daec7") +
-      t(48 + i * 33, 141, String(i + 1), 11);
-  s += t(
-    591,
-    141,
-    `互联柜 ${num(counts?.interconnectRacks != null ? counts.interconnectRacks / counts.supernodes : null, 0)} / 超节点`,
-    13,
-    "#397e85",
-    true,
-  );
-  s += `<g data-contains="hardware-rack">${box(42, 166, 514, 336, "#fff", "#316b9a")}${t(54, 190, "计算柜（64 NPU）", 15, "#316b9a", true)}<g data-contains="hardware-node">${box(54, 200, 490, 202, "#f2f7fb")}${t(66, 222, "计算框：主机 + 8 NPU计算板", 14)}<g data-contains="hardware-board">${box(66, 232, 314, 112, "#e6eff7")}${t(77, 254, "计算板", 13)}<g data-contains="hardware-module"><g data-contains="hardware-chip">`;
-  for (let i = 0; i < 8; i++)
-    s +=
-      box(77 + i * 36, 268, 29, 52, "#c9ddec", "#7c9fb9") +
-      t(80 + i * 36, 289, "NPU", 10) +
-      t(88 + i * 36, 313, String(i + 1), 12);
-  s += "</g></g></g>";
-  s +=
-    box(391, 232, 140, 112, "#fff", "#8daec7") +
-    t(402, 254, "单NPU / 模组展开", 12, "#316b9a", true);
-  ["CORE", "SRAM", "IOD", "HBM"].forEach((id, i) => {
-    s += `<g role="button" tabindex="0" aria-label="${id}" data-analysis-node="object-${id}">${box(400 + (i % 2) * 63, 266 + Math.floor(i / 2) * 35, 58, 27, "#edf3f8")}${t(407 + (i % 2) * 63, 285 + Math.floor(i / 2) * 35, id, 11)}</g>`;
-  });
-  ["CPU", "DDR", "SSD"].forEach(
-    (id, i) =>
-      (s += `<g data-analysis-node="object-${id}">${box(69 + i * 155, 355, 145, 32, "#fff")}${t(100 + i * 155, 377, id === "SSD" ? "本地SSD" : id, 13)}</g>`),
-  );
-  s +=
-    "</g>" + t(65, 426, "柜内网络设备（预算归02网络域）", 13, "#397e85", true);
-  [
-    ["hardware-l1", "L1交换"],
-    ["hardware-io", "IO总线"],
-    ["hardware-ubnic", "UB网卡"],
-  ].forEach(
-    ([id, label], i) =>
-      (s += `<g data-analysis-node="${id}">${box(66 + i * 159, 441, 148, 39, "#e5f2ef", "#73a39e")}${t(88 + i * 159, 467, label, 14, "#397e85", true)}</g>`),
-  );
-  s += "</g>";
-  s += `<g stroke="#397e85" stroke-width="3" fill="none"><path d="M165 344V349H60V433H137V441M306 344V349H374V433H296V441M455 387V441"/><path d="M556 459H575V322H595M575 459V454H595"/><path d="M717 322H738V234H748M717 454H738V356H748"/></g>`;
-  s +=
-    box(595, 282, 122, 84, "#fff2d8", "#bf923f") +
-    t(609, 306, "光模块 / 光链路", 12, "#91681d", true) +
-    t(607, 330, `约${num(n("object-OPT").quantity, 0)}个`, 11) +
-    t(607, 350, `损失 ${num(n("object-OPT").actualHours, 2)}h`, 11);
-  s +=
-    box(595, 416, 122, 76, "#edf6f4", "#73a39e") +
-    t(608, 440, "域间IO / UB链路", 12) +
-    t(607, 465, "含光电转换与线缆", 11);
-  for (let i = 0; i < 2; i++) {
-    s +=
-      box(748, 174 + i * 122, 121, 103, "#f6fbfa", "#397e85") +
-      t(760, 198 + i * 122, `互联柜${i + 1} · L2`, 13, "#397e85", true);
-    for (let j = 0; j < 8; j++)
-      s +=
-        box(
-          760 + (j % 4) * 25,
-          209 + i * 122 + Math.floor(j / 4) * 26,
-          20,
-          20,
-          "#c5ded8",
-          "#82aca2",
-        ) +
-        t(
-          766 + (j % 4) * 25,
-          223 + i * 122 + Math.floor(j / 4) * 26,
-          String(j + 1),
-          9,
-        );
-  }
-  s +=
-    t(744, 449, "8交换平面示意", 12, "#397e85") +
-    t(744, 470, "配置以BOM为准", 11, "#60798b");
-  s +=
-    metric(n("domain-1"), 904, 82, 358) +
-    metric(n("hardware-network"), 904, 183, 358, "#397e85");
-  const c = n("domain-1"),
-    net = n("hardware-network");
-  s +=
-    t(
-      916,
-      286,
-      `等效MTTR / 条件预算：计算 ${num(c.mttrSeconds, 1)} / ${num(c.targetMttrSeconds, 1)}s`,
-      12,
+  const optics = stage.nodes.find((n) => n.id === "object-OPT");
+  if (optics)
+    reference = reference
+      .replace(
+        /(<text x="772" y="712"[^>]*>)[^<]*(<\/text>)/,
+        `$1${esc(`等效FIT ${num(optics.fit, 2)} · 损失 ${num(optics.actualHours, 3)} / 预算 ${num(optics.allowedHours, 3)}h`)}$2`,
+      )
+      .replace(
+        "2+2 光模块保护组",
+        `2+2 光模块保护组 · 约${num((optics.quantity ?? 0) / 10000, 1)}万`,
+      );
+  let panel =
+    text(1224, 35, "六层目标分配与缺口", 24, "#194b6c", true) +
+    text(
+      1224,
+      65,
+      `${stage.name} · ${num(root.quantity, 0)}卡 · A ${pct(root.availability)} → ${pct(root.target)}`,
+      17,
     ) +
-    t(
-      916,
-      307,
-      `网络 ${num(net.mttrSeconds, 1)} / ${num(net.targetMttrSeconds, 1)}s`,
-      12,
+    text(
+      1224,
+      91,
+      `总损失 ${num(root.actualHours, 3)} / 预算 ${num(root.allowedHours, 3)} h；与左图01–06对应`,
+      15,
     );
-  s +=
-    box(904, 330, 358, 92, "#edf6f4", "#397e85") +
-    t(919, 355, "跨超节点：Leaf ⇄ Spine ⇄ 共享存储", 15, "#397e85", true) +
-    t(918, 381, "光模块与交换设备独立归属；不等同独立容错域。", 12) +
-    t(918, 404, "TP/PP/DP映射与共享故障需单独验证。", 12, "#60798b");
-  s += `<path d="M869 356H904" stroke="#397e85" stroke-width="3"/><path d="M530 518V534H1090V422" stroke="#8f9ea8" stroke-width="2" stroke-dasharray="7 5" fill="none"/>`;
-  [
-    "hardware-storage",
-    "hardware-facility",
-    "hardware-other",
-    "overhead",
-  ].forEach(
-    (id, i) =>
-      (s += metric(
-        n(id),
-        28 + i * 311,
-        534,
-        300,
-        ["#8b743c", "#75688c", "#626f82", "#9b7a25"][i],
-      )),
+  decisionDomains.forEach(([id, name], i) => {
+    const n = stage.nodes.find((v) => v.id === id)!;
+    const { weak, path } = domainGapDetail(stage, id);
+    const y = 111 + i * 140,
+      bad = (n.gapHours ?? 0) > 0,
+      color = bad ? "#a84d36" : "#23796e";
+    panel += `<g data-analysis-node="${id}" data-allocation-domain="${id}" role="button" tabindex="0" aria-label="${esc(name)}分配与差距">${rect(1210, y, 688, 130, bad ? "#fff4f0" : "#eef7f4", bad ? "#d69b87" : "#9bc6bb")}${text(1226, y + 24, `${name}   A ${pct(n.availability)} → 目标 ${pct(n.target, 3)}`, 17, color, true)}${text(1226, y + 49, `损失 ${num(n.actualHours, 3)} / 预算 ${num(n.allowedHours, 3)} h  ·  ${n.gapHours == null ? "未分配" : bad ? "超预算 " + num(n.gapHours, 3) + " h" : "余量 " + num(-n.gapHours, 3) + " h"}`, 15, color)}${text(1226, y + 73, `等效FIT ${num(n.fit, 2)} · MTBF ${duration(n.mtbfHours)} · 等效MTTR ${num(n.mttrSeconds, 2)} s`, 14)}${text(1226, y + 96, weak.length ? "缺口定位：" + weak.map((v) => `${v.name} +${num(v.gapHours, 2)}h`).join("；") : n.gapHours == null ? "此责任域尚未分配预算；不能据此判断达标" : "责任域预算内；继续验证共因与工程能力边界", 14, color)}${text(1226, y + 118, `主要损失：${path.name} ${num(path.hours, 3)}h · 本MTBF条件MTTR预算 ${num(n.targetMttrSeconds, 2)}s`, 13, "#607485")}</g>`;
+  });
+  panel += text(
+    1224,
+    974,
+    "A为损失责任投影，六层损失相加；不可将六层A相乘。FIT为每NPU等效口径。",
+    13,
+    "#607485",
   );
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1290 636" class="analysis-physical-svg" role="img" aria-label="设备通信连接关系" style="font-family:system-ui,'Noto Sans CJK SC',sans-serif">${s}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="analysis-physical-svg" viewBox="0 0 1920 990" width="1920" height="990" role="img" aria-label="Atlas 950参考架构与六层目标分配" style="font-family:'Noto Sans CJK SC','Microsoft YaHei',sans-serif">${rect(0, 0, 1920, 990, "#fff", "none")}${reference || text(28, 65, "此快照未记录Atlas 950拓扑配置", 22)}${panel}</svg>`;
+}
+
+export function scaleWeaknessHtml(d: TopologyDecision, stageName: string) {
+  return `<h4>规模变化后，薄弱点在哪里 · ${esc(stageName)}</h4><div class="analysis-table-scroll"><table class="analysis-scale-gaps" aria-label="四规模六层分配缺口"><thead><tr><th>规模 / A</th>${decisionDomains.map(([, name]) => `<th>${name}</th>`).join("")}</tr></thead><tbody>${d.scales
+    .map((scale) => {
+      const stage = scale.scenarios.find((s) => s.name === stageName);
+      if (!stage) return "";
+      const root = stage.nodes.find((n) => n.id === "system")!;
+      return `<tr><th>${scale.cards / 10000}万卡<small>${pct(root.availability)}</small></th>${decisionDomains
+        .map(([id]) => {
+          const n = stage.nodes.find((n) => n.id === id)!,
+            { weak } = domainGapDetail(stage, id),
+            gap = n.gapHours;
+          return `<td style="background:${gap != null && gap > 0 ? lossFill(gap, d.hours) : "#edf6f3"}"><b>${gap == null ? "未分配" : gap > 0 ? "+" + num(gap, 3) + " h" : "预算内"}</b><small>A目标 ${pct(n.target, 3)}</small><small>${weak[0] ? esc(weak[0].name) + " +" + num(weak[0].gapHours, 3) + " h" : gap == null ? "未分配预算" : "无超预算叶节点"}</small></td>`;
+        })
+        .join("")}</tr>`;
+    })
+    .join(
+      "",
+    )}</tbody></table></div><p class="analysis-note">格内为相对各规模冻结分配的超预算小时；第二行列出主要缺口部件。同一责任域的分配随规模证据变化，不把50万卡分配直接复用到其他规模。六层为互斥损失责任域，物理设备之间仍存在共享依赖。</p>`;
 }

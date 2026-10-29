@@ -74,14 +74,14 @@ const stageColors = ["#316b9a", "#a07c27", "#277c70"];
 export function lossHours(n: TopologyDecisionNode, index: number) {
   return decisionLosses[index].keys.reduce((sum, k) => sum + n.loss[k], 0);
 }
-/** Fixed shared yellow scale, anchored at one minute and the complete assessment window. */
+/** Fixed shared pink-to-orange scale, anchored at one minute and the complete assessment window. */
 export function lossFill(hours: number, window: number) {
   const t = Math.max(
     0,
     Math.min(1, Math.log1p(hours * 60) / Math.log1p(window * 60)),
   );
-  const a = [255, 253, 235],
-    b = [189, 132, 21];
+  const a = [255, 241, 243],
+    b = [213, 108, 58];
   return (
     "#" +
     a
@@ -354,7 +354,7 @@ function heat(d: TopologyDecision, cards: number) {
   let b = text(
     30,
     130,
-    "损失单位 h · 共用黄色对数色尺 log(1+小时/1分钟)，0 → 600h；格内为真实时长",
+    "损失单位 h · 共用粉橙色对数色尺 log(1+小时/1分钟)，0 → 600h；格内为真实时长",
     16,
   );
   for (let i = 0; i < 120; i++)
@@ -398,7 +398,7 @@ function heat(d: TopologyDecision, cards: number) {
           x = sx + i * sw + j * cw;
         b +=
           `<g data-loss-domain="${id}" data-loss-index="${j}" data-hours="${v}">` +
-          rect(x, y, cw - 5, 47, lossFill(v, d.hours), "#e4d7ac", 3) +
+          rect(x, y, cw - 5, 47, lossFill(v, d.hours), "#eed6ce", 3) +
           text(
             x + 9,
             y + 29,
