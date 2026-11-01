@@ -159,13 +159,16 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
           "#153b56",
           true,
         ) +
-        Array.from({ length: Math.min(16, racks) }, (_, i) => {
-          const x = 60 + i * 39;
-          return (
-            rect(x, 297, 32, 42, "#e2ebf3", "#95aebe", 2) +
-            text(x + 6, 322, `${i + 1}`, 13, "#175b8f")
-          );
-        }).join("") +
+        rect(60, 297, 158, 42, "#e2ebf3", "#95aebe", 3) +
+        text(76, 324, "代表性计算柜", 17, "#175b8f", true) +
+        text(
+          242,
+          324,
+          `× ${racks} 柜 / 超节点；下方只展开1个`,
+          17,
+          "#153b56",
+          true,
+        ) +
         text(
           60,
           357,

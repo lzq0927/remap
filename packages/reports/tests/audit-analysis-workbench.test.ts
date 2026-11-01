@@ -18,6 +18,11 @@ import { domainGapDetail } from "../src/audit-physical-topology";
 import { componentLossSources } from "../src/audit-component-topology";
 import { checkpointAccounting } from "../src/audit-checkpoint-impact";
 import {
+  faultMeasureComparison,
+  matchedMeasureNecessity,
+} from "../src/audit-fault-measures";
+import measureStudy from "../../../references/remap-studies/2026-11-01-measure-necessity-50w.json";
+import {
   legacyExposureNotice,
   stageLossComparison,
   analysisContext,
@@ -171,6 +176,93 @@ test("checkpoint accounting separates save, source-event rollback and loading wi
   expect(noEvents.hardRollbackSeconds).toBeNull();
   expect(noEvents.saveHours).toBe(actual.saveHours);
   expect(comparison).toEqual(before);
+});
+
+test("fault-to-measure comparison preserves the loss ledger and isolates Agent manual duration from recovery success", () => {
+  const original = structuredClone(comparison);
+  const { d } = analysisContext(comparison, 500000)!;
+  const result = faultMeasureComparison(comparison, d, 500000)!;
+  for (const [key, stage] of [
+    ["before", result.current],
+    ["after", result.target],
+  ] as const) {
+    expect(
+      result.modes.reduce((sum, row) => sum + row[key], 0) +
+        stage.nodes.find((n) => n.id === "overhead")!.actualHours,
+    ).toBeCloseTo(stage.nodes.find((n) => n.id === "system")!.actualHours, 8);
+  }
+  expect(result.modes.map((r) => r.before)).toEqual(
+    result.modes.map((r) => r.before).sort((a, b) => b - a),
+  );
+  // The fixture's breakthrough preset still uses 99% success, unlike the reviewed 99.9% case.
+  expect(result.success).toBe(0.99);
+  expect(result.manualWeightedSavingSeconds).toBeCloseTo(126, 9);
+  const improved = structuredClone(d);
+  improved.scales
+    .find((s) => s.cards === 500000)!
+    .scenarios.find(
+      (s) => s.trainingScenario?.id === "breakthrough",
+    )!.configuration.model.recoverySuccess = 0.999;
+  expect(
+    faultMeasureComparison(comparison, improved, 500000)!
+      .manualWeightedSavingSeconds,
+  ).toBeCloseTo(12.6, 9);
+  // This fixture has different FIT/parameters and sampling: never reuse the published 50w study.
+  expect(result.necessity).toBeNull();
+  expect(comparison).toEqual(original);
+});
+
+test("conditional measure evidence rejects stale inputs, scale, event FIT and missing endpoints", () => {
+  const baseline = {
+    inputHash: measureStudy.baselineInputHash,
+    configuration: measureStudy.baselineConfiguration,
+  };
+  const entry = {
+    inputHash: measureStudy.targetInputHash,
+    configuration: structuredClone(measureStudy.targetConfiguration),
+    rows: [
+      {
+        cards: measureStudy.cards,
+        id: "combined",
+        statistics: { mean: measureStudy.targetAvailability },
+        scaleEvents: measureStudy.targetEvents.map(([id, type, fit]) => ({
+          id,
+          type,
+          fit,
+        })),
+      },
+    ],
+  };
+  expect(matchedMeasureNecessity(entry, 500000, 600, baseline)).toEqual(
+    measureStudy,
+  );
+  expect(matchedMeasureNecessity(entry, 10000, 600, baseline)).toBeNull();
+  expect(
+    matchedMeasureNecessity(entry, 500000, 600, {
+      ...baseline,
+      inputHash: "different-baseline",
+    }),
+  ).toBeNull();
+  const wrongFit = structuredClone(entry);
+  wrongFit.rows[0].scaleEvents[0].fit =
+    Number(wrongFit.rows[0].scaleEvents[0].fit) + 1;
+  expect(matchedMeasureNecessity(wrongFit, 500000, 600, baseline)).toBeNull();
+  const wrongParameters = structuredClone(entry);
+  wrongParameters.configuration.model.manualAdditionalSeconds = 7200;
+  expect(
+    matchedMeasureNecessity(wrongParameters, 500000, 600, baseline),
+  ).toBeNull();
+  expect(
+    matchedMeasureNecessity(
+      { ...entry, inputHash: "different" },
+      500000,
+      600,
+      baseline,
+    ),
+  ).toBeNull();
+  const missing = structuredClone(entry);
+  missing.rows[0].statistics.mean = NaN;
+  expect(matchedMeasureNecessity(missing, 500000, 600, baseline)).toBeNull();
 });
 test("resource cost keeps reserve and active denominators distinct, including zero production", () => {
   const r = resourceAccounting(32768);

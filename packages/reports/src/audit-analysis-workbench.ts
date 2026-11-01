@@ -4,6 +4,7 @@ import {
 } from "./audit-mechanism-evolution";
 import { physicalTopology, scaleWeaknessHtml } from "./audit-physical-topology";
 import { checkpointImpactHtml } from "./audit-checkpoint-impact";
+import { faultMeasureClosureHtml } from "./audit-fault-measures";
 import { trainingReferenceAvailability } from "../../contracts/src/audit-training-scenario";
 import { reliabilityStages } from "../../contracts/src/reliability-workflow";
 import {
@@ -493,10 +494,11 @@ export const concreteMeasures = [
   {
     id: "M8",
     category: "MTTR · 失败升级",
-    name: "自动恢复失败后的全局重启、人工排查与修复回归",
+    name: "智能故障分析Agent辅助人工定位、处置与修复回归（新增建议）",
     scope: "01–05",
     loss: [0, 1],
-    condition: "区分作业恢复与硬件维修；人工兜底在自动失败后追加。",
+    condition:
+      "Agent仅通过人工追加耗时预算评估；自动恢复时长另列，逐模式核验定位、资源等待及切换。",
     param: "manual",
   },
 ];
@@ -926,6 +928,7 @@ export function analysisWorkbenchHtml(
   if (view === "overview")
     body =
       systemMetrics(d, stage, root) +
+      faultMeasureClosureHtml(result, d, cards) +
       assessmentReading(d, stage, cards) +
       checkpointImpactHtml(result, stage, cards, d.hours) +
       stageLossComparison(d, cards) +
@@ -937,6 +940,7 @@ export function analysisWorkbenchHtml(
   if (view === "architecture")
     body =
       systemMetrics(d, stage, root) +
+      faultMeasureClosureHtml(result, d, cards) +
       architectureRelations(stage, ctx.scale.counts, architecture, d, events) +
       checkpointImpactHtml(result, stage, cards, d.hours) +
       allocationMetrics(stage, parentId) +
