@@ -3,6 +3,7 @@ import {
   recoveryEvolutionHtml,
 } from "./audit-mechanism-evolution";
 import { physicalTopology, scaleWeaknessHtml } from "./audit-physical-topology";
+import { checkpointImpactHtml } from "./audit-checkpoint-impact";
 import { trainingReferenceAvailability } from "../../contracts/src/audit-training-scenario";
 import { reliabilityStages } from "../../contracts/src/reliability-workflow";
 import {
@@ -326,7 +327,18 @@ export function architectureRelations(
   const network = `<div class="analysis-enclosure analysis-network"><div class="analysis-enclosure-title">网络物理位置与责任归属</div><p>L1、IO、UB网卡位于计算柜；L2位于互联柜。责任预算统一计入02网络域。</p><div class="analysis-enclosure"><b>计算柜内网络设备</b>${["hardware-l1", "hardware-io", "hardware-ubnic"].map((id) => containment(stage, id)).join("")}</div><div class="analysis-enclosure"><b>互联柜 / 域内交换 · 柜数 ${num(counts?.interconnectRacks, 0)}</b>${containment(stage, "hardware-l2")}</div><div class="analysis-enclosure"><b>跨超节点网络 / 光介质</b>${["hardware-leaf-extra", "hardware-spine-extra", "object-OPT"].map((id) => containment(stage, id)).join("")}</div></div>`;
   return card(
     "架构：物理包含与通信连接",
-    `<div class="analysis-table-scroll">${physicalTopology(stage, counts, architecture, events)}</div>${decision ? scaleWeaknessHtml(decision, stage.name) : ""}<details><summary>展开完整包含层级与部件指标</summary><div class="analysis-relation-key"><span>嵌套框：物理包含</span><span>蓝色连线：通信路径</span><span>共享服务：跨域依赖</span></div><div class="analysis-system-envelope" data-contains="system"><header><b>集群总体 · ${num(get(stage, "system").quantity, 0)}卡</b><span>A ${pct(get(stage, "system").availability)} / 目标 ${pct(get(stage, "system").target)}</span></header><div class="analysis-physical"><div>${compute}</div>${network}</div>${communicationGraph()}<div class="analysis-services">${["hardware-storage", "hardware-facility", "hardware-other"].map((id) => `<span>⇢ ${esc(get(stage, id).name)}<small>${id === "hardware-storage" ? "检查点/训练数据服务，传播范围按输入" : id === "hardware-facility" ? "供电/冷却/管理，需核对公共依赖" : "训练框架/控制面/未归因事件，按事件界定范围"}</small></span>`).join("")}</div></div><p class="analysis-note">图内数量、FIT与A均为当前规模该类部件的责任汇总，不是单件器件指标。框表示包含关系，不表示独立串并联。CPU/DDR/SSD数量可为责任代理单元，光模块/Leaf/Spine可含拓扑估算，需以BOM核对。</p></details>`,
+    `<div class="analysis-table-scroll">${physicalTopology(
+      stage,
+      counts,
+      architecture,
+      events,
+      decision?.scales
+        .find((s) => s.cards === get(stage, "system").quantity)
+        ?.scenarios.find(
+          (s) =>
+            s.trainingScenario?.id === "breakthrough" && s.name !== stage.name,
+        ),
+    )}</div>${decision ? scaleWeaknessHtml(decision, stage.name) : ""}<details><summary>展开完整包含层级与部件指标</summary><div class="analysis-relation-key"><span>嵌套框：物理包含</span><span>蓝色连线：通信路径</span><span>共享服务：跨域依赖</span></div><div class="analysis-system-envelope" data-contains="system"><header><b>集群总体 · ${num(get(stage, "system").quantity, 0)}卡</b><span>A ${pct(get(stage, "system").availability)} / 目标 ${pct(get(stage, "system").target)}</span></header><div class="analysis-physical"><div>${compute}</div>${network}</div>${communicationGraph()}<div class="analysis-services">${["hardware-storage", "hardware-facility", "hardware-other"].map((id) => `<span>⇢ ${esc(get(stage, id).name)}<small>${id === "hardware-storage" ? "检查点/训练数据服务，传播范围按输入" : id === "hardware-facility" ? "供电/冷却/管理，需核对公共依赖" : "训练框架/控制面/未归因事件，按事件界定范围"}</small></span>`).join("")}</div></div><p class="analysis-note">图内数量、FIT与A均为当前规模该类部件的责任汇总，不是单件器件指标。框表示包含关系，不表示独立串并联。CPU/DDR/SSD数量可为责任代理单元，光模块/Leaf/Spine可含拓扑估算，需以BOM核对。</p></details>`,
   );
 }
 export function allocationLogic(
@@ -915,6 +927,7 @@ export function analysisWorkbenchHtml(
     body =
       systemMetrics(d, stage, root) +
       assessmentReading(d, stage, cards) +
+      checkpointImpactHtml(result, stage, cards, d.hours) +
       stageLossComparison(d, cards) +
       lossMeasureMap(d, stage) +
       lossSourceCharts(d, stage, cards) +
@@ -925,6 +938,7 @@ export function analysisWorkbenchHtml(
     body =
       systemMetrics(d, stage, root) +
       architectureRelations(stage, ctx.scale.counts, architecture, d, events) +
+      checkpointImpactHtml(result, stage, cards, d.hours) +
       allocationMetrics(stage, parentId) +
       allocationLogic(d, stage, baseline, cards, architecture);
   if (view === "loss")

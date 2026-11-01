@@ -15,6 +15,8 @@ import {
   recoveryEvolution,
 } from "../src/audit-mechanism-evolution";
 import { domainGapDetail } from "../src/audit-physical-topology";
+import { componentLossSources } from "../src/audit-component-topology";
+import { checkpointAccounting } from "../src/audit-checkpoint-impact";
 import {
   legacyExposureNotice,
   stageLossComparison,
@@ -115,6 +117,60 @@ test("horizontal source bars partition the original ledger without counting pare
       ).toBeCloseTo(root.actualHours, 8);
     }
   }
+});
+
+test("component hotspots rank disjoint leaves at each scale and conserve the saved loss ledger", () => {
+  const before = structuredClone(comparison);
+  for (const cards of [10000, 500000]) {
+    const { scale } = analysisContext(comparison, cards)!;
+    for (const stage of scale.scenarios) {
+      const parts = componentLossSources(stage);
+      const ids = new Set(parts.map((n) => n.id));
+      expect(parts.every((n) => !ids.has(n.parentId ?? ""))).toBe(true);
+      expect(ids.has("hardware-chip")).toBe(false);
+      expect(ids.has("object-HBM")).toBe(true);
+      expect(ids.has("overhead")).toBe(false);
+      expect(parts.map((n) => n.actualHours)).toEqual(
+        parts.map((n) => n.actualHours).sort((a, b) => b - a),
+      );
+      expect(
+        parts.reduce((sum, n) => sum + n.actualHours, 0) +
+          stage.nodes.find((n) => n.id === "overhead")!.actualHours,
+      ).toBeCloseTo(stage.nodes.find((n) => n.id === "system")!.actualHours, 8);
+    }
+  }
+  expect(comparison).toEqual(before);
+});
+
+test("checkpoint accounting separates save, source-event rollback and loading without changing the snapshot", () => {
+  const before = structuredClone(comparison);
+  const { d, stage } = analysisContext(comparison, 500000)!;
+  const actual = checkpointAccounting(comparison, stage, 500000, d.hours);
+  expect(actual.compute).toBe(600);
+  expect(actual.save).toBe(4);
+  expect(actual.blockingFraction).toBeCloseTo(4 / 604, 12);
+  expect(actual.uninterruptedSaveHours).toBeCloseTo((600 * 4) / 604, 12);
+  expect(actual.load).toBe(10);
+  expect(actual.attempt).toBe(130);
+  expect(actual.hard!.rollback + actual.sdc!.rollback).toBeCloseTo(
+    actual.rollbackHours,
+    8,
+  );
+  expect(actual.saveHours).toBe(
+    stage.nodes.find((n) => n.id === "overhead")!.loss.save,
+  );
+  const alternative = structuredClone(stage);
+  alternative.configuration.policy["C-FAST"].computeSeconds = 1;
+  expect(
+    checkpointAccounting(comparison, alternative, 500000, d.hours)
+      .blockingFraction,
+  ).toBeNull();
+  const missing = structuredClone(comparison);
+  delete missing.entries[0].rows.find((r: any) => r.cards === 500000).perEvent;
+  const noEvents = checkpointAccounting(missing, stage, 500000, d.hours);
+  expect(noEvents.hardRollbackSeconds).toBeNull();
+  expect(noEvents.saveHours).toBe(actual.saveHours);
+  expect(comparison).toEqual(before);
 });
 test("resource cost keeps reserve and active denominators distinct, including zero production", () => {
   const r = resourceAccounting(32768);

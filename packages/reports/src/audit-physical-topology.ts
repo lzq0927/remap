@@ -5,7 +5,10 @@ import type {
 import type { AuditArchitecture } from "../../contracts/src/audit-architecture";
 import type { AuditEventView } from "../../contracts/src/audit-objects";
 import { auditAtlas } from "../../analysis/src/audit-atlas";
-import { ascendTopologySvg } from "./audit-ascend-diagram";
+import {
+  componentTopologyReference,
+  componentLossBars,
+} from "./audit-component-topology";
 import {
   decisionDomains,
   decisionLosses,
@@ -41,6 +44,7 @@ export function physicalTopology(
   counts?: TopologyDecision["scales"][number]["counts"],
   architecture?: AuditArchitecture,
   events: AuditEventView[] = [],
+  compare?: Stage,
 ) {
   const root = stage.nodes.find((n) => n.id === "system")!;
   const text = (
@@ -72,38 +76,7 @@ export function physicalTopology(
       const measured = stage.nodes.find((n) => n.id === node.id);
       if (measured?.quantity != null) node.quantity = measured.quantity;
     }
-  let reference = atlas
-    ? ascendTopologySvg(atlas, { metric: "structure", links: true })
-    : "";
-  reference = reference
-    .replace(/<svg[^>]*>/, "")
-    .replace(/<\/svg>\s*$/, "")
-    .replace(
-      /data-atlas-node="([^"]+)"/g,
-      'data-atlas-node="$1" data-analysis-node="$1"',
-    );
-  reference = reference
-    .replace("计算柜展开 ·", "01 计算柜展开 ·")
-    .replace("跨超节点参数面", "02 网络 · 跨超节点参数面")
-    .replace("VPC / 存储面", "03 VPC / 存储面")
-    .replace("基础设施支撑", "04 基础设施支撑")
-    .replace("软件与业务", "05 软件与业务")
-    .replaceAll("保存与检测开销", "06 保存与检测开销")
-    .replace(
-      "配置预览 · 当前可用度待独立计算",
-      "结构参考 · 六域责任指标见右侧冻结快照",
-    );
-  const optics = stage.nodes.find((n) => n.id === "object-OPT");
-  if (optics)
-    reference = reference
-      .replace(
-        /(<text x="772" y="712"[^>]*>)[^<]*(<\/text>)/,
-        `$1${esc(`等效FIT ${num(optics.fit, 2)} · 损失 ${num(optics.actualHours, 3)} / 预算 ${num(optics.allowedHours, 3)}h`)}$2`,
-      )
-      .replace(
-        "2+2 光模块保护组",
-        `2+2 光模块保护组 · 约${num((optics.quantity ?? 0) / 10000, 1)}万`,
-      );
+  const reference = atlas ? componentTopologyReference(stage, atlas) : "";
   let panel =
     text(1224, 35, "六层目标分配与缺口", 24, "#194b6c", true) +
     text(
@@ -124,16 +97,16 @@ export function physicalTopology(
     const y = 111 + i * 140,
       bad = (n.gapHours ?? 0) > 0,
       color = bad ? "#a84d36" : "#23796e";
-    panel += `<g data-analysis-node="${id}" data-allocation-domain="${id}" role="button" tabindex="0" aria-label="${esc(name)}分配与差距">${rect(1210, y, 688, 130, bad ? "#fff4f0" : "#eef7f4", bad ? "#d69b87" : "#9bc6bb")}${text(1226, y + 24, `${name}   A ${pct(n.availability)} → 目标 ${pct(n.target, 3)}`, 17, color, true)}${text(1226, y + 49, `损失 ${num(n.actualHours, 3)} / 预算 ${num(n.allowedHours, 3)} h  ·  ${n.gapHours == null ? "未分配" : bad ? "超预算 " + num(n.gapHours, 3) + " h" : "余量 " + num(-n.gapHours, 3) + " h"}`, 15, color)}${text(1226, y + 73, `等效FIT ${num(n.fit, 2)} · MTBF ${duration(n.mtbfHours)} · 等效MTTR ${num(n.mttrSeconds, 2)} s`, 14)}${text(1226, y + 96, weak.length ? "缺口定位：" + weak.map((v) => `${v.name} +${num(v.gapHours, 2)}h`).join("；") : n.gapHours == null ? "此责任域尚未分配预算；不能据此判断达标" : "责任域预算内；继续验证共因与工程能力边界", 14, color)}${text(1226, y + 118, `主要损失：${path.name} ${num(path.hours, 3)}h · 本MTBF条件MTTR预算 ${num(n.targetMttrSeconds, 2)}s`, 13, "#607485")}</g>`;
+    panel += `<g data-analysis-node="${id}" data-allocation-domain="${id}" role="button" tabindex="0" aria-label="${esc(name)}分配与差距">${rect(1210, y, 688, 130, bad ? "#fff4f0" : "#eef7f4", bad ? "#d69b87" : "#9bc6bb")}${text(1226, y + 24, `${name}   A ${pct(n.availability)} → 目标 ${pct(n.target, 3)}`, 17, color, true)}${text(1226, y + 49, `损失 ${num(n.actualHours, 3)} / 预算 ${num(n.allowedHours, 3)} h  ·  ${n.gapHours == null ? "未分配" : bad ? "超预算 " + num(n.gapHours, 3) + " h" : "余量 " + num(-n.gapHours, 3) + " h"}`, 15, color)}${text(1226, y + 73, `等效FIT ${num(n.fit, 2)} · MTBF ${duration(n.mtbfHours)} · 等效MTTR ${num(n.mttrSeconds, 2)} s`, 14)}${text(1226, y + 96, weak.length ? "缺口定位：" + weak.map((v) => `${v.name} +${num(v.gapHours, 2)}h`).join("；") : n.gapHours == null ? "此责任域尚未分配预算；不能据此判断达标" : "责任域预算内；继续验证共因与工程能力边界", 14, color)}${text(1226, y + 118, `主要损失：${path.name} ${num(path.hours, 3)}h · 本MTBF条件MTTR预算 ${num(n.targetMttrSeconds, 2)}s`, 13, "#26485f")}</g>`;
   });
   panel += text(
     1224,
     974,
     "A为损失责任投影，六层损失相加；不可将六层A相乘。FIT为每NPU等效口径。",
     13,
-    "#607485",
+    "#26485f",
   );
-  return `<svg xmlns="http://www.w3.org/2000/svg" class="analysis-physical-svg" viewBox="0 0 1920 990" width="1920" height="990" role="img" aria-label="Atlas 950参考架构与六层目标分配" style="font-family:'Noto Sans CJK SC','Microsoft YaHei',sans-serif">${rect(0, 0, 1920, 990, "#fff", "none")}${reference || text(28, 65, "此快照未记录Atlas 950拓扑配置", 22)}${panel}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="analysis-physical-svg" viewBox="0 0 1920 1390" width="1920" height="1390" role="img" aria-label="Atlas 950参考架构与六层目标分配" style="font-family:'Noto Sans CJK SC','Microsoft YaHei',sans-serif">${rect(0, 0, 1920, 1390, "#fff", "none")}${reference || text(28, 65, "此快照未记录Atlas 950拓扑配置", 22)}${panel}${componentLossBars(stage, compare)}</svg>`;
 }
 
 export function scaleWeaknessHtml(d: TopologyDecision, stageName: string) {
