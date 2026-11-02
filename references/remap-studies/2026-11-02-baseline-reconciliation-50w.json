@@ -13,7 +13,10 @@
       "value": 0.84,
       "cards": 500000,
       "source": "2026-11-02用户转述专家",
-      "metric": "pending-confirmation",
+      "metric": "standalone-network-availability",
+      "hours": 600,
+      "metricConfirmedBy": "用户确认：网络单独评估的可用度",
+      "metricConfirmedAt": "2026-11-02",
       "status": "reference-not-model-output"
     }
   },

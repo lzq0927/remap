@@ -39,6 +39,16 @@ test("each stored diagnostic conserves the 600h loss ledger; expert references r
     expect(r.ciLow).toBeLessThan(r.mean);
     expect(r.ciHigh).toBeGreaterThan(r.mean);
   }
-  expect(study.referencePoints.network.metric).toBe("pending-confirmation");
+  expect(study.referencePoints.network.metric).toBe(
+    "standalone-network-availability",
+  );
+  expect(study.referencePoints.network.hours).toBe(600);
+  const network = study.results.find((r) => r.id === "network_only")!;
+  expect(
+    (network.mean - study.referencePoints.network.value) * 100,
+  ).toBeCloseTo(3.020740879, 6);
+  expect(
+    600 * (1 - study.referencePoints.network.value) - network.loss,
+  ).toBeCloseTo(18.124445275, 6);
   expect(study.originalModelChanged).toBe(false);
 });

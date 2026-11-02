@@ -70,6 +70,10 @@ export function baselineReconciliationHtml(
   const get = (id: string) => baseline.nodes.find((n) => n.id === id)!,
     network = evidence.results.find((r) => r.id === "network_only")!,
     compute = evidence.results.find((r) => r.id === "compute_only")!;
+  const networkReference = evidence.referencePoints.network.value,
+    networkReferenceLoss = d.hours * (1 - networkReference),
+    networkAvailabilityDifference = (network.mean - networkReference) * 100,
+    networkLossDifference = networkReferenceLoss - network.loss;
   const rows = [
     [
       "全系统",
@@ -82,8 +86,8 @@ export function baselineReconciliationHtml(
       "网络 · 单独评估",
       "仅网络故障，含IOD；独立仿真",
       `${pct(network.mean, 3)} / ${num(network.loss, 3)}h`,
-      "专家约84%（原始指标口径待核实）",
-      `1024轨迹；95%均值区间 ${pct(network.ciLow, 3)}–${pct(network.ciHigh, 3)}`,
+      `专家约${pct(networkReference, 0)}（单独评估；约${num(networkReferenceLoss, 0)}h损失）`,
+      `模型高约${num(networkAvailabilityDifference, 2)}个百分点，少估约${num(networkLossDifference, 2)}h损失；输入仍待校准`,
     ],
     [
       "网络 · 责任损失",
@@ -112,7 +116,7 @@ export function baselineReconciliationHtml(
   const mechanisms = Object.keys(parameters).map(
     (id) => evidence.recoveredMechanisms.find((m) => m.id === id)!,
   );
-  return `<section class="analysis-card analysis-baseline-review" data-baseline-calibration="pending"><h3>现状基线核查：专家参照与模型分开列</h3><p class="analysis-priority">IOD属于02网络责任域，物理位置仍在NPU芯片。整网约60%、网络约84%保留为专家参照；当前输入尚未复现这两个参考点。</p><div class="analysis-table-scroll"><table><thead><tr>${["对象", "口径", "模型可用度 / 损失", "专家参照", "结论"].map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((v, i) => `<${i ? "td" : "th"}>${esc(v)}</${i ? "td" : "th"}>`).join("")}</tr>`).join("")}</tbody></table></div><p class="analysis-note">单域独立评估重新计算暴露、检查点与污染；责任损失来自整网同一份账。两者不同，六层责任可用度不能相乘。IOD的原叶预算随责任归属迁移，总预算仍为9h；这是归属修订，未改写原始仿真。</p><details><summary>已找回的专家措施与参数 · 网络及其他恢复能力</summary><div class="analysis-table-scroll"><table><thead><tr><th>具体措施</th><th>原始参考参数</th><th>适用事件</th><th>现状接入所缺证据</th></tr></thead><tbody>${mechanisms.map((m) => `<tr><th>${esc(m.name)}<small>${m.id}</small></th><td>${esc(parameters[m.id])}</td><td>${esc((m.eventCandidates ?? []).join("、"))}</td><td>部署状态、适用比例、条件成功率、失败耗时与正常态开销待核实；原库为单点工程参考，不能直接当作已部署收益。</td></tr>`).join("")}</tbody></table></div><p>来源：新可靠性机制库单点量化交付包（2026-10-14）。原库共16项；上表列出本次最相关的7项。已建模的保护后残余故障不重复扣冗余收益。</p></details><details><summary>计算域校准敏感性 · 保留原输入，逐项核查</summary><div class="analysis-table-scroll"><table><thead><tr><th>独立诊断情景</th><th>可用度</th><th>损失h</th><th>状态</th></tr></thead><tbody>${evidence.results
+  return `<section class="analysis-card analysis-baseline-review" data-baseline-calibration="pending"><h3>现状基线核查：专家参照与模型分开列</h3><p class="analysis-priority">IOD属于02网络责任域，物理位置仍在NPU芯片。已确认专家约84%指网络单独评估；整网约60%另列。当前输入尚未复现这两个参考点。</p><div class="analysis-table-scroll"><table><thead><tr>${["对象", "口径", "模型可用度 / 损失", "专家参照", "结论"].map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((v, i) => `<${i ? "td" : "th"}>${esc(v)}</${i ? "td" : "th"}>`).join("")}</tr>`).join("")}</tbody></table></div><p class="analysis-note">网络单域复核：1024轨迹，95%均值区间 ${pct(network.ciLow, 3)}–${pct(network.ciHigh, 3)}；回滚 ${num(network.ledger.rollback, 2)}h、停机 ${num(network.ledger.downtime, 2)}h 是主要损失。原专家算例的事件FIT、数量与逐模式恢复参数仍待对齐，不能把约${num(networkLossDifference, 2)}h差额直接添加到某一故障。</p><p class="analysis-note">单域独立评估重新计算暴露、检查点与污染；责任损失来自整网同一份账。两者不同，六层责任可用度不能相乘，也不能以60%÷84%反推计算域。IOD的原叶预算随责任归属迁移，总预算仍为9h；这是归属修订，未改写原始仿真。</p><details><summary>已找回的专家措施与参数 · 网络及其他恢复能力</summary><div class="analysis-table-scroll"><table><thead><tr><th>具体措施</th><th>原始参考参数</th><th>适用事件</th><th>现状接入所缺证据</th></tr></thead><tbody>${mechanisms.map((m) => `<tr><th>${esc(m.name)}<small>${m.id}</small></th><td>${esc(parameters[m.id])}</td><td>${esc((m.eventCandidates ?? []).join("、"))}</td><td>部署状态、适用比例、条件成功率、失败耗时与正常态开销待核实；原库为单点工程参考，不能直接当作已部署收益。</td></tr>`).join("")}</tbody></table></div><p>来源：新可靠性机制库单点量化交付包（2026-10-14）。原库共16项；上表列出本次最相关的7项。已建模的保护后残余故障不重复扣冗余收益。</p></details><details><summary>计算域校准敏感性 · 保留原输入，逐项核查</summary><div class="analysis-table-scroll"><table><thead><tr><th>独立诊断情景</th><th>可用度</th><th>损失h</th><th>状态</th></tr></thead><tbody>${evidence.results
     .filter((r) =>
       [
         "independent",
