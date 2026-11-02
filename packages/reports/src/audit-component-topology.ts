@@ -20,12 +20,26 @@ export function componentLossSources(stage: Stage) {
 
 /** Fixed absolute-hour scale shared by every cluster size and scenario. */
 export function architectureLossFill(hours: number) {
-  const t = Math.min(1, Math.log1p(Math.max(0, hours)) / Math.log1p(600));
+  const stops = [
+    [0, [241, 247, 252]],
+    [10, [221, 236, 248]],
+    [30, [244, 217, 223]],
+    [100, [233, 150, 162]],
+    [600, [223, 101, 114]],
+  ] as const;
+  const v = Math.max(0, Math.min(600, hours));
+  const index = stops.findIndex(([h]) => h >= v);
+  const [lo, a] = stops[Math.max(0, index - 1)],
+    [hi, b] = stops[Math.max(0, index)];
+  const t =
+    hi === lo
+      ? 0
+      : (Math.log1p(v) - Math.log1p(lo)) / (Math.log1p(hi) - Math.log1p(lo));
   return (
     "#" +
-    [255, 247, 248]
-      .map((v, i) =>
-        Math.round(v + ([223, 101, 114][i] - v) * t)
+    a
+      .map((c, i) =>
+        Math.round(c + (b[i] - c) * t)
           .toString(16)
           .padStart(2, "0"),
       )
@@ -33,6 +47,8 @@ export function architectureLossFill(hours: number) {
   );
 }
 const tone = (hours: number) => ["#132738", architectureLossFill(hours)];
+export const architectureLossStroke = (hours: number) =>
+  hours <= 10 ? "#719cb9" : "#ad6871";
 const text = (
   x: number,
   y: number,
@@ -68,6 +84,8 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
   };
   const fill = (id: string) =>
     lookup(id) ? architectureLossFill(lookup(id)!.actualHours) : "#f1f5f8";
+  const stroke = (id: string) =>
+    architectureLossStroke(lookup(id)?.actualHours ?? 0);
   const group = (id: string, content: string) => {
     const n = lookup(id);
     return `<g data-atlas-node="${esc(id)}" data-analysis-node="${esc(id)}"${n ? ` data-module-loss="${n.actualHours}"` : ""} role="button" tabindex="0" aria-label="${esc(n?.name ?? id)}"><title>${esc(n ? `${n.name}；${stage.name}损失${num(n.actualHours, 3)}h；目标损失预算${num(n.allowedHours, 3)}h；A ${pct(n.availability, 3)}；分配目标 ${pct(n.target, 3)}；全规模数量 ${num(n.quantity, 0)}` : "快照未包含此部件")}</title>${content}</g>`;
@@ -82,8 +100,15 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
   ) =>
     group(
       id,
-      rect(x, y, w, h, fill(id), "#ad6871") +
-        text(x + 7, y + 21, label, 13, "#132738", true) +
+      rect(x, y, w, h, fill(id), stroke(id)) +
+        text(
+          x + 7,
+          y + 21,
+          label,
+          id === "object-IOD" ? 10 : 13,
+          "#132738",
+          true,
+        ) +
         text(x + 7, y + 49, hours(id), 17, "#132738", true) +
         (h >= 78
           ? text(x + 7, y + 70, `损失 TOP${rank.get(id) ?? "—"}`, 11)
@@ -99,7 +124,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
   ) =>
     group(
       id,
-      rect(x, y, w, h, fill(id), "#ad6871") +
+      rect(x, y, w, h, fill(id), stroke(id)) +
         text(x + 12, y + 24, label, 15, "#132738", true) +
         text(x + 12, y + 49, `损失 ${hours(id)}`, 15, "#132738", true),
     );
@@ -133,7 +158,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     text(
       28,
       94,
-      "数字为全规模损失；底色越红，损失越多。图中仅展开代表单元，父层汇总不重复相加。",
+      "数字为全规模损失；低损失浅蓝，损失越多越红。图中仅展开代表单元，父层汇总不重复相加。",
       14,
     ) +
     network("hardware-leaf-extra", "02 跨超节点 · Leaf", 28, 114, 366, 75) +
@@ -187,7 +212,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     ) +
     header(
       "hardware-board",
-      `计算板 · 汇总 ${hours("hardware-board")} · ${t.cardsPerBoard} NPU/板`,
+      `计算板 · 计算责任 ${hours("hardware-board")} · ${t.cardsPerBoard} NPU/板`,
       60,
       433,
       430,
@@ -196,7 +221,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     ) +
     header(
       "hardware-module",
-      `NPU模组 · 汇总 ${hours("hardware-module")}`,
+      `NPU模组 · 计算责任 ${hours("hardware-module")}`,
       68,
       482,
       414,
@@ -205,7 +230,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     ) +
     header(
       "hardware-chip",
-      `NPU芯片 · 汇总 ${hours("hardware-chip")}`,
+      `NPU芯片 · 计算责任 ${hours("hardware-chip")}`,
       76,
       523,
       296,
@@ -214,12 +239,20 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     ) +
     part("object-CORE", "CORE", 82, 562, 90, 78) +
     part("object-SRAM", "SRAM", 179, 562, 90, 78) +
-    part("object-IOD", "IOD", 276, 562, 90, 78) +
+    part("object-IOD", "IOD · 02网络", 276, 562, 90, 78) +
     part("object-HBM", "HBM", 382, 523, 92, 126) +
     path("M372 595H382") +
     group(
       "object-MODULE",
-      rect(76, 654, 398, 25, fill("object-MODULE"), "#ad6871", 2) +
+      rect(
+        76,
+        654,
+        398,
+        25,
+        fill("object-MODULE"),
+        stroke("object-MODULE"),
+        2,
+      ) +
         text(
           82,
           672,
@@ -231,7 +264,15 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     ) +
     group(
       "hardware-board-extra",
-      rect(76, 686, 398, 17, fill("hardware-board-extra"), "#ad6871", 2) +
+      rect(
+        76,
+        686,
+        398,
+        17,
+        fill("hardware-board-extra"),
+        stroke("hardware-board-extra"),
+        2,
+      ) +
         text(
           82,
           699,
@@ -267,7 +308,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
           x = 60 + i * 146;
         return group(
           id,
-          rect(x, 709, 138, 29, fill(id), "#ad6871") +
+          rect(x, 709, 138, 29, fill(id), stroke(id)) +
             text(x + 7, 729, `${name} ${hours(id)}`, 12, "#132738", true),
         );
       })
@@ -288,7 +329,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
       16,
     ) +
     text(772, 343, "损失为全规模L2汇总，不按示意柜数重复计入。", 13) +
-    rect(778, 368, 354, 63, fill("hardware-l2"), "#ad6871") +
+    rect(778, 368, 354, 63, fill("hardware-l2"), stroke("hardware-l2")) +
     text(
       794,
       395,
@@ -304,7 +345,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     text(778, 568, "可点击L2查看模式、分配及前后损失", 14) +
     group(
       "object-OPT",
-      rect(756, 626, 398, 103, fill("object-OPT"), "#ad6871") +
+      rect(756, 626, 398, 103, fill("object-OPT"), stroke("object-OPT")) +
         text(772, 652, "02 光模块 · 2+2保护组", 16, "#132738", true) +
         text(772, 680, `损失 ${hours("object-OPT")}`, 18, "#132738", true) +
         text(
@@ -332,7 +373,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
       path(`M${x + 180} 755V783`, true) +
       group(
         id,
-        rect(x, 783, 372, 94, fill(id), "#ad6871") +
+        rect(x, 783, 372, 94, fill(id), stroke(id)) +
           text(x + 15, 808, `${title} · ${hours(id)}`, 16, "#132738", true) +
           text(x + 15, 837, detail, 13) +
           text(
@@ -347,9 +388,9 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     text(
       28,
       904,
-      "边界表示物理包含；实线为通信/数据路径，虚线为跨域连接。计算柜内的网络刀片归02网络。",
+      "边界表示物理包含；实线为通信/数据路径，虚线为跨域连接。IOD及柜内网络刀片归02网络；计算汇总不含IOD。",
       14,
-    ) + text(28, 928, "共用损失色尺：浅粉 → 红（h，连续对数色阶）", 13);
+    ) + text(28, 928, "共用损失色尺：低损失浅蓝 → 高损失红（h）", 13);
   for (let i = 0; i < 120; i++) {
     const loss = Math.expm1((i / 119) * Math.log1p(600));
     body += rect(
@@ -362,7 +403,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
       0,
     );
   }
-  for (const v of [0, 1, 10, 100, 600])
+  for (const v of [0, 1, 10, 30, 100, 600])
     body += text(28 + (Math.log1p(v) / Math.log1p(600)) * 534, 972, `${v}`, 12);
   return (
     body +

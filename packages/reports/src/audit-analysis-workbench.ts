@@ -1,3 +1,5 @@
+import { baselineReconciliationHtml } from "./audit-baseline-reconciliation";
+import { networkIodProjection } from "../../analysis/src/audit-responsibility-projection";
 import {
   mechanismBenefitHtml,
   recoveryEvolutionHtml,
@@ -63,9 +65,10 @@ export function analysisContext(
   cards: number,
   stageName?: string,
 ) {
-  const d: TopologyDecision | null =
+  const saved: TopologyDecision | null =
     result.topologyDecision ?? topologyDecision(result);
-  if (!d) return null;
+  if (!saved) return null;
+  const d = networkIodProjection(saved);
   const scale = d.scales.find((s) => s.cards === cards) ?? d.scales[0];
   if (!scale?.scenarios.length) return null;
   const baseline =
@@ -929,6 +932,7 @@ export function analysisWorkbenchHtml(
   if (view === "overview")
     body =
       systemMetrics(d, stage, root) +
+      baselineReconciliationHtml(result, d, cards) +
       faultMeasureClosureHtml(result, d, cards) +
       assessmentReading(d, stage, cards) +
       checkpointImpactHtml(result, stage, cards, d.hours) +
@@ -941,6 +945,7 @@ export function analysisWorkbenchHtml(
   if (view === "architecture")
     body =
       systemMetrics(d, stage, root) +
+      baselineReconciliationHtml(result, d, cards) +
       faultMeasureClosureHtml(result, d, cards) +
       architectureRelations(stage, ctx.scale.counts, architecture, d, events) +
       checkpointImpactHtml(result, stage, cards, d.hours) +

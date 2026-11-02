@@ -1,0 +1,2996 @@
+{
+  "version": "baseline-reconciliation-2026-11-02",
+  "sourceSha256": "7316ff4d77420bbf9d9a9c05270b8b75994af17540b14b4277f3dbb14f5eed2a",
+  "baselineInputHash": "6d62e769ea9622a538ac58cf3107fc5b666aa39d16b07b0d58e1cb0d52cc06b4",
+  "referencePoints": {
+    "system": {
+      "value": 0.6,
+      "cards": 500000,
+      "source": "用户专家参照",
+      "status": "reference-not-model-output"
+    },
+    "network": {
+      "value": 0.84,
+      "cards": 500000,
+      "source": "2026-11-02用户转述专家",
+      "metric": "pending-confirmation",
+      "status": "reference-not-model-output"
+    }
+  },
+  "originalModelChanged": false,
+  "iodResponsibility": "network; physical location remains NPU chip",
+  "boundaryCorrectedProjection": {
+    "system": {
+      "availability": 0.3660737450516822,
+      "loss": 380.35575296899066,
+      "budget": 9.000000000000007,
+      "hardFit": 7935.308641975307,
+      "mtbfHours": 0.25203808575518083
+    },
+    "domain-1": {
+      "availability": 0.517902095642268,
+      "loss": 289.2587426146392,
+      "budget": 1.4569541915843018,
+      "hardFit": 5996.970421749182,
+      "mtbfHours": 0.3335017282637597
+    },
+    "hardware-network": {
+      "availability": 0.9302066294153742,
+      "loss": 41.87602235077543,
+      "budget": 3.735566657318143,
+      "hardFit": 968.7077059639535,
+      "mtbfHours": 2.064606266355459
+    }
+  },
+  "networkFractionByEvent": {
+    "IOD-hard": 1,
+    "IOD-slow": 1,
+    "IOD-sdc": 1,
+    "NIC-hard": 1,
+    "NIC-slow": 1,
+    "NIC-sdc": 1,
+    "OPT-hard": 1,
+    "OPT-slow": 1,
+    "OPT-sdc": 1,
+    "BOXIO-hard": 1,
+    "BOXIO-slow": 1,
+    "BOXIO-sdc": 1,
+    "FABRIC-hard": 1,
+    "FABRIC-slow": 1,
+    "FABRIC-sdc": 1,
+    "UNKNOWN-hard": 0.020323122670268562,
+    "UNKNOWN-slow": 0.024829860608063584,
+    "UNKNOWN-sdc": 0.020592644895297527
+  },
+  "results": [
+    {
+      "id": "replay",
+      "name": "冻结现状精确重放",
+      "n": 256,
+      "seed": 7419231,
+      "mean": 0.36607374505168483,
+      "ciLow": 0.3541759674389484,
+      "ciHigh": 0.37797152266442124,
+      "loss": 380.3557529689907,
+      "ledger": {
+        "downtime": 167.91270097115,
+        "rollback": 197.44459954070288,
+        "slowdown": 2.547532285188128,
+        "localLoss": 0,
+        "terminalInvalid": 10.44195400484602,
+        "save": 2.0089661671036563,
+        "mechanismOverhead": 0
+      },
+      "operational": 0.7201454983814164,
+      "hardMtbfHours": 0.25203808575518083,
+      "eventFits": [
+        [
+          "CORE-hard",
+          "hard",
+          645.7785218847166
+        ],
+        [
+          "CORE-slow",
+          "slow",
+          6.070016939582157
+        ],
+        [
+          "CORE-sdc",
+          "sdc",
+          41.06280193236715
+        ],
+        [
+          "SRAM-hard",
+          "hard",
+          1076.2975364745278
+        ],
+        [
+          "SRAM-slow",
+          "slow",
+          1.6861158165505994
+        ],
+        [
+          "SRAM-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "IOD-hard",
+          "hard",
+          669.6962449174838
+        ],
+        [
+          "IOD-slow",
+          "slow",
+          4.589937057051356
+        ],
+        [
+          "IOD-sdc",
+          "sdc",
+          1.0305969095676324
+        ],
+        [
+          "MODULE-hard",
+          "hard",
+          569.2418081798611
+        ],
+        [
+          "MODULE-slow",
+          "slow",
+          1.9507232492468258
+        ],
+        [
+          "MODULE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMT-hard",
+          "hard",
+          1339.3924898349676
+        ],
+        [
+          "MEMT-slow",
+          "slow",
+          12.642080157136753
+        ],
+        [
+          "MEMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMP-hard",
+          "hard",
+          580.4034122618193
+        ],
+        [
+          "MEMP-slow",
+          "slow",
+          0.8217352102138887
+        ],
+        [
+          "MEMP-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "NIC-hard",
+          "hard",
+          103.70370370370371
+        ],
+        [
+          "NIC-slow",
+          "slow",
+          2.0336139250613536
+        ],
+        [
+          "NIC-sdc",
+          "sdc",
+          1.0058431102498928
+        ],
+        [
+          "OPT-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "OPT-slow",
+          "slow",
+          2.7114852334151385
+        ],
+        [
+          "OPT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "BOXIO-hard",
+          "hard",
+          48.39506172839505
+        ],
+        [
+          "BOXIO-slow",
+          "slow",
+          0.4745099158476492
+        ],
+        [
+          "BOXIO-sdc",
+          "sdc",
+          0.46939345144995
+        ],
+        [
+          "FABRIC-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "FABRIC-slow",
+          "slow",
+          1.3557426167075692
+        ],
+        [
+          "FABRIC-sdc",
+          "sdc",
+          0.6705620734999285
+        ],
+        [
+          "CPU-hard",
+          "hard",
+          558.0802040979032
+        ],
+        [
+          "CPU-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "CPU-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "DDR-hard",
+          "hard",
+          669.6962449174838
+        ],
+        [
+          "DDR-slow",
+          "slow",
+          3.3290066275737673
+        ],
+        [
+          "DDR-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "SSD-hard",
+          "hard",
+          558.0802040979032
+        ],
+        [
+          "SSD-slow",
+          "slow",
+          5.548344379289613
+        ],
+        [
+          "SSD-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "POWER-hard",
+          "hard",
+          172.83950617283946
+        ],
+        [
+          "POWER-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "POWER-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "COOL-hard",
+          "hard",
+          103.70370370370367
+        ],
+        [
+          "COOL-slow",
+          "slow",
+          8.32251656893442
+        ],
+        [
+          "COOL-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MGMT-hard",
+          "hard",
+          138.27160493827157
+        ],
+        [
+          "MGMT-slow",
+          "slow",
+          0.6658013255147535
+        ],
+        [
+          "MGMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "STORAGE-hard",
+          "hard",
+          138.27160493827157
+        ],
+        [
+          "STORAGE-slow",
+          "slow",
+          4.438675503431691
+        ],
+        [
+          "STORAGE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "UNKNOWN-hard",
+          "hard",
+          425.1851851851852
+        ],
+        [
+          "UNKNOWN-slow",
+          "slow",
+          6.824463586526225
+        ],
+        [
+          "UNKNOWN-sdc",
+          "sdc",
+          4.0699812668268
+        ]
+      ],
+      "changes": {
+        "model": {},
+        "policy": {},
+        "scope": "全部故障"
+      },
+      "usedParameters": {
+        "scope": "hard-interruptions-only",
+        "referenceCards": 10000,
+        "referenceMtbfHours": 30,
+        "checkpointComputeSeconds": 600,
+        "checkpointSaveSeconds": 4,
+        "recoveryAttemptSeconds": 130,
+        "recoverySuccess": 0.99,
+        "manualAdditionalSeconds": 16200,
+        "detectProbability": 0.95,
+        "detectSeconds": 60,
+        "timeoutSeconds": 60,
+        "eventCatalog": {
+          "path": "catalogs/故障事件库.json",
+          "revision": "event-budget-v3-sdc1.4-reviewed-85",
+          "events": 54,
+          "classFit": {
+            "中断": 3333.333333333333,
+            "亚健康": 69.01311249137338,
+            "静默": 48.30917874396136
+          },
+          "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+        },
+        "horizonHours": 600,
+        "shares": {
+          "hard": 0.9660000000000001,
+          "slow": 0.020000000000000007,
+          "sdc": 0.014000000000000005
+        },
+        "slowDetectProbability": 0.8,
+        "slowDetectHours": 0.08333333333333333,
+        "slowLifetimeHours": 24,
+        "slowLoss": 0.05,
+        "sdcImmediateProbability": 0,
+        "sdcDelayHours": 168,
+        "sdcDelayDistribution": "fixed",
+        "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+        "trials": 20000,
+        "seed": 20261009,
+        "validationOverhead": 0,
+        "referenceRateArithmetic": false,
+        "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+      }
+    },
+    {
+      "id": "independent",
+      "name": "现状参数独立复核1024轨迹",
+      "n": 1024,
+      "seed": 2026110201,
+      "mean": 0.37019104419964666,
+      "ciLow": 0.36428571238684976,
+      "ciHigh": 0.37609637601244356,
+      "loss": 377.88537348021316,
+      "ledger": {
+        "downtime": 168.3998811894464,
+        "rollback": 192.7592496197858,
+        "slowdown": 2.5269545214041567,
+        "localLoss": 0,
+        "terminalInvalid": 12.190203823107428,
+        "save": 2.009084326469355,
+        "mechanismOverhead": 0
+      },
+      "operational": 0.7193335313509233,
+      "hardMtbfHours": 0.25203808575518083,
+      "eventFits": [
+        [
+          "CORE-hard",
+          "hard",
+          645.7785218847166
+        ],
+        [
+          "CORE-slow",
+          "slow",
+          6.070016939582157
+        ],
+        [
+          "CORE-sdc",
+          "sdc",
+          41.06280193236715
+        ],
+        [
+          "SRAM-hard",
+          "hard",
+          1076.2975364745278
+        ],
+        [
+          "SRAM-slow",
+          "slow",
+          1.6861158165505994
+        ],
+        [
+          "SRAM-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "IOD-hard",
+          "hard",
+          669.6962449174838
+        ],
+        [
+          "IOD-slow",
+          "slow",
+          4.589937057051356
+        ],
+        [
+          "IOD-sdc",
+          "sdc",
+          1.0305969095676324
+        ],
+        [
+          "MODULE-hard",
+          "hard",
+          569.2418081798611
+        ],
+        [
+          "MODULE-slow",
+          "slow",
+          1.9507232492468258
+        ],
+        [
+          "MODULE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMT-hard",
+          "hard",
+          1339.3924898349676
+        ],
+        [
+          "MEMT-slow",
+          "slow",
+          12.642080157136753
+        ],
+        [
+          "MEMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMP-hard",
+          "hard",
+          580.4034122618193
+        ],
+        [
+          "MEMP-slow",
+          "slow",
+          0.8217352102138887
+        ],
+        [
+          "MEMP-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "NIC-hard",
+          "hard",
+          103.70370370370371
+        ],
+        [
+          "NIC-slow",
+          "slow",
+          2.0336139250613536
+        ],
+        [
+          "NIC-sdc",
+          "sdc",
+          1.0058431102498928
+        ],
+        [
+          "OPT-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "OPT-slow",
+          "slow",
+          2.7114852334151385
+        ],
+        [
+          "OPT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "BOXIO-hard",
+          "hard",
+          48.39506172839505
+        ],
+        [
+          "BOXIO-slow",
+          "slow",
+          0.4745099158476492
+        ],
+        [
+          "BOXIO-sdc",
+          "sdc",
+          0.46939345144995
+        ],
+        [
+          "FABRIC-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "FABRIC-slow",
+          "slow",
+          1.3557426167075692
+        ],
+        [
+          "FABRIC-sdc",
+          "sdc",
+          0.6705620734999285
+        ],
+        [
+          "CPU-hard",
+          "hard",
+          558.0802040979032
+        ],
+        [
+          "CPU-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "CPU-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "DDR-hard",
+          "hard",
+          669.6962449174838
+        ],
+        [
+          "DDR-slow",
+          "slow",
+          3.3290066275737673
+        ],
+        [
+          "DDR-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "SSD-hard",
+          "hard",
+          558.0802040979032
+        ],
+        [
+          "SSD-slow",
+          "slow",
+          5.548344379289613
+        ],
+        [
+          "SSD-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "POWER-hard",
+          "hard",
+          172.83950617283946
+        ],
+        [
+          "POWER-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "POWER-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "COOL-hard",
+          "hard",
+          103.70370370370367
+        ],
+        [
+          "COOL-slow",
+          "slow",
+          8.32251656893442
+        ],
+        [
+          "COOL-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MGMT-hard",
+          "hard",
+          138.27160493827157
+        ],
+        [
+          "MGMT-slow",
+          "slow",
+          0.6658013255147535
+        ],
+        [
+          "MGMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "STORAGE-hard",
+          "hard",
+          138.27160493827157
+        ],
+        [
+          "STORAGE-slow",
+          "slow",
+          4.438675503431691
+        ],
+        [
+          "STORAGE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "UNKNOWN-hard",
+          "hard",
+          425.1851851851852
+        ],
+        [
+          "UNKNOWN-slow",
+          "slow",
+          6.824463586526225
+        ],
+        [
+          "UNKNOWN-sdc",
+          "sdc",
+          4.0699812668268
+        ]
+      ],
+      "changes": {
+        "model": {},
+        "policy": {},
+        "scope": "全部故障"
+      },
+      "usedParameters": {
+        "scope": "hard-interruptions-only",
+        "referenceCards": 10000,
+        "referenceMtbfHours": 30,
+        "checkpointComputeSeconds": 600,
+        "checkpointSaveSeconds": 4,
+        "recoveryAttemptSeconds": 130,
+        "recoverySuccess": 0.99,
+        "manualAdditionalSeconds": 16200,
+        "detectProbability": 0.95,
+        "detectSeconds": 60,
+        "timeoutSeconds": 60,
+        "eventCatalog": {
+          "path": "catalogs/故障事件库.json",
+          "revision": "event-budget-v3-sdc1.4-reviewed-85",
+          "events": 54,
+          "classFit": {
+            "中断": 3333.333333333333,
+            "亚健康": 69.01311249137338,
+            "静默": 48.30917874396136
+          },
+          "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+        },
+        "horizonHours": 600,
+        "shares": {
+          "hard": 0.9660000000000001,
+          "slow": 0.020000000000000007,
+          "sdc": 0.014000000000000005
+        },
+        "slowDetectProbability": 0.8,
+        "slowDetectHours": 0.08333333333333333,
+        "slowLifetimeHours": 24,
+        "slowLoss": 0.05,
+        "sdcImmediateProbability": 0,
+        "sdcDelayHours": 168,
+        "sdcDelayDistribution": "fixed",
+        "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+        "trials": 20000,
+        "seed": 20261009,
+        "validationOverhead": 0,
+        "referenceRateArithmetic": false,
+        "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+      }
+    },
+    {
+      "id": "network_only",
+      "name": "仅网络事件独立评估（含IOD及网络估算份额）",
+      "n": 1024,
+      "seed": 2026110201,
+      "mean": 0.8702074087913573,
+      "ciLow": 0.8645365057277977,
+      "ciHigh": 0.8758783118549168,
+      "loss": 77.87555472518537,
+      "ledger": {
+        "downtime": 27.40714106097584,
+        "rollback": 42.947403091732056,
+        "slowdown": 0.7656812133284124,
+        "localLoss": 0,
+        "terminalInvalid": 3.116658162928904,
+        "save": 3.638671196220173,
+        "mechanismOverhead": 0
+      },
+      "operational": 0.9543214315650398,
+      "hardMtbfHours": 2.064606266355459,
+      "eventFits": [
+        [
+          "CORE-hard",
+          "hard",
+          0
+        ],
+        [
+          "CORE-slow",
+          "slow",
+          0
+        ],
+        [
+          "CORE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "SRAM-hard",
+          "hard",
+          0
+        ],
+        [
+          "SRAM-slow",
+          "slow",
+          0
+        ],
+        [
+          "SRAM-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "IOD-hard",
+          "hard",
+          669.6962449174838
+        ],
+        [
+          "IOD-slow",
+          "slow",
+          4.589937057051356
+        ],
+        [
+          "IOD-sdc",
+          "sdc",
+          1.0305969095676324
+        ],
+        [
+          "MODULE-hard",
+          "hard",
+          0
+        ],
+        [
+          "MODULE-slow",
+          "slow",
+          0
+        ],
+        [
+          "MODULE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMT-hard",
+          "hard",
+          0
+        ],
+        [
+          "MEMT-slow",
+          "slow",
+          0
+        ],
+        [
+          "MEMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMP-hard",
+          "hard",
+          0
+        ],
+        [
+          "MEMP-slow",
+          "slow",
+          0
+        ],
+        [
+          "MEMP-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "NIC-hard",
+          "hard",
+          103.70370370370371
+        ],
+        [
+          "NIC-slow",
+          "slow",
+          2.0336139250613536
+        ],
+        [
+          "NIC-sdc",
+          "sdc",
+          1.0058431102498928
+        ],
+        [
+          "OPT-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "OPT-slow",
+          "slow",
+          2.7114852334151385
+        ],
+        [
+          "OPT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "BOXIO-hard",
+          "hard",
+          48.39506172839505
+        ],
+        [
+          "BOXIO-slow",
+          "slow",
+          0.4745099158476492
+        ],
+        [
+          "BOXIO-sdc",
+          "sdc",
+          0.46939345144995
+        ],
+        [
+          "FABRIC-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "FABRIC-slow",
+          "slow",
+          1.3557426167075692
+        ],
+        [
+          "FABRIC-sdc",
+          "sdc",
+          0.6705620734999285
+        ],
+        [
+          "CPU-hard",
+          "hard",
+          0
+        ],
+        [
+          "CPU-slow",
+          "slow",
+          0
+        ],
+        [
+          "CPU-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "DDR-hard",
+          "hard",
+          0
+        ],
+        [
+          "DDR-slow",
+          "slow",
+          0
+        ],
+        [
+          "DDR-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "SSD-hard",
+          "hard",
+          0
+        ],
+        [
+          "SSD-slow",
+          "slow",
+          0
+        ],
+        [
+          "SSD-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "POWER-hard",
+          "hard",
+          0
+        ],
+        [
+          "POWER-slow",
+          "slow",
+          0
+        ],
+        [
+          "POWER-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "COOL-hard",
+          "hard",
+          0
+        ],
+        [
+          "COOL-slow",
+          "slow",
+          0
+        ],
+        [
+          "COOL-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MGMT-hard",
+          "hard",
+          0
+        ],
+        [
+          "MGMT-slow",
+          "slow",
+          0
+        ],
+        [
+          "MGMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "STORAGE-hard",
+          "hard",
+          0
+        ],
+        [
+          "STORAGE-slow",
+          "slow",
+          0
+        ],
+        [
+          "STORAGE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "UNKNOWN-hard",
+          "hard",
+          8.641090676099374
+        ],
+        [
+          "UNKNOWN-slow",
+          "slow",
+          0.16945047957825182
+        ],
+        [
+          "UNKNOWN-sdc",
+          "sdc",
+          0.08381167895827747
+        ]
+      ],
+      "changes": {
+        "model": {},
+        "policy": {},
+        "scope": "network-only"
+      },
+      "usedParameters": {
+        "scope": "hard-interruptions-only",
+        "referenceCards": 10000,
+        "referenceMtbfHours": 30,
+        "checkpointComputeSeconds": 600,
+        "checkpointSaveSeconds": 4,
+        "recoveryAttemptSeconds": 130,
+        "recoverySuccess": 0.99,
+        "manualAdditionalSeconds": 16200,
+        "detectProbability": 0.95,
+        "detectSeconds": 60,
+        "timeoutSeconds": 60,
+        "eventCatalog": {
+          "path": "catalogs/故障事件库.json",
+          "revision": "event-budget-v3-sdc1.4-reviewed-85",
+          "events": 54,
+          "classFit": {
+            "中断": 3333.333333333333,
+            "亚健康": 69.01311249137338,
+            "静默": 48.30917874396136
+          },
+          "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+        },
+        "horizonHours": 600,
+        "shares": {
+          "hard": 0.9660000000000001,
+          "slow": 0.020000000000000007,
+          "sdc": 0.014000000000000005
+        },
+        "slowDetectProbability": 0.8,
+        "slowDetectHours": 0.08333333333333333,
+        "slowLifetimeHours": 24,
+        "slowLoss": 0.05,
+        "sdcImmediateProbability": 0,
+        "sdcDelayHours": 168,
+        "sdcDelayDistribution": "fixed",
+        "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+        "trials": 20000,
+        "seed": 20261009,
+        "validationOverhead": 0,
+        "referenceRateArithmetic": false,
+        "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+      }
+    },
+    {
+      "id": "compute_only",
+      "name": "仅计算事件独立评估（不含IOD）",
+      "n": 1024,
+      "seed": 2026110201,
+      "mean": 0.43386679992560523,
+      "ciLow": 0.42700470090273906,
+      "ciHigh": 0.4407288989484714,
+      "loss": 339.6799200446377,
+      "ledger": {
+        "downtime": 136.58772038810224,
+        "rollback": 184.75109192952306,
+        "slowdown": 1.4699031617152318,
+        "localLoss": 0,
+        "terminalInvalid": 14.511024940997117,
+        "save": 2.36017962430004,
+        "mechanismOverhead": 0
+      },
+      "operational": 0.772353799353163,
+      "hardMtbfHours": 0.3335017282637596,
+      "eventFits": [
+        [
+          "CORE-hard",
+          "hard",
+          645.7785218847166
+        ],
+        [
+          "CORE-slow",
+          "slow",
+          6.070016939582157
+        ],
+        [
+          "CORE-sdc",
+          "sdc",
+          41.06280193236715
+        ],
+        [
+          "SRAM-hard",
+          "hard",
+          1076.2975364745278
+        ],
+        [
+          "SRAM-slow",
+          "slow",
+          1.6861158165505994
+        ],
+        [
+          "SRAM-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "IOD-hard",
+          "hard",
+          0
+        ],
+        [
+          "IOD-slow",
+          "slow",
+          0
+        ],
+        [
+          "IOD-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MODULE-hard",
+          "hard",
+          569.2418081798611
+        ],
+        [
+          "MODULE-slow",
+          "slow",
+          1.9507232492468258
+        ],
+        [
+          "MODULE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMT-hard",
+          "hard",
+          1339.3924898349676
+        ],
+        [
+          "MEMT-slow",
+          "slow",
+          12.642080157136753
+        ],
+        [
+          "MEMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMP-hard",
+          "hard",
+          580.4034122618193
+        ],
+        [
+          "MEMP-slow",
+          "slow",
+          0.8217352102138887
+        ],
+        [
+          "MEMP-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "NIC-hard",
+          "hard",
+          0
+        ],
+        [
+          "NIC-slow",
+          "slow",
+          0
+        ],
+        [
+          "NIC-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "OPT-hard",
+          "hard",
+          0
+        ],
+        [
+          "OPT-slow",
+          "slow",
+          0
+        ],
+        [
+          "OPT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "BOXIO-hard",
+          "hard",
+          0
+        ],
+        [
+          "BOXIO-slow",
+          "slow",
+          0
+        ],
+        [
+          "BOXIO-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "FABRIC-hard",
+          "hard",
+          0
+        ],
+        [
+          "FABRIC-slow",
+          "slow",
+          0
+        ],
+        [
+          "FABRIC-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "CPU-hard",
+          "hard",
+          558.0802040979032
+        ],
+        [
+          "CPU-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "CPU-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "DDR-hard",
+          "hard",
+          669.6962449174838
+        ],
+        [
+          "DDR-slow",
+          "slow",
+          3.3290066275737673
+        ],
+        [
+          "DDR-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "SSD-hard",
+          "hard",
+          558.0802040979032
+        ],
+        [
+          "SSD-slow",
+          "slow",
+          5.548344379289613
+        ],
+        [
+          "SSD-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "POWER-hard",
+          "hard",
+          0
+        ],
+        [
+          "POWER-slow",
+          "slow",
+          0
+        ],
+        [
+          "POWER-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "COOL-hard",
+          "hard",
+          0
+        ],
+        [
+          "COOL-slow",
+          "slow",
+          0
+        ],
+        [
+          "COOL-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MGMT-hard",
+          "hard",
+          0
+        ],
+        [
+          "MGMT-slow",
+          "slow",
+          0
+        ],
+        [
+          "MGMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "STORAGE-hard",
+          "hard",
+          0
+        ],
+        [
+          "STORAGE-slow",
+          "slow",
+          0
+        ],
+        [
+          "STORAGE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "UNKNOWN-hard",
+          "hard",
+          0
+        ],
+        [
+          "UNKNOWN-slow",
+          "slow",
+          0
+        ],
+        [
+          "UNKNOWN-sdc",
+          "sdc",
+          0
+        ]
+      ],
+      "changes": {
+        "model": {},
+        "policy": {},
+        "scope": "compute-only"
+      },
+      "usedParameters": {
+        "scope": "hard-interruptions-only",
+        "referenceCards": 10000,
+        "referenceMtbfHours": 30,
+        "checkpointComputeSeconds": 600,
+        "checkpointSaveSeconds": 4,
+        "recoveryAttemptSeconds": 130,
+        "recoverySuccess": 0.99,
+        "manualAdditionalSeconds": 16200,
+        "detectProbability": 0.95,
+        "detectSeconds": 60,
+        "timeoutSeconds": 60,
+        "eventCatalog": {
+          "path": "catalogs/故障事件库.json",
+          "revision": "event-budget-v3-sdc1.4-reviewed-85",
+          "events": 54,
+          "classFit": {
+            "中断": 3333.333333333333,
+            "亚健康": 69.01311249137338,
+            "静默": 48.30917874396136
+          },
+          "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+        },
+        "horizonHours": 600,
+        "shares": {
+          "hard": 0.9660000000000001,
+          "slow": 0.020000000000000007,
+          "sdc": 0.014000000000000005
+        },
+        "slowDetectProbability": 0.8,
+        "slowDetectHours": 0.08333333333333333,
+        "slowLifetimeHours": 24,
+        "slowLoss": 0.05,
+        "sdcImmediateProbability": 0,
+        "sdcDelayHours": 168,
+        "sdcDelayDistribution": "fixed",
+        "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+        "trials": 20000,
+        "seed": 20261009,
+        "validationOverhead": 0,
+        "referenceRateArithmetic": false,
+        "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+      }
+    },
+    {
+      "id": "expert_older_recovery",
+      "name": "旧专家恢复参数条件核查：180s/99%、人工追加2h、检测10s",
+      "n": 1024,
+      "seed": 2026110201,
+      "mean": 0.38906177106361206,
+      "ciLow": 0.38264626690968506,
+      "ciHigh": 0.39547727521753906,
+      "loss": 366.56293736183403,
+      "ledger": {
+        "downtime": 136.46341012689564,
+        "rollback": 211.09164825737406,
+        "slowdown": 2.887035976243593,
+        "localLoss": 0,
+        "terminalInvalid": 13.963451040535752,
+        "save": 2.157391960784975,
+        "mechanismOverhead": 0
+      },
+      "operational": 0.7725609831218399,
+      "hardMtbfHours": 0.25203808575518083,
+      "eventFits": [
+        [
+          "CORE-hard",
+          "hard",
+          645.7785218847166
+        ],
+        [
+          "CORE-slow",
+          "slow",
+          6.070016939582157
+        ],
+        [
+          "CORE-sdc",
+          "sdc",
+          41.06280193236715
+        ],
+        [
+          "SRAM-hard",
+          "hard",
+          1076.2975364745278
+        ],
+        [
+          "SRAM-slow",
+          "slow",
+          1.6861158165505994
+        ],
+        [
+          "SRAM-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "IOD-hard",
+          "hard",
+          669.6962449174838
+        ],
+        [
+          "IOD-slow",
+          "slow",
+          4.589937057051356
+        ],
+        [
+          "IOD-sdc",
+          "sdc",
+          1.0305969095676324
+        ],
+        [
+          "MODULE-hard",
+          "hard",
+          569.2418081798611
+        ],
+        [
+          "MODULE-slow",
+          "slow",
+          1.9507232492468258
+        ],
+        [
+          "MODULE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMT-hard",
+          "hard",
+          1339.3924898349676
+        ],
+        [
+          "MEMT-slow",
+          "slow",
+          12.642080157136753
+        ],
+        [
+          "MEMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMP-hard",
+          "hard",
+          580.4034122618193
+        ],
+        [
+          "MEMP-slow",
+          "slow",
+          0.8217352102138887
+        ],
+        [
+          "MEMP-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "NIC-hard",
+          "hard",
+          103.70370370370371
+        ],
+        [
+          "NIC-slow",
+          "slow",
+          2.0336139250613536
+        ],
+        [
+          "NIC-sdc",
+          "sdc",
+          1.0058431102498928
+        ],
+        [
+          "OPT-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "OPT-slow",
+          "slow",
+          2.7114852334151385
+        ],
+        [
+          "OPT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "BOXIO-hard",
+          "hard",
+          48.39506172839505
+        ],
+        [
+          "BOXIO-slow",
+          "slow",
+          0.4745099158476492
+        ],
+        [
+          "BOXIO-sdc",
+          "sdc",
+          0.46939345144995
+        ],
+        [
+          "FABRIC-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "FABRIC-slow",
+          "slow",
+          1.3557426167075692
+        ],
+        [
+          "FABRIC-sdc",
+          "sdc",
+          0.6705620734999285
+        ],
+        [
+          "CPU-hard",
+          "hard",
+          558.0802040979032
+        ],
+        [
+          "CPU-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "CPU-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "DDR-hard",
+          "hard",
+          669.6962449174838
+        ],
+        [
+          "DDR-slow",
+          "slow",
+          3.3290066275737673
+        ],
+        [
+          "DDR-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "SSD-hard",
+          "hard",
+          558.0802040979032
+        ],
+        [
+          "SSD-slow",
+          "slow",
+          5.548344379289613
+        ],
+        [
+          "SSD-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "POWER-hard",
+          "hard",
+          172.83950617283946
+        ],
+        [
+          "POWER-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "POWER-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "COOL-hard",
+          "hard",
+          103.70370370370367
+        ],
+        [
+          "COOL-slow",
+          "slow",
+          8.32251656893442
+        ],
+        [
+          "COOL-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MGMT-hard",
+          "hard",
+          138.27160493827157
+        ],
+        [
+          "MGMT-slow",
+          "slow",
+          0.6658013255147535
+        ],
+        [
+          "MGMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "STORAGE-hard",
+          "hard",
+          138.27160493827157
+        ],
+        [
+          "STORAGE-slow",
+          "slow",
+          4.438675503431691
+        ],
+        [
+          "STORAGE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "UNKNOWN-hard",
+          "hard",
+          425.1851851851852
+        ],
+        [
+          "UNKNOWN-slow",
+          "slow",
+          6.824463586526225
+        ],
+        [
+          "UNKNOWN-sdc",
+          "sdc",
+          4.0699812668268
+        ]
+      ],
+      "changes": {
+        "model": {
+          "recoveryAttemptSeconds": 180,
+          "recoverySuccess": 0.99,
+          "manualAdditionalSeconds": 7200,
+          "detectSeconds": 10,
+          "detectProbability": 0.95
+        },
+        "policy": {
+          "D-HARD": {
+            "coverage": 0.95,
+            "detectSeconds": 10
+          }
+        },
+        "scope": "全部故障"
+      },
+      "usedParameters": {
+        "scope": "hard-interruptions-only",
+        "referenceCards": 10000,
+        "referenceMtbfHours": 30,
+        "checkpointComputeSeconds": 600,
+        "checkpointSaveSeconds": 4,
+        "recoveryAttemptSeconds": 180,
+        "recoverySuccess": 0.99,
+        "manualAdditionalSeconds": 7200,
+        "detectProbability": 0.95,
+        "detectSeconds": 10,
+        "timeoutSeconds": 60,
+        "eventCatalog": {
+          "path": "catalogs/故障事件库.json",
+          "revision": "event-budget-v3-sdc1.4-reviewed-85",
+          "events": 54,
+          "classFit": {
+            "中断": 3333.333333333333,
+            "亚健康": 69.01311249137338,
+            "静默": 48.30917874396136
+          },
+          "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+        },
+        "horizonHours": 600,
+        "shares": {
+          "hard": 0.9660000000000001,
+          "slow": 0.020000000000000007,
+          "sdc": 0.014000000000000005
+        },
+        "slowDetectProbability": 0.8,
+        "slowDetectHours": 0.08333333333333333,
+        "slowLifetimeHours": 24,
+        "slowLoss": 0.05,
+        "sdcImmediateProbability": 0,
+        "sdcDelayHours": 168,
+        "sdcDelayDistribution": "fixed",
+        "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+        "trials": 20000,
+        "seed": 20261009,
+        "validationOverhead": 0,
+        "referenceRateArithmetic": false,
+        "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+      }
+    },
+    {
+      "id": "exposure_x1",
+      "name": "仅将原选定9类中断暴露由×2改为×1（敏感性）",
+      "n": 1024,
+      "seed": 2026110201,
+      "mean": 0.45165915915408694,
+      "ciLow": 0.44349316268812167,
+      "ciHigh": 0.4598251556200522,
+      "loss": 329.00450450754886,
+      "ledger": {
+        "downtime": 111.22545858983617,
+        "rollback": 193.82029716442352,
+        "slowdown": 3.1542428132262956,
+        "localLoss": 0,
+        "terminalInvalid": 18.1593250841984,
+        "save": 2.645180855864491,
+        "mechanismOverhead": 0
+      },
+      "operational": 0.8146242356836066,
+      "hardMtbfHours": 0.43459598669385135,
+      "eventFits": [
+        [
+          "CORE-hard",
+          "hard",
+          322.8892609423583
+        ],
+        [
+          "CORE-slow",
+          "slow",
+          6.070016939582157
+        ],
+        [
+          "CORE-sdc",
+          "sdc",
+          41.06280193236715
+        ],
+        [
+          "SRAM-hard",
+          "hard",
+          538.1487682372639
+        ],
+        [
+          "SRAM-slow",
+          "slow",
+          1.6861158165505994
+        ],
+        [
+          "SRAM-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "IOD-hard",
+          "hard",
+          334.8481224587419
+        ],
+        [
+          "IOD-slow",
+          "slow",
+          4.589937057051356
+        ],
+        [
+          "IOD-sdc",
+          "sdc",
+          1.0305969095676324
+        ],
+        [
+          "MODULE-hard",
+          "hard",
+          284.62090408993055
+        ],
+        [
+          "MODULE-slow",
+          "slow",
+          1.9507232492468258
+        ],
+        [
+          "MODULE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMT-hard",
+          "hard",
+          669.6962449174838
+        ],
+        [
+          "MEMT-slow",
+          "slow",
+          12.642080157136753
+        ],
+        [
+          "MEMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMP-hard",
+          "hard",
+          290.20170613090966
+        ],
+        [
+          "MEMP-slow",
+          "slow",
+          0.8217352102138887
+        ],
+        [
+          "MEMP-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "NIC-hard",
+          "hard",
+          103.70370370370371
+        ],
+        [
+          "NIC-slow",
+          "slow",
+          2.0336139250613536
+        ],
+        [
+          "NIC-sdc",
+          "sdc",
+          1.0058431102498928
+        ],
+        [
+          "OPT-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "OPT-slow",
+          "slow",
+          2.7114852334151385
+        ],
+        [
+          "OPT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "BOXIO-hard",
+          "hard",
+          48.39506172839505
+        ],
+        [
+          "BOXIO-slow",
+          "slow",
+          0.4745099158476492
+        ],
+        [
+          "BOXIO-sdc",
+          "sdc",
+          0.46939345144995
+        ],
+        [
+          "FABRIC-hard",
+          "hard",
+          69.13580246913578
+        ],
+        [
+          "FABRIC-slow",
+          "slow",
+          1.3557426167075692
+        ],
+        [
+          "FABRIC-sdc",
+          "sdc",
+          0.6705620734999285
+        ],
+        [
+          "CPU-hard",
+          "hard",
+          279.0401020489516
+        ],
+        [
+          "CPU-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "CPU-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "DDR-hard",
+          "hard",
+          334.8481224587419
+        ],
+        [
+          "DDR-slow",
+          "slow",
+          3.3290066275737673
+        ],
+        [
+          "DDR-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "SSD-hard",
+          "hard",
+          279.0401020489516
+        ],
+        [
+          "SSD-slow",
+          "slow",
+          5.548344379289613
+        ],
+        [
+          "SSD-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "POWER-hard",
+          "hard",
+          172.83950617283946
+        ],
+        [
+          "POWER-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "POWER-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "COOL-hard",
+          "hard",
+          103.70370370370367
+        ],
+        [
+          "COOL-slow",
+          "slow",
+          8.32251656893442
+        ],
+        [
+          "COOL-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MGMT-hard",
+          "hard",
+          138.27160493827157
+        ],
+        [
+          "MGMT-slow",
+          "slow",
+          0.6658013255147535
+        ],
+        [
+          "MGMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "STORAGE-hard",
+          "hard",
+          138.27160493827157
+        ],
+        [
+          "STORAGE-slow",
+          "slow",
+          4.438675503431691
+        ],
+        [
+          "STORAGE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "UNKNOWN-hard",
+          "hard",
+          425.1851851851852
+        ],
+        [
+          "UNKNOWN-slow",
+          "slow",
+          6.824463586526225
+        ],
+        [
+          "UNKNOWN-sdc",
+          "sdc",
+          4.0699812668268
+        ]
+      ],
+      "changes": {
+        "model": {},
+        "policy": {},
+        "scope": "全部故障；仅9类中断代际暴露×1"
+      },
+      "usedParameters": {
+        "scope": "hard-interruptions-only",
+        "referenceCards": 10000,
+        "referenceMtbfHours": 30,
+        "checkpointComputeSeconds": 600,
+        "checkpointSaveSeconds": 4,
+        "recoveryAttemptSeconds": 130,
+        "recoverySuccess": 0.99,
+        "manualAdditionalSeconds": 16200,
+        "detectProbability": 0.95,
+        "detectSeconds": 60,
+        "timeoutSeconds": 60,
+        "eventCatalog": {
+          "path": "catalogs/故障事件库.json",
+          "revision": "event-budget-v3-sdc1.4-reviewed-85",
+          "events": 54,
+          "classFit": {
+            "中断": 3333.333333333333,
+            "亚健康": 69.01311249137338,
+            "静默": 48.30917874396136
+          },
+          "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+        },
+        "horizonHours": 600,
+        "shares": {
+          "hard": 0.9660000000000001,
+          "slow": 0.020000000000000007,
+          "sdc": 0.014000000000000005
+        },
+        "slowDetectProbability": 0.8,
+        "slowDetectHours": 0.08333333333333333,
+        "slowLifetimeHours": 24,
+        "slowLoss": 0.05,
+        "sdcImmediateProbability": 0,
+        "sdcDelayHours": 168,
+        "sdcDelayDistribution": "fixed",
+        "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+        "trials": 20000,
+        "seed": 20261009,
+        "validationOverhead": 0,
+        "referenceRateArithmetic": false,
+        "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+      }
+    },
+    {
+      "id": "whole_mtbf_18",
+      "name": "18分钟解释为全部中断MTBF（范围敏感性）",
+      "n": 1024,
+      "seed": 2026110201,
+      "mean": 0.3995379152532654,
+      "ciLow": 0.39283000296012477,
+      "ciHigh": 0.406245827546406,
+      "loss": 360.27725084804183,
+      "ledger": {
+        "downtime": 148.14858989118366,
+        "rollback": 193.45838948426845,
+        "slowdown": 2.7041102316094827,
+        "localLoss": 0,
+        "terminalInvalid": 13.737260601464373,
+        "save": 2.2289006395158992,
+        "mechanismOverhead": 0
+      },
+      "operational": 0.7530856835146924,
+      "hardMtbfHours": 0.30000000000000004,
+      "eventFits": [
+        [
+          "CORE-hard",
+          "hard",
+          542.5359415921138
+        ],
+        [
+          "CORE-slow",
+          "slow",
+          6.070016939582157
+        ],
+        [
+          "CORE-sdc",
+          "sdc",
+          41.06280193236715
+        ],
+        [
+          "SRAM-hard",
+          "hard",
+          904.2265693201897
+        ],
+        [
+          "SRAM-slow",
+          "slow",
+          1.6861158165505994
+        ],
+        [
+          "SRAM-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "IOD-hard",
+          "hard",
+          562.6298653547846
+        ],
+        [
+          "IOD-slow",
+          "slow",
+          4.589937057051356
+        ],
+        [
+          "IOD-sdc",
+          "sdc",
+          1.0305969095676324
+        ],
+        [
+          "MODULE-hard",
+          "hard",
+          478.23538555156676
+        ],
+        [
+          "MODULE-slow",
+          "slow",
+          1.9507232492468258
+        ],
+        [
+          "MODULE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMT-hard",
+          "hard",
+          1125.259730709569
+        ],
+        [
+          "MEMT-slow",
+          "slow",
+          12.642080157136753
+        ],
+        [
+          "MEMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MEMP-hard",
+          "hard",
+          487.61254997414665
+        ],
+        [
+          "MEMP-slow",
+          "slow",
+          0.8217352102138887
+        ],
+        [
+          "MEMP-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "NIC-hard",
+          "hard",
+          87.12427655734646
+        ],
+        [
+          "NIC-slow",
+          "slow",
+          2.0336139250613536
+        ],
+        [
+          "NIC-sdc",
+          "sdc",
+          1.0058431102498928
+        ],
+        [
+          "OPT-hard",
+          "hard",
+          58.082851038230956
+        ],
+        [
+          "OPT-slow",
+          "slow",
+          2.7114852334151385
+        ],
+        [
+          "OPT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "BOXIO-hard",
+          "hard",
+          40.65799572676167
+        ],
+        [
+          "BOXIO-slow",
+          "slow",
+          0.4745099158476492
+        ],
+        [
+          "BOXIO-sdc",
+          "sdc",
+          0.46939345144995
+        ],
+        [
+          "FABRIC-hard",
+          "hard",
+          58.082851038230956
+        ],
+        [
+          "FABRIC-slow",
+          "slow",
+          1.3557426167075692
+        ],
+        [
+          "FABRIC-sdc",
+          "sdc",
+          0.6705620734999285
+        ],
+        [
+          "CPU-hard",
+          "hard",
+          468.85822112898717
+        ],
+        [
+          "CPU-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "CPU-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "DDR-hard",
+          "hard",
+          562.6298653547846
+        ],
+        [
+          "DDR-slow",
+          "slow",
+          3.3290066275737673
+        ],
+        [
+          "DDR-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "SSD-hard",
+          "hard",
+          468.85822112898717
+        ],
+        [
+          "SSD-slow",
+          "slow",
+          5.548344379289613
+        ],
+        [
+          "SSD-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "POWER-hard",
+          "hard",
+          145.2071275955774
+        ],
+        [
+          "POWER-slow",
+          "slow",
+          2.7741721896448066
+        ],
+        [
+          "POWER-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "COOL-hard",
+          "hard",
+          87.12427655734643
+        ],
+        [
+          "COOL-slow",
+          "slow",
+          8.32251656893442
+        ],
+        [
+          "COOL-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "MGMT-hard",
+          "hard",
+          116.16570207646191
+        ],
+        [
+          "MGMT-slow",
+          "slow",
+          0.6658013255147535
+        ],
+        [
+          "MGMT-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "STORAGE-hard",
+          "hard",
+          116.16570207646191
+        ],
+        [
+          "STORAGE-slow",
+          "slow",
+          4.438675503431691
+        ],
+        [
+          "STORAGE-sdc",
+          "sdc",
+          0
+        ],
+        [
+          "UNKNOWN-hard",
+          "hard",
+          357.2095338851205
+        ],
+        [
+          "UNKNOWN-slow",
+          "slow",
+          6.824463586526225
+        ],
+        [
+          "UNKNOWN-sdc",
+          "sdc",
+          4.0699812668268
+        ]
+      ],
+      "changes": {
+        "model": {},
+        "policy": {},
+        "scope": "全部故障；全部hard合计MTBF=18分钟"
+      },
+      "usedParameters": {
+        "scope": "hard-interruptions-only",
+        "referenceCards": 10000,
+        "referenceMtbfHours": 30,
+        "checkpointComputeSeconds": 600,
+        "checkpointSaveSeconds": 4,
+        "recoveryAttemptSeconds": 130,
+        "recoverySuccess": 0.99,
+        "manualAdditionalSeconds": 16200,
+        "detectProbability": 0.95,
+        "detectSeconds": 60,
+        "timeoutSeconds": 60,
+        "eventCatalog": {
+          "path": "catalogs/故障事件库.json",
+          "revision": "event-budget-v3-sdc1.4-reviewed-85",
+          "events": 54,
+          "classFit": {
+            "中断": 3333.333333333333,
+            "亚健康": 69.01311249137338,
+            "静默": 48.30917874396136
+          },
+          "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+        },
+        "horizonHours": 600,
+        "shares": {
+          "hard": 0.9660000000000001,
+          "slow": 0.020000000000000007,
+          "sdc": 0.014000000000000005
+        },
+        "slowDetectProbability": 0.8,
+        "slowDetectHours": 0.08333333333333333,
+        "slowLifetimeHours": 24,
+        "slowLoss": 0.05,
+        "sdcImmediateProbability": 0,
+        "sdcDelayHours": 168,
+        "sdcDelayDistribution": "fixed",
+        "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+        "trials": 20000,
+        "seed": 20261009,
+        "validationOverhead": 0,
+        "referenceRateArithmetic": false,
+        "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+      }
+    }
+  ],
+  "limitations": [
+    "单域独立评估含本身保存开销和暴露；不可与整网责任损失投影直接等同或相加。",
+    "旧专家恢复参数来自2026-10-09配置，其原始窗口720h、CKPT300s；此处保持用户确认的600h/600s/4s及SDC80%/168h，仅替换恢复相关参数作条件核查。",
+    "×1暴露和全系统18分钟为诊断敏感性，不覆盖已确认的×2情景。",
+    "未为匹配60%或84%调参；尚缺84%原始计算输入与现状网络机制部署记录。"
+  ],
+  "baselineConfiguration": {
+    "policy": {
+      "D-HARD": {
+        "coverage": 0.95,
+        "detectSeconds": 60
+      },
+      "D-SLOW": {
+        "coverage": 0.8,
+        "detectSeconds": 300
+      },
+      "D-SDC": {
+        "coverage": 0.8,
+        "detectSeconds": 1
+      },
+      "R-SDC": {
+        "stepSeconds": 1,
+        "recoverSeconds": 1
+      },
+      "R-REPLAY": {
+        "success": 0.9,
+        "successSeconds": 5,
+        "failureSeconds": 10
+      },
+      "R-PROCESS": {
+        "success": 0.95,
+        "successSeconds": 60,
+        "failureSeconds": 120
+      },
+      "R-ELASTIC": {
+        "domains": 50,
+        "success": 0.98,
+        "recoverSeconds": 180,
+        "failureSeconds": 120,
+        "syncSeconds": 1
+      },
+      "C-FAST": {
+        "computeSeconds": 600,
+        "saveSeconds": 4
+      }
+    },
+    "model": {
+      "scope": "hard-interruptions-only",
+      "referenceCards": 10000,
+      "referenceMtbfHours": 30,
+      "checkpointComputeSeconds": 600,
+      "checkpointSaveSeconds": 4,
+      "recoveryAttemptSeconds": 130,
+      "recoverySuccess": 0.99,
+      "manualAdditionalSeconds": 16200,
+      "detectProbability": 0.95,
+      "detectSeconds": 60,
+      "timeoutSeconds": 60,
+      "eventCatalog": {
+        "path": "catalogs/故障事件库.json",
+        "revision": "event-budget-v3-sdc1.4-reviewed-85",
+        "events": 54,
+        "classFit": {
+          "中断": 3333.333333333333,
+          "亚健康": 69.01311249137338,
+          "静默": 48.30917874396136
+        },
+        "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+      },
+      "horizonHours": 600,
+      "shares": {
+        "hard": 0.9660000000000001,
+        "slow": 0.020000000000000007,
+        "sdc": 0.014000000000000005
+      },
+      "slowDetectProbability": 0.8,
+      "slowDetectHours": 0.08333333333333333,
+      "slowLifetimeHours": 24,
+      "slowLoss": 0.05,
+      "sdcImmediateProbability": 0,
+      "sdcDelayHours": 168,
+      "sdcDelayDistribution": "fixed",
+      "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+      "trials": 20000,
+      "seed": 20261009,
+      "validationOverhead": 0,
+      "referenceRateArithmetic": false,
+      "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+    }
+  },
+  "recoveredMechanisms": [
+    {
+      "id": "R-LINK-LOCAL",
+      "name": "链路透明恢复",
+      "eventCandidates": [
+        "IOD-hard",
+        "NIC-hard",
+        "OPT-hard",
+        "BOXIO-hard",
+        "FABRIC-hard"
+      ],
+      "inputs": {
+        "successTotalPauseSeconds": 2,
+        "successPauseRangeSeconds": [
+          1,
+          3
+        ],
+        "rollbackSeconds": 0
+      },
+      "evidence": "公开资料提供分层纠错/重试的设计依据。端到端 2s 是跨平台工程预算，不能当作 FEC 或物理重试的实测耗时。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "R-FABRIC-DEGRADE",
+      "name": "网络绕行与降级运行",
+      "eventCandidates": [
+        "NIC-hard",
+        "OPT-hard",
+        "BOXIO-hard",
+        "FABRIC-hard"
+      ],
+      "inputs": {
+        "switchTotalPauseSeconds": 2,
+        "exposedCommunicationFraction": 0.3,
+        "remainingBandwidthRatio": 0.75,
+        "repairSeconds": 1800
+      },
+      "evidence": "降带宽运行有官方实现例证；f=30%、r=75%、30min 修复均为示例预算，必须用训练 profile 和运维数据替换。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "I-CONTAIN",
+      "name": "故障隔离与传播抑制",
+      "eventCandidates": [
+        "IOD-hard",
+        "NIC-hard",
+        "BOXIO-hard",
+        "FABRIC-hard"
+      ],
+      "inputs": {
+        "stageSeconds": 180,
+        "domains": 50,
+        "affectedDomains": 1,
+        "globalCoordinationSeconds": 1
+      },
+      "evidence": "50 域沿用用户设定；1s 和局部独立前进是条件假设。物理隔离本身不保证同步训练可继续。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "H-CONTROL-CONTINUITY",
+      "name": "控制面异常下业务连续运行",
+      "eventCandidates": [
+        "MGMT-hard"
+      ],
+      "inputs": {
+        "trainingPauseSeconds": 1,
+        "trainingPauseRangeSeconds": [
+          0,
+          1
+        ],
+        "controlRestoreRangeSeconds": [
+          10,
+          30
+        ],
+        "rollbackSeconds": 0
+      },
+      "evidence": "控制面与数据面解耦是公开设计；0–1s 训练停顿和 10–30s 管理恢复均是候选预算。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "R-WARM-PROCESS",
+      "name": "预热进程与可信状态接替",
+      "eventCandidates": [
+        "UNKNOWN-hard"
+      ],
+      "inputs": {
+        "startupBeforeSeconds": 60,
+        "startupTargetSeconds": 20,
+        "startupTargetRangeSeconds": [
+          10,
+          30
+        ],
+        "otherRecoverySeconds": 120,
+        "rollbackSeconds": 150
+      },
+      "evidence": "公开 7.3s 结果来自推理进程终止实验，不用于训练预测。60s 启动预算和 20s 目标均为工程估算。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "R-RUNTIME-SNAPSHOT",
+      "name": "运行时初始化快照",
+      "eventCandidates": [
+        "CORE-hard",
+        "SRAM-hard",
+        "IOD-hard",
+        "MODULE-hard",
+        "MEMT-hard",
+        "MEMP-hard",
+        "NIC-hard",
+        "CPU-hard",
+        "DDR-hard",
+        "SSD-hard",
+        "UNKNOWN-hard"
+      ],
+      "inputs": {
+        "startupBeforeSeconds": 60,
+        "startupTargetSeconds": 15,
+        "startupTargetRangeSeconds": [
+          10,
+          30
+        ],
+        "otherRecoverySeconds": 120,
+        "rollbackSeconds": 150
+      },
+      "evidence": "进程快照原理有公开支持；训练 15s 恢复目标、兼容范围均待验证，不等同于普通图捕捉。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "C-ASYNC",
+      "name": "异步检查点保存",
+      "eventCandidates": [],
+      "inputs": {
+        "blockingBeforeSeconds": 4,
+        "blockingTargetSeconds": 1,
+        "blockingTargetRangeSeconds": [
+          0.5,
+          2
+        ],
+        "additionalDurableLagSeconds": 10
+      },
+      "evidence": "异步暂存并后台写入是公开方案；1s 阻塞和新增 10s 滞后是候选值，不是实测。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "C-LOSSLESS",
+      "name": "无损检查点压缩",
+      "eventCandidates": [],
+      "inputs": {
+        "readBeforeSeconds": 60,
+        "compressionRatio": 2,
+        "decompressSeconds": 10,
+        "otherRecoverySeconds": 120
+      },
+      "evidence": "无损压缩有公开支持；2× 压缩比、60s I/O、10s 解压均为工程预算。FP8/FP4 权重通常需更保守的压缩比。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "D-RECOVERY-CLASSIFY",
+      "name": "故障分类与恢复动作匹配",
+      "eventCandidates": [],
+      "inputs": {
+        "automaticRecoverySeconds": 180,
+        "manualExtraSeconds": 7200,
+        "manualProbabilityBefore": 0.01,
+        "manualProbabilityTarget": 0.001
+      },
+      "evidence": "恢复动作分类有官方接口依据；人工升级概率 0.1% 为候选目标，并非 NVIDIA 公布的效果。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "D-SDC-FP8",
+      "name": "FP8 计算路径 SDC 检测",
+      "eventCandidates": [
+        "CORE-sdc"
+      ],
+      "inputs": {
+        "creditedDetectionBefore": 0,
+        "detectionTarget": 0.95,
+        "precisionSdcRiskShare": null,
+        "stepSeconds": 1,
+        "detectSeconds": 1,
+        "recoverSeconds": 1,
+        "latentDiscoverySeconds": 432000
+      },
+      "evidence": "95% 是用户提出的验收目标；0% 是尚未验证能力的保守记账，不是断言原检测器真实无效。低精度计算是混合精度执行，FP4 存储不能直接证明 FP4 训练计算占比。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "D-SDC-FP4",
+      "name": "FP4 计算路径 SDC 检测",
+      "eventCandidates": [
+        "CORE-sdc"
+      ],
+      "inputs": {
+        "creditedDetectionBefore": 0,
+        "detectionTarget": 0.95,
+        "precisionSdcRiskShare": null,
+        "stepSeconds": 1,
+        "detectSeconds": 1,
+        "recoverSeconds": 1,
+        "latentDiscoverySeconds": 432000
+      },
+      "evidence": "95% 是用户提出的验收目标；0% 是尚未验证能力的保守记账，不是断言原检测器真实无效。低精度计算是混合精度执行，FP4 存储不能直接证明 FP4 训练计算占比。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "D-ABFT",
+      "name": "算子 ABFT／实时矩阵校验",
+      "eventCandidates": [
+        "CORE-sdc"
+      ],
+      "inputs": {
+        "upstreamDetection": 0.95,
+        "conditionalMissDetectionTarget": 0.9,
+        "conditionalTargetRange": [
+          0.9,
+          0.95,
+          0.98
+        ],
+        "throughputLossBudget": 0.001,
+        "stepSeconds": 1
+      },
+      "evidence": "0.1% 来自用户预算，条件补漏率 90% 为待验证示例，并非已有实测。99.5% 只适用于第一道已有 95% 有效覆盖的同一算子子集；尚未验证的低精度路径不能直接套用。此公式不要求两道检测独立。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "D-NET-SDC",
+      "name": "网络端到端 SDC 检测",
+      "eventCandidates": [
+        "NIC-sdc",
+        "BOXIO-sdc",
+        "FABRIC-sdc"
+      ],
+      "inputs": {
+        "creditedDetectionBefore": 0,
+        "detectionTarget": 0.95,
+        "detectSeconds": 1,
+        "latentDiscoverySeconds": 432000
+      },
+      "evidence": "95% 是用户目标，不是 NVLink 或 HCCL 公布的端到端 SDC 指标；1s 是 step 级发现预算，需用集合通信时延校准。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "H-SDC-SCREEN",
+      "name": "在线压测与异常资源筛除",
+      "eventCandidates": [
+        "CORE-sdc",
+        "IOD-sdc",
+        "NIC-sdc",
+        "BOXIO-sdc",
+        "FABRIC-sdc",
+        "UNKNOWN-sdc"
+      ],
+      "inputs": {
+        "occurrenceReductionTarget": 0.25,
+        "sdcFitReference": 48.30917874396136,
+        "coreFitReference": 41.06280193236715,
+        "eligibleShare": null,
+        "screenIntervalSeconds": null,
+        "screenCostSeconds": null
+      },
+      "evidence": "降低 25% 为用户目标，适用风险比例 a 未知。48.3092 FIT 和 CORE 的 41.0628 FIT 来自审计事件库的单卡等效先验，并非厂商实测；本轮没有改写原始故障率。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "R-HCCL-ELASTIC",
+      "name": "HCCL 通信域弹性重建",
+      "eventCandidates": [
+        "CORE-hard",
+        "IOD-hard",
+        "NIC-hard",
+        "BOXIO-hard",
+        "FABRIC-hard",
+        "UNKNOWN-hard"
+      ],
+      "inputs": {
+        "communicationBeforeSeconds": 60,
+        "communicationTargetSeconds": 15,
+        "communicationTargetRangeSeconds": [
+          10,
+          20
+        ],
+        "otherRecoverySeconds": 120,
+        "domains": 50
+      },
+      "evidence": "NCCL shrink 提供可参考的恢复设计。HCCL 9.0 文档中的部分暂停／恢复接口为保留接口，不能据此声称当前 HCCL 已具备等价 shrink；15s 是待实现和测试的工程目标。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    },
+    {
+      "id": "R-CANN-GRAPH",
+      "name": "CANN 图准备与启动缓存加速",
+      "eventCandidates": [
+        "CORE-hard",
+        "MODULE-hard",
+        "CPU-hard",
+        "NIC-hard",
+        "UNKNOWN-hard"
+      ],
+      "inputs": {
+        "graphBeforeSeconds": 30,
+        "graphTargetSeconds": 7.5,
+        "graphTargetRangeSeconds": [
+          5,
+          10
+        ],
+        "otherRecoverySeconds": 150
+      },
+      "evidence": "CANN 的流捕获 API 支持将任务保存为运行实例以减少主机投递开销；该能力本身不保证跨进程持久化或故障后免初始化。7.5s 是图缓存／预热方案的候选目标。",
+      "simulationReady": false,
+      "integration": {
+        "eligibleShareOfParentEvents": null,
+        "conditionalSuccessProbability": null,
+        "failureAttemptSeconds": null,
+        "steadyThroughputOverheadFraction": null,
+        "rateBasis": "原始库保持 96.6% / 2% / 1.4%；筛查仅对适用子集的残余 FIT 乘系数，改善后的比例不强行归一回原比例。",
+        "instructions": "事件 ID 仅为候选挂接。先填写适用比例、条件恢复成功率、失败耗时、正常态开销及重叠规则；检出率、恢复成功率与发生率改善分别记账。"
+      }
+    }
+  ],
+  "mechanismSource": "references/新可靠性机制库-单点量化交付包/新可靠性机制库-单点量化.json",
+  "expertRepositoryRevision": "683afe829313bfdcb249bc593e48df5b29813666"
+}

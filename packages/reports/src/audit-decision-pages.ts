@@ -1,3 +1,4 @@
+import { networkIodProjection } from "../../analysis/src/audit-responsibility-projection";
 import { reliabilityEvidence } from "./audit-research";
 import {
   topologyDecision,
@@ -596,9 +597,10 @@ export function decisionPageSvg(
   cards = 500000,
   view: DecisionView = "architecture",
 ) {
-  const d: TopologyDecision | null =
+  const saved: TopologyDecision | null =
     result.topologyDecision ?? topologyDecision(result);
-  if (!d?.scales.length) return "";
+  if (!saved?.scales.length) return "";
+  const d = networkIodProjection(saved);
   return view === "research"
     ? research()
     : view === "loss"

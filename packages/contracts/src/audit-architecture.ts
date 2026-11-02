@@ -14,6 +14,7 @@ const node = z
     id,
     name: z.string().trim().min(1).max(120),
     parentId: id.optional(),
+    physicalParentId: id.optional(),
     kind: z.enum(["system", "subsystem", "object", "overhead"]),
     eventIds: z.array(id).max(2000),
     weight: z.number().finite().positive().max(1e6),
@@ -133,6 +134,11 @@ export function resolveAuditArchitecture(
   const known = new Set(events.map((e) => e.id)),
     assigned = new Set<string>();
   for (const n of architecture.nodes) {
+    if (
+      n.physicalParentId &&
+      (n.physicalParentId === n.id || !nodes.has(n.physicalParentId))
+    )
+      throw new Error("架构物理位置引用无效：" + n.id);
     const path = new Set([n.id]);
     let current = n;
     while (current.parentId) {

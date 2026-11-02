@@ -5,6 +5,7 @@ import {
   hardwareScaleEvents,
 } from "../../contracts/src/audit-hardware";
 import { supernodeCounts } from "../../contracts/src/audit-topology-config";
+import { networkIodProjection } from "./audit-responsibility-projection";
 
 const lossKeys = [
   "downtime",
@@ -24,6 +25,7 @@ export type TopologyDecisionNode = {
   id: string;
   name: string;
   parentId?: string;
+  physicalParentId?: string;
   domain: string;
   quantity: number | null;
   fit: number;
@@ -89,6 +91,14 @@ export function topologyDecision(result: any, reference?: { scales: any[] }) {
     } as Record<string, string>
   )[allocationMethod];
   const hours: number = result.request.hours;
+  const allocationReference = reference
+    ? networkIodProjection({
+        ...reference,
+        hours,
+        method: "historical",
+        basis: "冻结预算",
+      })
+    : undefined;
   const cards: number[] = [
     ...new Set<number>(entries[0].rows.map((r: any) => r.cards)),
   ]
@@ -154,7 +164,7 @@ export function topologyDecision(result: any, reference?: { scales: any[] }) {
     add("hardware-board", "计算板", "hardware-node", "compute", counts.boards);
     add("hardware-module", "NPU模组", "hardware-board", "compute", cards);
     add("hardware-chip", "NPU芯片", "hardware-module", "compute", cards);
-    for (const id of ["CORE", "SRAM", "IOD"])
+    for (const id of ["CORE", "SRAM"])
       add("object-" + id, id, "hardware-chip", "compute", cards);
     add("object-HBM", "HBM / 内存路径", "hardware-module", "compute", cards);
     add("object-MODULE", "模组连接", "hardware-module", "compute", cards);
@@ -176,6 +186,7 @@ export function topologyDecision(result: any, reference?: { scales: any[] }) {
           : null) ?? counts.nodes,
       );
     add("hardware-network", "网络互联", "system", "network");
+    add("object-IOD", "IOD", "hardware-network", "network", cards);
     for (const [id, name, q] of [
       ["hardware-l1", "L1互联刀片", l1],
       ["hardware-l2", "L2互联设备", l2],
@@ -215,6 +226,9 @@ export function topologyDecision(result: any, reference?: { scales: any[] }) {
           hardwareScaleEvents(entry.events, architecture, cards);
         const nodes: TopologyDecisionNode[] = schema.map((n) => ({
           ...n,
+          ...(n.id === "object-IOD"
+            ? { physicalParentId: "hardware-chip" }
+            : {}),
           fit: 0,
           hardFit: 0,
           complexity: 0,
@@ -468,7 +482,9 @@ export function topologyDecision(result: any, reference?: { scales: any[] }) {
       }
       children.forEach((n) => split(n.id));
     };
-    const frozenScale = reference?.scales.find((s) => s.cards === cards);
+    const frozenScale = allocationReference?.scales.find(
+      (s) => s.cards === cards,
+    );
     const frozen =
       frozenScale?.scenarios?.find(
         (s: any) => s.name === frozenScale.reference,
@@ -512,7 +528,7 @@ export function topologyDecision(result: any, reference?: { scales: any[] }) {
     };
   });
   return {
-    method: "topology-conservative-partition.v1",
+    method: "topology-conservative-partition.iod-network.v2",
     allocationMethod,
     allocationLabel,
     hours,

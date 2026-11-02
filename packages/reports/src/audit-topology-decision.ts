@@ -1,3 +1,4 @@
+import { networkIodProjection } from "../../analysis/src/audit-responsibility-projection";
 import {
   topologyDecision,
   type TopologyDecision,
@@ -22,9 +23,10 @@ const node = (
 export { decisionPageSvg as topologyDecisionSvg } from "./audit-decision-pages";
 
 export function topologyEstimateDetails(result: any, cards: number) {
-  const d: TopologyDecision | null =
+  const saved: TopologyDecision | null =
     result.topologyDecision ?? topologyDecision(result);
-  if (!d) return "";
+  if (!saved) return "";
+  const d = networkIodProjection(saved);
   const rows = d.estimates.filter((e) => e.cards === cards);
   const scale = d.scales.find((s) => s.cards === cards),
     baseline = scale?.scenarios[0];

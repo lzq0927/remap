@@ -254,7 +254,7 @@ export function hardwareAuditArchitecture(
   const parents: Record<string, string> = {
     CORE: "hardware-chip",
     SRAM: "hardware-chip",
-    IOD: "hardware-chip",
+    IOD: "hardware-network",
     MEMT: "hardware-module",
     MEMP: "hardware-module",
     MODULE: "hardware-module",
@@ -280,6 +280,9 @@ export function hardwareAuditArchitecture(
     Object.assign(nodes.at(-1)!, {
       kind: "object",
       eventIds: object.events.map((e) => e.id),
+      ...(object.id === "IOD"
+        ? { physicalParentId: "hardware-chip", functionalDomain: "network" }
+        : {}),
     });
   }
   add(

@@ -9,6 +9,7 @@ import {
   componentTopologyReference,
   componentLossBars,
   architectureLossFill,
+  architectureLossStroke,
 } from "./audit-component-topology";
 import {
   decisionDomains,
@@ -98,7 +99,7 @@ export function physicalTopology(
     const y = 111 + i * 140,
       bad = (n.gapHours ?? 0) > 0,
       color = "#132738";
-    panel += `<g data-analysis-node="${id}" data-allocation-domain="${id}" role="button" tabindex="0" aria-label="${esc(name)}分配与差距">${rect(1210, y, 688, 130, architectureLossFill(n.actualHours), "#ad6871")}${text(1226, y + 24, `${name}   A ${pct(n.availability)} → 目标 ${pct(n.target, 3)}`, 17, color, true)}${text(1226, y + 49, `本轮损失 ${num(n.actualHours, 3)} h / 目标损失 ${num(n.allowedHours, 3)} h  ·  ${n.gapHours == null ? "未分配" : bad ? "超预算 " + num(n.gapHours, 3) + " h" : "余量 " + num(-n.gapHours, 3) + " h"}`, 15, color)}${text(1226, y + 73, `MTBF ${duration(n.mtbfHours)} · 等效MTTR ${num(n.mttrSeconds, 2)} s`, 14)}${text(1226, y + 96, weak.length ? "缺口定位：" + weak.map((v) => `${v.name} +${num(v.gapHours, 2)}h`).join("；") : n.gapHours == null ? "此责任域尚未分配预算；不能据此判断达标" : "责任域预算内；继续验证共因与工程能力边界", 14, color)}${text(1226, y + 118, `主要损失：${path.name} ${num(path.hours, 3)}h · 本MTBF条件MTTR预算 ${num(n.targetMttrSeconds, 2)}s`, 13, "#26485f")}</g>`;
+    panel += `<g data-analysis-node="${id}" data-allocation-domain="${id}" role="button" tabindex="0" aria-label="${esc(name)}分配与差距">${rect(1210, y, 688, 130, architectureLossFill(n.actualHours), architectureLossStroke(n.actualHours))}${text(1226, y + 24, `${name}   A ${pct(n.availability)} → 目标 ${pct(n.target, 3)}`, 17, color, true)}${text(1226, y + 49, `本轮损失 ${num(n.actualHours, 3)} h / 目标损失 ${num(n.allowedHours, 3)} h  ·  ${n.gapHours == null ? "未分配" : bad ? "超预算 " + num(n.gapHours, 3) + " h" : "余量 " + num(-n.gapHours, 3) + " h"}`, 15, color)}${text(1226, y + 73, `MTBF ${duration(n.mtbfHours)} · 等效MTTR ${num(n.mttrSeconds, 2)} s`, 14)}${text(1226, y + 96, weak.length ? "缺口定位：" + weak.map((v) => `${v.name} +${num(v.gapHours, 2)}h`).join("；") : n.gapHours == null ? "此责任域尚未分配预算；不能据此判断达标" : "责任域预算内；继续验证共因与工程能力边界", 14, color)}${text(1226, y + 118, `主要损失：${path.name} ${num(path.hours, 3)}h · 本MTBF条件MTTR预算 ${num(n.targetMttrSeconds, 2)}s`, 13, "#26485f")}</g>`;
   });
   panel += text(
     1224,
