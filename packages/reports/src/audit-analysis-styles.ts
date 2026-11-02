@@ -11,4 +11,5 @@ export const analysisWorkbenchCss = `
 .analysis-allocation small,.analysis-allocation .analysis-note{color:#26485f}.analysis-allocation tbody th{color:#132738}
 
 .analysis-baseline-review small,.analysis-baseline-review .analysis-note,.analysis-baseline-review tbody th{color:#132738}.analysis-baseline-review .analysis-priority{color:#153b56;background:#eaf3fa;border-left-color:#487fa9}
+.analysis-measure-ranking{color:#132738}.analysis-measure-ranking .analysis-note,.analysis-measure-ranking small{color:#26485f}.analysis-measure-ranking tbody th{position:static;color:#132738}.analysis-measure-ranking .measure-ranking-main{min-width:1280px}.measure-ranking-main td:nth-child(n+4){text-align:right;font-variant-numeric:tabular-nums}.measure-ranking-main td:nth-child(3){min-width:220px}.measure-ranking-main th:first-child{min-width:200px}.measure-ranking-total{background:#e5eff7;font-weight:700}.analysis-measure-ranking details>article{padding-bottom:12px;border-bottom:1px solid #dce6ed}.analysis-measure-ranking .analysis-priority{color:#153b56;background:#eaf3fa}
 `;

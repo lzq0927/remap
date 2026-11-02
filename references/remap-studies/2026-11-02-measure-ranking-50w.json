@@ -1,0 +1,1873 @@
+{
+  "version": "measure-improvement-shapley-2026-11-02",
+  "cards": 500000,
+  "hours": 600,
+  "n": 1024,
+  "seed": 2655407334,
+  "coalitions": 512,
+  "method": "Exact nine-group Shapley; every coalition evaluated by DES with the same 1024 per-trial seeds. Conditional additions/removals are not additive.",
+  "uncertainty": "Normal 95% intervals over paired trajectories; coalition ordering is exact. Sampling uncertainty only, excludes model and parameter uncertainty. Seeds are shared, not identical physical fault traces after paths/exposure change.",
+  "sourceSha256": "7316ff4d77420bbf9d9a9c05270b8b75994af17540b14b4277f3dbb14f5eed2a",
+  "engineSha256": "e90c95974a6a2429685630d4cd9c427d1555ca2189bf94536aed1242cb99f4fc",
+  "baselineInputHash": "6d62e769ea9622a538ac58cf3107fc5b666aa39d16b07b0d58e1cb0d52cc06b4",
+  "targetInputHash": "04c8b38dac96b61232d74a8314cc99134eb1d88ea3443a9b4dec9fcae6408131",
+  "baselineConfiguration": {
+    "policy": {
+      "D-HARD": {
+        "coverage": 0.95,
+        "detectSeconds": 60
+      },
+      "D-SLOW": {
+        "coverage": 0.8,
+        "detectSeconds": 300
+      },
+      "D-SDC": {
+        "coverage": 0.8,
+        "detectSeconds": 1
+      },
+      "R-SDC": {
+        "stepSeconds": 1,
+        "recoverSeconds": 1
+      },
+      "R-REPLAY": {
+        "success": 0.9,
+        "successSeconds": 5,
+        "failureSeconds": 10
+      },
+      "R-PROCESS": {
+        "success": 0.95,
+        "successSeconds": 60,
+        "failureSeconds": 120
+      },
+      "R-ELASTIC": {
+        "domains": 50,
+        "success": 0.98,
+        "recoverSeconds": 180,
+        "failureSeconds": 120,
+        "syncSeconds": 1
+      },
+      "C-FAST": {
+        "computeSeconds": 600,
+        "saveSeconds": 4
+      }
+    },
+    "model": {
+      "scope": "hard-interruptions-only",
+      "referenceCards": 10000,
+      "referenceMtbfHours": 30,
+      "checkpointComputeSeconds": 600,
+      "checkpointSaveSeconds": 4,
+      "recoveryAttemptSeconds": 130,
+      "recoverySuccess": 0.99,
+      "manualAdditionalSeconds": 16200,
+      "detectProbability": 0.95,
+      "detectSeconds": 60,
+      "timeoutSeconds": 60,
+      "eventCatalog": {
+        "path": "catalogs/故障事件库.json",
+        "revision": "event-budget-v3-sdc1.4-reviewed-85",
+        "events": 54,
+        "classFit": {
+          "中断": 3333.333333333333,
+          "亚健康": 69.01311249137338,
+          "静默": 48.30917874396136
+        },
+        "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+      },
+      "horizonHours": 600,
+      "shares": {
+        "hard": 0.9660000000000001,
+        "slow": 0.020000000000000007,
+        "sdc": 0.014000000000000005
+      },
+      "slowDetectProbability": 0.8,
+      "slowDetectHours": 0.08333333333333333,
+      "slowLifetimeHours": 24,
+      "slowLoss": 0.05,
+      "sdcImmediateProbability": 0,
+      "sdcDelayHours": 168,
+      "sdcDelayDistribution": "fixed",
+      "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+      "trials": 20000,
+      "seed": 20261009,
+      "validationOverhead": 0,
+      "referenceRateArithmetic": false,
+      "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+    }
+  },
+  "targetConfiguration": {
+    "policy": {
+      "D-HARD": {
+        "coverage": 0.998,
+        "detectSeconds": 1
+      },
+      "D-SLOW": {
+        "coverage": 0.975,
+        "detectSeconds": 52.6
+      },
+      "D-SDC": {
+        "coverage": 0.9991,
+        "detectSeconds": 1
+      },
+      "R-SDC": {
+        "stepSeconds": 1,
+        "recoverSeconds": 1
+      },
+      "R-REPLAY": {
+        "success": 0.9,
+        "successSeconds": 5,
+        "failureSeconds": 10
+      },
+      "R-PROCESS": {
+        "success": 0.95,
+        "successSeconds": 60,
+        "failureSeconds": 120
+      },
+      "R-ELASTIC": {
+        "domains": 50,
+        "success": 0.98,
+        "recoverSeconds": 180,
+        "failureSeconds": 120,
+        "syncSeconds": 1
+      },
+      "C-FAST": {
+        "computeSeconds": 1,
+        "saveSeconds": 0
+      }
+    },
+    "model": {
+      "scope": "hard-interruptions-only",
+      "referenceCards": 10000,
+      "referenceMtbfHours": 30,
+      "checkpointComputeSeconds": 1,
+      "checkpointSaveSeconds": 0,
+      "recoveryAttemptSeconds": 15,
+      "recoverySuccess": 0.999,
+      "manualAdditionalSeconds": 3600,
+      "detectProbability": 0.998,
+      "detectSeconds": 1,
+      "timeoutSeconds": 60,
+      "eventCatalog": {
+        "path": "catalogs/故障事件库.json",
+        "revision": "event-budget-v3-sdc1.4-reviewed-85",
+        "events": 54,
+        "classFit": {
+          "中断": 3333.333333333333,
+          "亚健康": 69.01311249137338,
+          "静默": 48.30917874396136
+        },
+        "sha256": "6b0f6c209a8edb116f870d5e57022aaa0758a025d3c4561a875ac6e150e1d5dc"
+      },
+      "horizonHours": 600,
+      "shares": {
+        "hard": 0.9660000000000001,
+        "slow": 0.020000000000000007,
+        "sdc": 0.014000000000000005
+      },
+      "slowDetectProbability": 0.975,
+      "slowDetectHours": 0.014611111111111111,
+      "slowLifetimeHours": 24,
+      "slowLoss": 0.05,
+      "sdcImmediateProbability": 0,
+      "sdcDelayHours": 24,
+      "sdcDelayDistribution": "fixed",
+      "terminalRule": "retain-last-clean-checkpoint-if-corrupt",
+      "trials": 20000,
+      "seed": 20261009,
+      "validationOverhead": 0,
+      "referenceRateArithmetic": false,
+      "referenceFitSignature": "[{\"id\":\"CORE-hard\",\"fit\":466.6666666666666},{\"id\":\"CORE-slow\",\"fit\":14.163372859025031},{\"id\":\"CORE-sdc\",\"fit\":41.06280193236715},{\"id\":\"SRAM-hard\",\"fit\":166.6666666666666},{\"id\":\"SRAM-slow\",\"fit\":0.8430579082752995},{\"id\":\"SRAM-sdc\",\"fit\":0},{\"id\":\"IOD-hard\",\"fit\":199.99999999999997},{\"id\":\"IOD-slow\",\"fit\":4.046677959721438},{\"id\":\"IOD-sdc\",\"fit\":1.0305969095676324},{\"id\":\"MODULE-hard\",\"fit\":169.99999999999994},{\"id\":\"MODULE-slow\",\"fit\":1.719838132881611},{\"id\":\"MODULE-sdc\",\"fit\":0},{\"id\":\"MEMT-hard\",\"fit\":399.99999999999994},{\"id\":\"MEMT-slow\",\"fit\":11.145779669968281},{\"id\":\"MEMT-sdc\",\"fit\":0},{\"id\":\"MEMP-hard\",\"fit\":173.33333333333331},{\"id\":\"MEMP-slow\",\"fit\":0.724475678547938},{\"id\":\"MEMP-sdc\",\"fit\":0},{\"id\":\"NIC-hard\",\"fit\":100.00000000000001},{\"id\":\"NIC-slow\",\"fit\":1.7929179740026897},{\"id\":\"NIC-sdc\",\"fit\":1.0058431102498928},{\"id\":\"OPT-hard\",\"fit\":66.66666666666666},{\"id\":\"OPT-slow\",\"fit\":2.3905572986702532},{\"id\":\"OPT-sdc\",\"fit\":0},{\"id\":\"BOXIO-hard\",\"fit\":46.666666666666664},{\"id\":\"BOXIO-slow\",\"fit\":0.4183475272672943},{\"id\":\"BOXIO-sdc\",\"fit\":0.46939345144995},{\"id\":\"FABRIC-hard\",\"fit\":66.66666666666666},{\"id\":\"FABRIC-slow\",\"fit\":1.1952786493351266},{\"id\":\"FABRIC-sdc\",\"fit\":0.6705620734999285},{\"id\":\"CPU-hard\",\"fit\":166.66666666666666},{\"id\":\"CPU-slow\",\"fit\":2.445824706694272},{\"id\":\"CPU-sdc\",\"fit\":0},{\"id\":\"DDR-hard\",\"fit\":199.99999999999997},{\"id\":\"DDR-slow\",\"fit\":2.9349896480331257},{\"id\":\"DDR-sdc\",\"fit\":0},{\"id\":\"SSD-hard\",\"fit\":166.66666666666666},{\"id\":\"SSD-slow\",\"fit\":4.891649413388544},{\"id\":\"SSD-sdc\",\"fit\":0},{\"id\":\"POWER-hard\",\"fit\":166.66666666666666},{\"id\":\"POWER-slow\",\"fit\":2.445824706694272},{\"id\":\"POWER-sdc\",\"fit\":0},{\"id\":\"COOL-hard\",\"fit\":99.99999999999999},{\"id\":\"COOL-slow\",\"fit\":7.337474120082815},{\"id\":\"COOL-sdc\",\"fit\":0},{\"id\":\"MGMT-hard\",\"fit\":133.33333333333331},{\"id\":\"MGMT-slow\",\"fit\":0.5869979296066252},{\"id\":\"MGMT-sdc\",\"fit\":0},{\"id\":\"STORAGE-hard\",\"fit\":133.33333333333331},{\"id\":\"STORAGE-slow\",\"fit\":3.913319530710835},{\"id\":\"STORAGE-sdc\",\"fit\":0},{\"id\":\"UNKNOWN-hard\",\"fit\":410.00000000000006},{\"id\":\"UNKNOWN-slow\",\"fit\":6.016728778467909},{\"id\":\"UNKNOWN-sdc\",\"fit\":4.0699812668268}]"
+    }
+  },
+  "baselineEvents": [
+    [
+      "CORE-hard",
+      "hard",
+      645.7785218847166
+    ],
+    [
+      "CORE-slow",
+      "slow",
+      6.070016939582157
+    ],
+    [
+      "CORE-sdc",
+      "sdc",
+      41.06280193236715
+    ],
+    [
+      "SRAM-hard",
+      "hard",
+      1076.2975364745278
+    ],
+    [
+      "SRAM-slow",
+      "slow",
+      1.6861158165505994
+    ],
+    [
+      "SRAM-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "IOD-hard",
+      "hard",
+      669.6962449174838
+    ],
+    [
+      "IOD-slow",
+      "slow",
+      4.589937057051356
+    ],
+    [
+      "IOD-sdc",
+      "sdc",
+      1.0305969095676324
+    ],
+    [
+      "MODULE-hard",
+      "hard",
+      569.2418081798611
+    ],
+    [
+      "MODULE-slow",
+      "slow",
+      1.9507232492468258
+    ],
+    [
+      "MODULE-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "MEMT-hard",
+      "hard",
+      1339.3924898349676
+    ],
+    [
+      "MEMT-slow",
+      "slow",
+      12.642080157136753
+    ],
+    [
+      "MEMT-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "MEMP-hard",
+      "hard",
+      580.4034122618193
+    ],
+    [
+      "MEMP-slow",
+      "slow",
+      0.8217352102138887
+    ],
+    [
+      "MEMP-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "NIC-hard",
+      "hard",
+      103.70370370370371
+    ],
+    [
+      "NIC-slow",
+      "slow",
+      2.0336139250613536
+    ],
+    [
+      "NIC-sdc",
+      "sdc",
+      1.0058431102498928
+    ],
+    [
+      "OPT-hard",
+      "hard",
+      69.13580246913578
+    ],
+    [
+      "OPT-slow",
+      "slow",
+      2.7114852334151385
+    ],
+    [
+      "OPT-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "BOXIO-hard",
+      "hard",
+      48.39506172839505
+    ],
+    [
+      "BOXIO-slow",
+      "slow",
+      0.4745099158476492
+    ],
+    [
+      "BOXIO-sdc",
+      "sdc",
+      0.46939345144995
+    ],
+    [
+      "FABRIC-hard",
+      "hard",
+      69.13580246913578
+    ],
+    [
+      "FABRIC-slow",
+      "slow",
+      1.3557426167075692
+    ],
+    [
+      "FABRIC-sdc",
+      "sdc",
+      0.6705620734999285
+    ],
+    [
+      "CPU-hard",
+      "hard",
+      558.0802040979032
+    ],
+    [
+      "CPU-slow",
+      "slow",
+      2.7741721896448066
+    ],
+    [
+      "CPU-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "DDR-hard",
+      "hard",
+      669.6962449174838
+    ],
+    [
+      "DDR-slow",
+      "slow",
+      3.3290066275737673
+    ],
+    [
+      "DDR-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "SSD-hard",
+      "hard",
+      558.0802040979032
+    ],
+    [
+      "SSD-slow",
+      "slow",
+      5.548344379289613
+    ],
+    [
+      "SSD-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "POWER-hard",
+      "hard",
+      172.83950617283946
+    ],
+    [
+      "POWER-slow",
+      "slow",
+      2.7741721896448066
+    ],
+    [
+      "POWER-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "COOL-hard",
+      "hard",
+      103.70370370370367
+    ],
+    [
+      "COOL-slow",
+      "slow",
+      8.32251656893442
+    ],
+    [
+      "COOL-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "MGMT-hard",
+      "hard",
+      138.27160493827157
+    ],
+    [
+      "MGMT-slow",
+      "slow",
+      0.6658013255147535
+    ],
+    [
+      "MGMT-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "STORAGE-hard",
+      "hard",
+      138.27160493827157
+    ],
+    [
+      "STORAGE-slow",
+      "slow",
+      4.438675503431691
+    ],
+    [
+      "STORAGE-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "UNKNOWN-hard",
+      "hard",
+      425.1851851851852
+    ],
+    [
+      "UNKNOWN-slow",
+      "slow",
+      6.824463586526225
+    ],
+    [
+      "UNKNOWN-sdc",
+      "sdc",
+      4.0699812668268
+    ]
+  ],
+  "targetEvents": [
+    [
+      "CORE-hard",
+      "hard",
+      258.3114087538866
+    ],
+    [
+      "CORE-slow",
+      "slow",
+      6.070016939582157
+    ],
+    [
+      "CORE-sdc",
+      "sdc",
+      41.06280193236715
+    ],
+    [
+      "SRAM-hard",
+      "hard",
+      430.51901458981104
+    ],
+    [
+      "SRAM-slow",
+      "slow",
+      1.6861158165505994
+    ],
+    [
+      "SRAM-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "IOD-hard",
+      "hard",
+      267.87849796699345
+    ],
+    [
+      "IOD-slow",
+      "slow",
+      4.589937057051356
+    ],
+    [
+      "IOD-sdc",
+      "sdc",
+      1.0305969095676324
+    ],
+    [
+      "MODULE-hard",
+      "hard",
+      227.6967232719444
+    ],
+    [
+      "MODULE-slow",
+      "slow",
+      1.9507232492468258
+    ],
+    [
+      "MODULE-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "MEMT-hard",
+      "hard",
+      535.7569959339869
+    ],
+    [
+      "MEMT-slow",
+      "slow",
+      12.642080157136753
+    ],
+    [
+      "MEMT-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "MEMP-hard",
+      "hard",
+      232.1613649047277
+    ],
+    [
+      "MEMP-slow",
+      "slow",
+      0.8217352102138887
+    ],
+    [
+      "MEMP-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "NIC-hard",
+      "hard",
+      103.70370370370371
+    ],
+    [
+      "NIC-slow",
+      "slow",
+      2.0336139250613536
+    ],
+    [
+      "NIC-sdc",
+      "sdc",
+      1.0058431102498928
+    ],
+    [
+      "OPT-hard",
+      "hard",
+      69.13580246913578
+    ],
+    [
+      "OPT-slow",
+      "slow",
+      2.7114852334151385
+    ],
+    [
+      "OPT-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "BOXIO-hard",
+      "hard",
+      48.39506172839505
+    ],
+    [
+      "BOXIO-slow",
+      "slow",
+      0.4745099158476492
+    ],
+    [
+      "BOXIO-sdc",
+      "sdc",
+      0.46939345144995
+    ],
+    [
+      "FABRIC-hard",
+      "hard",
+      69.13580246913578
+    ],
+    [
+      "FABRIC-slow",
+      "slow",
+      1.3557426167075692
+    ],
+    [
+      "FABRIC-sdc",
+      "sdc",
+      0.6705620734999285
+    ],
+    [
+      "CPU-hard",
+      "hard",
+      223.23208163916124
+    ],
+    [
+      "CPU-slow",
+      "slow",
+      2.7741721896448066
+    ],
+    [
+      "CPU-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "DDR-hard",
+      "hard",
+      267.87849796699345
+    ],
+    [
+      "DDR-slow",
+      "slow",
+      3.3290066275737673
+    ],
+    [
+      "DDR-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "SSD-hard",
+      "hard",
+      223.23208163916124
+    ],
+    [
+      "SSD-slow",
+      "slow",
+      5.548344379289613
+    ],
+    [
+      "SSD-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "POWER-hard",
+      "hard",
+      172.83950617283946
+    ],
+    [
+      "POWER-slow",
+      "slow",
+      2.7741721896448066
+    ],
+    [
+      "POWER-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "COOL-hard",
+      "hard",
+      103.70370370370367
+    ],
+    [
+      "COOL-slow",
+      "slow",
+      8.32251656893442
+    ],
+    [
+      "COOL-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "MGMT-hard",
+      "hard",
+      138.27160493827157
+    ],
+    [
+      "MGMT-slow",
+      "slow",
+      0.6658013255147535
+    ],
+    [
+      "MGMT-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "STORAGE-hard",
+      "hard",
+      138.27160493827157
+    ],
+    [
+      "STORAGE-slow",
+      "slow",
+      4.438675503431691
+    ],
+    [
+      "STORAGE-sdc",
+      "sdc",
+      0
+    ],
+    [
+      "UNKNOWN-hard",
+      "hard",
+      425.1851851851852
+    ],
+    [
+      "UNKNOWN-slow",
+      "slow",
+      6.824463586526225
+    ],
+    [
+      "UNKNOWN-sdc",
+      "sdc",
+      4.0699812668268
+    ]
+  ],
+  "frozenBaseline": {
+    "n": 256,
+    "seed": 7419231,
+    "availability": 0.36607374505168483
+  },
+  "frozenTarget": {
+    "n": 1024,
+    "seed": 2655407334,
+    "availability": 0.9869647154842648
+  },
+  "originalSnapshotsChanged": false,
+  "ranking": [
+    {
+      "id": "sdc_detection",
+      "name": "静默故障在线检测",
+      "category": "正确性检测",
+      "model": [],
+      "policy": [
+        "D-SDC"
+      ],
+      "parameter": "检出率80%→99.91%；检测均1s",
+      "action": "算子/端到端正确性校验、污染追溯与可信状态回退；新增检测开销仍需实测。",
+      "index": 1,
+      "namedParameters": [
+        {
+          "path": "policy.D-SDC.coverage",
+          "before": 0.8,
+          "after": 0.9991
+        }
+      ],
+      "shapley": {
+        "loss": {
+          "mean": 92.83122878230218,
+          "se": 1.3072724319239106,
+          "ciLow": 90.26897481573131,
+          "ciHigh": 95.39348274887304
+        },
+        "availabilityGainPp": 15.47187146371703,
+        "ledger": {
+          "downtime": -0.06440942529194205,
+          "rollback": 81.62622169928228,
+          "slowdown": 0.008372695731014146,
+          "localLoss": 0,
+          "terminalInvalid": 11.260073483211997,
+          "save": 0.0009703293690608485,
+          "mechanismOverhead": 0
+        }
+      },
+      "baselineOnly": {
+        "loss": {
+          "mean": 77.92132133743192,
+          "se": 1.740276581259568,
+          "ciLow": 74.51037923816317,
+          "ciHigh": 81.33226343670067
+        },
+        "availabilityGainPp": 12.986886889571986,
+        "ledger": {
+          "downtime": -0.0008898270058352864,
+          "rollback": 66.14336451566608,
+          "slowdown": -0.00970662254852872,
+          "localLoss": 0,
+          "terminalInvalid": 11.787125472151576,
+          "save": 0.001427799169176236,
+          "mechanismOverhead": 0
+        },
+        "availability": 0.4979287937279899,
+        "totalLoss": 301.242723763206,
+        "counts": {
+          "hard": 1711.3798828125,
+          "slow": 14.810546875,
+          "sdc": 10.5966796875,
+          "manual": 17.2841796875,
+          "sdcRecoveries": 0.0029296875
+        }
+      },
+      "necessity": {
+        "loss": {
+          "mean": 59.78211199092304,
+          "se": 1.0119723411683532,
+          "ciLow": 57.79864620223307,
+          "ciHigh": 61.76557777961301
+        },
+        "availabilityGainPp": 9.963685331820507,
+        "ledger": {
+          "downtime": -0.004438008110212444,
+          "rollback": 58.67247792195668,
+          "slowdown": 0.0349641696436922,
+          "localLoss": 0,
+          "terminalInvalid": 1.079107907432972,
+          "save": 0,
+          "mechanismOverhead": 0
+        },
+        "availabilityWithout": 0.8873278621660602,
+        "totalLossWithout": 67.6032827003639,
+        "countsWithout": {
+          "hard": 1168.1357421875,
+          "slow": 20.37109375,
+          "sdc": 14.2412109375,
+          "manual": 1.2353515625,
+          "sdcRecoveries": 2.4931640625
+        }
+      }
+    },
+    {
+      "id": "checkpoint",
+      "name": "极致CKPT",
+      "category": "回滚与保存开销",
+      "model": [
+        "checkpointComputeSeconds",
+        "checkpointSaveSeconds"
+      ],
+      "policy": [
+        "C-FAST"
+      ],
+      "parameter": "周期600→1s；保存阻塞4→0s",
+      "action": "异步/分层检查点、内存暂存与恢复读取协同；零阻塞与1s周期是情景假设，需验收持久化滞后和可恢复性。",
+      "index": 0,
+      "namedParameters": [
+        {
+          "path": "model.checkpointComputeSeconds",
+          "before": 600,
+          "after": 1
+        },
+        {
+          "path": "model.checkpointSaveSeconds",
+          "before": 4,
+          "after": 0
+        },
+        {
+          "path": "policy.C-FAST.computeSeconds",
+          "before": 600,
+          "after": 1
+        },
+        {
+          "path": "policy.C-FAST.saveSeconds",
+          "before": 4,
+          "after": 0
+        }
+      ],
+      "shapley": {
+        "loss": {
+          "mean": 92.29065187411956,
+          "se": 0.4963972382852893,
+          "ciLow": 91.3177132870804,
+          "ciHigh": 93.26359046115873
+        },
+        "availabilityGainPp": 15.38177531235326,
+        "ledger": {
+          "downtime": 0.03033244430353969,
+          "rollback": 93.31612289593309,
+          "slowdown": -0.010111553457320751,
+          "localLoss": 0,
+          "terminalInvalid": -3.7538187871965425,
+          "save": 2.7081268745377223,
+          "mechanismOverhead": 0
+        }
+      },
+      "baselineOnly": {
+        "loss": {
+          "mean": 60.99882612447323,
+          "se": 1.6695101102270569,
+          "ciLow": 57.7265863084282,
+          "ciHigh": 64.27106594051827
+        },
+        "availabilityGainPp": 10.166471020745538,
+        "ledger": {
+          "downtime": 0.1506756807094689,
+          "rollback": 69.9122622177629,
+          "slowdown": -0.01839929406928542,
+          "localLoss": 0,
+          "terminalInvalid": -11.053618739288515,
+          "save": 2.0079062593600305,
+          "mechanismOverhead": 0
+        },
+        "availability": 0.4697246350397264,
+        "totalLoss": 318.16521897616417,
+        "counts": {
+          "hard": 1712.7939453125,
+          "slow": 14.740234375,
+          "sdc": 10.5986328125,
+          "manual": 17.23828125,
+          "sdcRecoveries": 1.029296875
+        }
+      },
+      "necessity": {
+        "loss": {
+          "mean": 96.46906463125443,
+          "se": 0.11040640851631157,
+          "ciLow": 96.25266807056245,
+          "ciHigh": 96.6854611919464
+        },
+        "availabilityGainPp": 16.078177438542404,
+        "ledger": {
+          "downtime": -0.00010769314236025451,
+          "rollback": 93.17096359359442,
+          "slowdown": -0.0022959923725680564,
+          "localLoss": 0,
+          "terminalInvalid": -0.0021226671006943643,
+          "save": 3.3026273902766503,
+          "mechanismOverhead": 0
+        },
+        "availabilityWithout": 0.8261829410988414,
+        "totalLossWithout": 104.29023534069516,
+        "countsWithout": {
+          "hard": 1168.8046875,
+          "slow": 20.3681640625,
+          "sdc": 14.3642578125,
+          "manual": 1.2333984375,
+          "sdcRecoveries": 0.01171875
+        }
+      }
+    },
+    {
+      "id": "sdc_investigation",
+      "name": "静默漏检调查与追溯",
+      "category": "污染发现与回滚",
+      "model": [
+        "sdcDelayHours"
+      ],
+      "policy": [],
+      "parameter": "漏检后发现168→24h",
+      "action": "离线校验、污染追溯和调查闭环。Agent可以参与，但此处单独列项，不能与人工分支收益混为一项。",
+      "index": 8,
+      "namedParameters": [
+        {
+          "path": "model.sdcDelayHours",
+          "before": 168,
+          "after": 24
+        }
+      ],
+      "shapley": {
+        "loss": {
+          "mean": 54.84814296685804,
+          "se": 0.8003121055637735,
+          "ciLow": 53.279531239953045,
+          "ciHigh": 56.41675469376304
+        },
+        "availabilityGainPp": 9.141357161143008,
+        "ledger": {
+          "downtime": 0.01676608917052436,
+          "rollback": 44.06020296853422,
+          "slowdown": -0.002990932063918236,
+          "localLoss": 0,
+          "terminalInvalid": 10.773793988232343,
+          "save": 0.0003708529850425035,
+          "mechanismOverhead": 0
+        }
+      },
+      "baselineOnly": {
+        "loss": {
+          "mean": 61.91446005809315,
+          "se": 1.4478004221659273,
+          "ciLow": 59.07677123064793,
+          "ciHigh": 64.75214888553836
+        },
+        "availabilityGainPp": 10.319076676348859,
+        "ledger": {
+          "downtime": 0.3092181947404242,
+          "rollback": 49.942823082116405,
+          "slowdown": 0.0007309981196312876,
+          "localLoss": 0,
+          "terminalInvalid": 11.661986921992408,
+          "save": -0.0002991388754347568,
+          "mechanismOverhead": 0
+        },
+        "availability": 0.47125069159575983,
+        "totalLoss": 317.2495850425441,
+        "counts": {
+          "hard": 1713.478515625,
+          "slow": 14.845703125,
+          "sdc": 10.5517578125,
+          "manual": 17.181640625,
+          "sdcRecoveries": 1.3369140625
+        }
+      },
+      "necessity": {
+        "loss": {
+          "mean": 2.1416126311453123,
+          "se": 0.5318263536234771,
+          "ciLow": 1.0992329780432972,
+          "ciHigh": 3.1839922842473274
+        },
+        "availabilityGainPp": 0.3569354385242187,
+        "ledger": {
+          "downtime": -0.003016676462927137,
+          "rollback": 1.85280763660051,
+          "slowdown": -1.1800069656731083e-05,
+          "localLoss": 0,
+          "terminalInvalid": 0.29183347107739344,
+          "save": 0,
+          "mechanismOverhead": 0
+        },
+        "availabilityWithout": 0.9833953610990231,
+        "totalLossWithout": 9.96278334058608,
+        "countsWithout": {
+          "hard": 1168.8134765625,
+          "slow": 20.357421875,
+          "sdc": 14.359375,
+          "manual": 1.23046875,
+          "sdcRecoveries": 0.013671875
+        }
+      }
+    },
+    {
+      "id": "fit_reduction",
+      "name": "器件与链路故障率治理",
+      "category": "增加MTBF",
+      "model": [],
+      "policy": [],
+      "rates": true,
+      "parameter": "选定9类中断事件FIT×0.4；集合MTBF18→45min",
+      "action": "器件筛查、纠错、链路治理及冗余设计候选。当前只量化这9类事件的合计残余故障率目标，无法再按具体工程技术拆分。集合包含IOD，不等于计算域或全系统MTBF。",
+      "index": 2,
+      "namedParameters": [
+        {
+          "path": "events.CORE-hard.fit",
+          "before": 645.7785218847166,
+          "after": 258.3114087538866
+        },
+        {
+          "path": "events.SRAM-hard.fit",
+          "before": 1076.2975364745278,
+          "after": 430.51901458981104
+        },
+        {
+          "path": "events.IOD-hard.fit",
+          "before": 669.6962449174838,
+          "after": 267.87849796699345
+        },
+        {
+          "path": "events.MODULE-hard.fit",
+          "before": 569.2418081798611,
+          "after": 227.6967232719444
+        },
+        {
+          "path": "events.MEMT-hard.fit",
+          "before": 1339.3924898349676,
+          "after": 535.7569959339869
+        },
+        {
+          "path": "events.MEMP-hard.fit",
+          "before": 580.4034122618193,
+          "after": 232.1613649047277
+        },
+        {
+          "path": "events.CPU-hard.fit",
+          "before": 558.0802040979032,
+          "after": 223.23208163916124
+        },
+        {
+          "path": "events.DDR-hard.fit",
+          "before": 669.6962449174838,
+          "after": 267.87849796699345
+        },
+        {
+          "path": "events.SSD-hard.fit",
+          "before": 558.0802040979032,
+          "after": 223.23208163916124
+        }
+      ],
+      "shapley": {
+        "loss": {
+          "mean": 48.992521128807276,
+          "se": 0.6821890440567928,
+          "ciLow": 47.655430602455965,
+          "ciHigh": 50.32961165515859
+        },
+        "availabilityGainPp": 8.165420188134545,
+        "ledger": {
+          "downtime": 38.52665365888091,
+          "rollback": 13.948662012510358,
+          "slowdown": -0.29443733494838553,
+          "localLoss": 0,
+          "terminalInvalid": -2.8269287530416625,
+          "save": -0.36142845459372697,
+          "mechanismOverhead": 0
+        }
+      },
+      "baselineOnly": {
+        "loss": {
+          "mean": 55.720503547473626,
+          "se": 2.2717841080363392,
+          "ciLow": 51.2678066957224,
+          "ciHigh": 60.173200399224854
+        },
+        "availabilityGainPp": 9.286750591245605,
+        "ledger": {
+          "downtime": 70.88767634418731,
+          "rollback": -3.5595678070767747,
+          "slowdown": -0.7815526886200788,
+          "localLoss": 0,
+          "terminalInvalid": -10.033416929517026,
+          "save": -0.7926353714991632,
+          "mechanismOverhead": 0
+        },
+        "availability": 0.4609274307447273,
+        "totalLoss": 323.4435415531636,
+        "counts": {
+          "hard": 989.2646484375,
+          "slow": 17.109375,
+          "sdc": 12.21484375,
+          "manual": 9.943359375,
+          "sdcRecoveries": 1.0166015625
+        }
+      },
+      "necessity": {
+        "loss": {
+          "mean": 6.553062508031628,
+          "se": 0.07596853545893288,
+          "ciLow": 6.4041641785321195,
+          "ciHigh": 6.701960837531137
+        },
+        "availabilityGainPp": 1.092177084671938,
+        "ledger": {
+          "downtime": 6.367256442880194,
+          "rollback": 0.17794865959696404,
+          "slowdown": 0.027288623780742705,
+          "localLoss": 0,
+          "terminalInvalid": -0.019431218226238278,
+          "save": 1.6940658945086007e-21,
+          "mechanismOverhead": 0
+        },
+        "availabilityWithout": 0.976042944637546,
+        "totalLossWithout": 14.374233217472378,
+        "countsWithout": {
+          "hard": 2328.4326171875,
+          "slow": 20.1728515625,
+          "sdc": 14.3583984375,
+          "manual": 2.41015625,
+          "sdcRecoveries": 0.0185546875
+        }
+      }
+    },
+    {
+      "id": "recovery_time",
+      "name": "自动恢复链提速",
+      "category": "降低MTTR·恢复",
+      "model": [
+        "recoveryAttemptSeconds"
+      ],
+      "policy": [],
+      "parameter": "恢复链合计130→15s",
+      "action": "通信/建组60→8s、加载10→2s、编译60→5s，构建均0s；工程拆分共用同一恢复总时长，不重复计算收益。",
+      "index": 3,
+      "namedParameters": [
+        {
+          "path": "model.recoveryAttemptSeconds",
+          "before": 130,
+          "after": 15
+        }
+      ],
+      "shapley": {
+        "loss": {
+          "mean": 29.285913854904365,
+          "se": 0.15234828057179398,
+          "ciLow": 28.98731122498365,
+          "ciHigh": 29.58451648482508
+        },
+        "availabilityGainPp": 4.8809856424840605,
+        "ledger": {
+          "downtime": 43.06567275052145,
+          "rollback": -12.28121332531587,
+          "slowdown": -0.35369546344446806,
+          "localLoss": 0,
+          "terminalInvalid": -1.0365203969168546,
+          "save": -0.10832970993982746,
+          "mechanismOverhead": 0
+        }
+      },
+      "baselineOnly": {
+        "loss": {
+          "mean": 15.636590427942709,
+          "se": 0.7344437201213316,
+          "ciLow": 14.1970807365049,
+          "ciHigh": 17.07610011938052
+        },
+        "availabilityGainPp": 2.6060984046571183,
+        "ledger": {
+          "downtime": 43.77912614699004,
+          "rollback": -25.48813859828587,
+          "slowdown": -0.5583929044414284,
+          "localLoss": 0,
+          "terminalInvalid": -1.892515288592362,
+          "save": -0.2034889277274865,
+          "mechanismOverhead": 0
+        },
+        "availability": 0.39412090887884177,
+        "totalLoss": 363.52745467269494,
+        "counts": {
+          "hard": 1885.3291015625,
+          "slow": 16.2255859375,
+          "sdc": 11.662109375,
+          "manual": 19.046875,
+          "sdcRecoveries": 0.85546875
+        }
+      },
+      "necessity": {
+        "loss": {
+          "mean": 35.542809179727584,
+          "se": 0.04804423660495183,
+          "ciLow": 35.44864247598188,
+          "ciHigh": 35.63697588347329
+        },
+        "availabilityGainPp": 5.923801529954598,
+        "ledger": {
+          "downtime": 35.70585750823385,
+          "rollback": -0.07862554914757758,
+          "slowdown": -0.07594963088144435,
+          "localLoss": 0,
+          "terminalInvalid": -0.00847314847724756,
+          "save": 0,
+          "mechanismOverhead": 0
+        },
+        "availabilityWithout": 0.9277267001847196,
+        "totalLossWithout": 43.36397988916825,
+        "countsWithout": {
+          "hard": 1098.4951171875,
+          "slow": 19.1513671875,
+          "sdc": 13.501953125,
+          "manual": 1.1611328125,
+          "sdcRecoveries": 0.015625
+        }
+      }
+    },
+    {
+      "id": "recovery_success",
+      "name": "自动恢复成功率提升",
+      "category": "降低MTTR·失败分支",
+      "model": [
+        "recoverySuccess"
+      ],
+      "policy": [],
+      "parameter": "自动成功率99%→99.9%",
+      "action": "恢复编排、失败分类与自愈验证，减少升级人工的概率；99.9%仍是待验收参数。",
+      "index": 4,
+      "namedParameters": [
+        {
+          "path": "model.recoverySuccess",
+          "before": 0.99,
+          "after": 0.999
+        }
+      ],
+      "shapley": {
+        "loss": {
+          "mean": 20.520090234648492,
+          "se": 0.19616578445243826,
+          "ciLow": 20.135605297121714,
+          "ciHigh": 20.90457517217527
+        },
+        "availabilityGainPp": 3.420015039108082,
+        "ledger": {
+          "downtime": 33.254328324115654,
+          "rollback": -11.44112720832771,
+          "slowdown": -0.2918182733629922,
+          "localLoss": 0,
+          "terminalInvalid": -0.9019702529836745,
+          "save": -0.0993223547926793,
+          "mechanismOverhead": 0
+        }
+      },
+      "baselineOnly": {
+        "loss": {
+          "mean": 20.43024430958702,
+          "se": 0.9000921395205791,
+          "ciLow": 18.666063716126686,
+          "ciHigh": 22.194424903047356
+        },
+        "availabilityGainPp": 3.4050407182645035,
+        "ledger": {
+          "downtime": 56.60571731129511,
+          "rollback": -32.77103804343676,
+          "slowdown": -0.6925928630826164,
+          "localLoss": 0,
+          "terminalInvalid": -2.4482814491027725,
+          "save": -0.2635606460855091,
+          "mechanismOverhead": 0
+        },
+        "availability": 0.40211033201491597,
+        "totalLoss": 358.73380079105044,
+        "counts": {
+          "hard": 1936.2470703125,
+          "slow": 16.744140625,
+          "sdc": 11.9677734375,
+          "manual": 1.9873046875,
+          "sdcRecoveries": 0.873046875
+        }
+      },
+      "necessity": {
+        "loss": {
+          "mean": 10.28441180156763,
+          "se": 0.101242835964326,
+          "ciLow": 10.085975843077552,
+          "ciHigh": 10.482847760057709
+        },
+        "availabilityGainPp": 1.7140686335946052,
+        "ledger": {
+          "downtime": 10.323065592335746,
+          "rollback": -0.009668577231859432,
+          "slowdown": -0.02146144839895936,
+          "localLoss": 0,
+          "terminalInvalid": -0.007523765137267602,
+          "save": 0,
+          "mechanismOverhead": 0
+        },
+        "availabilityWithout": 0.9698240291483193,
+        "totalLossWithout": 18.1055825110084,
+        "countsWithout": {
+          "hard": 1148.4580078125,
+          "slow": 20.029296875,
+          "sdc": 14.0908203125,
+          "manual": 11.65625,
+          "sdcRecoveries": 0.017578125
+        }
+      }
+    },
+    {
+      "id": "agent_manual",
+      "name": "Agent辅助人工诊断处置",
+      "category": "降低MTTR·人工分支",
+      "model": [
+        "manualAdditionalSeconds"
+      ],
+      "policy": [],
+      "parameter": "人工追加4.5→1h；每次缩短3.5h",
+      "action": "遥测汇聚、根因候选、故障定界与恢复预案，仅缩短自动恢复失败后的人工追加耗时；不自动领取检测、自动成功率或静默追溯收益。",
+      "index": 5,
+      "namedParameters": [
+        {
+          "path": "model.manualAdditionalSeconds",
+          "before": 16200,
+          "after": 3600
+        }
+      ],
+      "shapley": {
+        "loss": {
+          "mean": 15.327967064657441,
+          "se": 0.15329261943710065,
+          "ciLow": 15.027513530560723,
+          "ciHigh": 15.62842059875416
+        },
+        "availabilityGainPp": 2.554661177442907,
+        "ledger": {
+          "downtime": 25.56746050576231,
+          "rollback": -9.24070841600988,
+          "slowdown": -0.22816579279587923,
+          "localLoss": 0,
+          "terminalInvalid": -0.6909245645628868,
+          "save": -0.0796946677362021,
+          "mechanismOverhead": 0
+        }
+      },
+      "baselineOnly": {
+        "loss": {
+          "mean": 17.230033868023636,
+          "se": 0.7899026604013795,
+          "ciLow": 15.681824653636932,
+          "ciHigh": 18.778243082410338
+        },
+        "availabilityGainPp": 2.8716723113372726,
+        "ledger": {
+          "downtime": 48.134328843782555,
+          "rollback": -28.088551058365454,
+          "slowdown": -0.5934082267218059,
+          "localLoss": 0,
+          "terminalInvalid": -1.9981386968076862,
+          "save": -0.22419699386367276,
+          "mechanismOverhead": 0
+        },
+        "availability": 0.3967766479456428,
+        "totalLoss": 361.9340112326143,
+        "counts": {
+          "hard": 1902.4443359375,
+          "slow": 16.431640625,
+          "sdc": 11.7548828125,
+          "manual": 19.2001953125,
+          "sdcRecoveries": 0.8642578125
+        }
+      },
+      "necessity": {
+        "loss": {
+          "mean": 4.190841267218963,
+          "se": 0.11834176819892607,
+          "ciLow": 3.958891401549068,
+          "ciHigh": 4.422791132888858
+        },
+        "availabilityGainPp": 0.6984735445364939,
+        "ledger": {
+          "downtime": 4.212824211200285,
+          "rollback": -0.027287589245005517,
+          "slowdown": -0.008191400406645899,
+          "localLoss": 0,
+          "terminalInvalid": 0.013496045670347567,
+          "save": 0,
+          "mechanismOverhead": 0
+        },
+        "availabilityWithout": 0.9799799800389005,
+        "totalLossWithout": 12.012011976659705,
+        "countsWithout": {
+          "hard": 1160.4619140625,
+          "slow": 20.234375,
+          "sdc": 14.2587890625,
+          "manual": 1.2255859375,
+          "sdcRecoveries": 0.0166015625
+        }
+      }
+    },
+    {
+      "id": "hard_detection",
+      "name": "中断快速检测",
+      "category": "降低MTTR·检测",
+      "model": [
+        "detectProbability",
+        "detectSeconds"
+      ],
+      "policy": [
+        "D-HARD"
+      ],
+      "parameter": "检出率95%→99.8%；60→1s；漏检超时仍60s",
+      "action": "硬件/软件遥测和故障检测联动；未检出的故障仍走60s超时。",
+      "index": 6,
+      "namedParameters": [
+        {
+          "path": "model.detectProbability",
+          "before": 0.95,
+          "after": 0.998
+        },
+        {
+          "path": "model.detectSeconds",
+          "before": 60,
+          "after": 1
+        },
+        {
+          "path": "policy.D-HARD.coverage",
+          "before": 0.95,
+          "after": 0.998
+        },
+        {
+          "path": "policy.D-HARD.detectSeconds",
+          "before": 60,
+          "after": 1
+        }
+      ],
+      "shapley": {
+        "loss": {
+          "mean": 14.809404125021867,
+          "se": 0.08947255445019023,
+          "ciLow": 14.634037918299494,
+          "ciHigh": 14.98477033174424
+        },
+        "availabilityGainPp": 2.4682340208369777,
+        "ledger": {
+          "downtime": 21.595066541024995,
+          "rollback": -6.105752418714787,
+          "slowdown": -0.17697240480666684,
+          "localLoss": 0,
+          "terminalInvalid": -0.4492566377282574,
+          "save": -0.05368095475334727,
+          "mechanismOverhead": 0
+        }
+      },
+      "baselineOnly": {
+        "loss": {
+          "mean": 7.5310497250230695,
+          "se": 0.5266360811378411,
+          "ciLow": 6.498843005992901,
+          "ciHigh": 8.563256444053238
+        },
+        "availabilityGainPp": 1.2551749541705115,
+        "ledger": {
+          "downtime": 21.04768491080361,
+          "rollback": -12.383270489546675,
+          "slowdown": -0.26799862231675897,
+          "localLoss": 0,
+          "terminalInvalid": -0.7679963380790653,
+          "save": -0.0973697358375647,
+          "mechanismOverhead": 0
+        },
+        "availability": 0.38061167437397514,
+        "totalLoss": 371.63299537561494,
+        "counts": {
+          "hard": 1796.5009765625,
+          "slow": 15.482421875,
+          "sdc": 11.08984375,
+          "manual": 18.125,
+          "sdcRecoveries": 0.82421875
+        }
+      },
+      "necessity": {
+        "loss": {
+          "mean": 18.23517080148252,
+          "se": 0.027514530827115087,
+          "ciLow": 18.181242321061376,
+          "ciHigh": 18.289099281903667
+        },
+        "availabilityGainPp": 3.0391951335804204,
+        "ledger": {
+          "downtime": 18.31909614717972,
+          "rollback": -0.040211687492195614,
+          "slowdown": -0.03973917752552081,
+          "localLoss": 0,
+          "terminalInvalid": -0.0039744806794262955,
+          "save": 0,
+          "mechanismOverhead": 0
+        },
+        "availabilityWithout": 0.9565727641484612,
+        "totalLossWithout": 26.05634151092331,
+        "countsWithout": {
+          "hard": 1132.875,
+          "slow": 19.755859375,
+          "sdc": 13.9072265625,
+          "manual": 1.189453125,
+          "sdcRecoveries": 0.0166015625
+        }
+      }
+    },
+    {
+      "id": "slow_detection",
+      "name": "亚健康检测与处置",
+      "category": "降速与检测",
+      "model": [
+        "slowDetectProbability",
+        "slowDetectHours"
+      ],
+      "policy": [
+        "D-SLOW"
+      ],
+      "parameter": "检出率80%→97.5%；300→52.6s",
+      "action": "性能探针、定位与隔离，减少持续降速；检测触发的恢复停机也计入总损失。",
+      "index": 7,
+      "namedParameters": [
+        {
+          "path": "model.slowDetectProbability",
+          "before": 0.8,
+          "after": 0.975
+        },
+        {
+          "path": "model.slowDetectHours",
+          "before": 0.08333333333333333,
+          "after": 0.014611111111111111
+        },
+        {
+          "path": "policy.D-SLOW.coverage",
+          "before": 0.8,
+          "after": 0.975
+        },
+        {
+          "path": "policy.D-SLOW.detectSeconds",
+          "before": 300,
+          "after": 52.6
+        }
+      ],
+      "shapley": {
+        "loss": {
+          "mean": 2.4369543598776353,
+          "se": 0.38786282980124337,
+          "ciLow": 1.6767432134671982,
+          "ciHigh": 3.1971655062880724
+        },
+        "availabilityGainPp": 0.4061590599796059,
+        "ledger": {
+          "downtime": -0.09866553602291185,
+          "rollback": -0.48688374373284754,
+          "slowdown": 3.3532451019204648,
+          "localLoss": 0,
+          "terminalInvalid": -0.33163580657120184,
+          "save": 0.0008943442839884069,
+          "mechanismOverhead": 0
+        }
+      },
+      "baselineOnly": {
+        "loss": {
+          "mean": 0.05245214571965495,
+          "se": 1.4625495532203758,
+          "ciLow": -2.8141449785922816,
+          "ciHigh": 2.919049270031591
+        },
+        "availabilityGainPp": 0.00874202428660916,
+        "ledger": {
+          "downtime": -0.10227999069169869,
+          "rollback": -0.4856782961218187,
+          "slowdown": 2.281402275283324,
+          "localLoss": 0,
+          "terminalInvalid": -1.6421858758558656,
+          "save": 0.0011940331057775921,
+          "mechanismOverhead": 0
+        },
+        "availability": 0.3681473450751359,
+        "totalLoss": 379.1115929549184,
+        "counts": {
+          "hard": 1709.7021484375,
+          "slow": 14.697265625,
+          "sdc": 10.658203125,
+          "manual": 17.3046875,
+          "sdcRecoveries": 0.7880859375
+        }
+      },
+      "necessity": {
+        "loss": {
+          "mean": 4.060899556665361,
+          "se": 0.08157469170774338,
+          "ciLow": 3.901013160918184,
+          "ciHigh": 4.220785952412538
+        },
+        "availabilityGainPp": 0.6768165927775601,
+        "ledger": {
+          "downtime": -0.06207240127169733,
+          "rollback": -0.05061461746396623,
+          "slowdown": 4.186559121270705,
+          "localLoss": 0,
+          "terminalInvalid": -0.012972545869654017,
+          "save": 1.6601845766184287e-19,
+          "mechanismOverhead": 0
+        },
+        "availabilityWithout": 0.9801965495564898,
+        "totalLossWithout": 11.882070266106103,
+        "countsWithout": {
+          "hard": 1168.5244140625,
+          "slow": 20.2626953125,
+          "sdc": 14.2763671875,
+          "manual": 1.1875,
+          "sdcRecoveries": 0.015625
+        }
+      }
+    }
+  ],
+  "combined": {
+    "loss": {
+      "mean": 371.3428743911976,
+      "se": 1.7550217709037734,
+      "ciLow": 367.9030317202262,
+      "ciHigh": 374.782717062169
+    },
+    "availabilityGainPp": 61.8904790651996,
+    "ledger": {
+      "downtime": 161.8932053524645,
+      "rollback": 193.39552446415888,
+      "slowdown": 2.0034260427718484,
+      "localLoss": 0,
+      "terminalInvalid": 12.042812272443262,
+      "save": 2.0079062593600305,
+      "mechanismOverhead": 0
+    }
+  },
+  "endpoints": {
+    "baseline": {
+      "mask": 0,
+      "loss": {
+        "mean": 379.16404510063757,
+        "se": 1.7567759499664135,
+        "ciLow": 375.7207642387034,
+        "ciHigh": 382.60732596257174
+      },
+      "availability": 0.3680599248322707,
+      "ledger": {
+        "downtime": 168.504307503047,
+        "rollback": 193.97621105448573,
+        "slowdown": 2.613376793076962,
+        "localLoss": 0,
+        "terminalInvalid": 12.0622434906695,
+        "save": 2.0079062593600305,
+        "mechanismOverhead": 0
+      },
+      "counts": {
+        "hard": 1712.146484375,
+        "slow": 14.740234375,
+        "sdc": 10.5849609375,
+        "manual": 17.2763671875,
+        "sdcRecoveries": 0.7919921875
+      }
+    },
+    "target": {
+      "mask": 511,
+      "loss": {
+        "mean": 7.821170709440767,
+        "se": 0.1105944364059577,
+        "ciLow": 7.60440561408509,
+        "ciHigh": 8.037935804796444
+      },
+      "availability": 0.9869647154842653,
+      "ledger": {
+        "downtime": 6.611102150582502,
+        "rollback": 0.580686590326839,
+        "slowdown": 0.6099507503051138,
+        "localLoss": 0,
+        "terminalInvalid": 0.019431218226238278,
+        "save": 0,
+        "mechanismOverhead": 0
+      },
+      "counts": {
+        "hard": 1168.822265625,
+        "slow": 20.3740234375,
+        "sdc": 14.3662109375,
+        "manual": 1.2333984375,
+        "sdcRecoveries": 0.017578125
+      }
+    }
+  },
+  "agentExpandedScope": {
+    "basis": "Conditional scenario only: manual handling plus missed-SDC investigation; neither is measured Agent capability. Do not add this bundle to the individual rows.",
+    "baselineOnly": {
+      "loss": {
+        "mean": 91.60920234342127,
+        "se": 1.4352775603078238,
+        "ciLow": 88.79605832521794,
+        "ciHigh": 94.4223463616246
+      },
+      "availabilityGainPp": 15.268200390570213,
+      "ledger": {
+        "downtime": 48.168744723606196,
+        "rollback": 32.5538436748287,
+        "slowdown": -0.5270732298825154,
+        "localLoss": 0,
+        "terminalInvalid": 11.636713818158897,
+        "save": -0.2230266432895167,
+        "mechanismOverhead": 0
+      }
+    },
+    "necessity": {
+      "loss": {
+        "mean": 6.296172413604276,
+        "se": 0.5440917680635716,
+        "ciLow": 5.229752548199675,
+        "ciHigh": 7.362592279008876
+      },
+      "availabilityGainPp": 1.049362068934046,
+      "ledger": {
+        "downtime": 4.201703669097396,
+        "rollback": 1.6799155659912284,
+        "slowdown": -0.008371300059069164,
+        "localLoss": 0,
+        "terminalInvalid": 0.4229244785747445,
+        "save": 0,
+        "mechanismOverhead": 0
+      }
+    }
+  },
+  "notSeparatelyQuantified": [
+    {
+      "id": "R-REPLAY",
+      "status": "现状部署待核实；两档均未开启；不计入本轮改进排序"
+    },
+    {
+      "id": "R-PROCESS",
+      "status": "现状部署待核实；两档均未开启；不计入本轮改进排序"
+    },
+    {
+      "id": "R-ELASTIC",
+      "status": "现状部署待核实；两档均未开启；不计入本轮改进排序"
+    },
+    {
+      "id": "R-LINK-LOCAL",
+      "name": "链路透明恢复",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "R-FABRIC-DEGRADE",
+      "name": "网络绕行与降级运行",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "I-CONTAIN",
+      "name": "故障隔离与传播抑制",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "H-CONTROL-CONTINUITY",
+      "name": "控制面异常下业务连续运行",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "R-WARM-PROCESS",
+      "name": "预热进程与可信状态接替",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "R-RUNTIME-SNAPSHOT",
+      "name": "运行时初始化快照",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "C-ASYNC",
+      "name": "异步检查点保存",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "C-LOSSLESS",
+      "name": "无损检查点压缩",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "D-RECOVERY-CLASSIFY",
+      "name": "故障分类与恢复动作匹配",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "D-SDC-FP8",
+      "name": "FP8 计算路径 SDC 检测",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "D-SDC-FP4",
+      "name": "FP4 计算路径 SDC 检测",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "D-ABFT",
+      "name": "算子 ABFT／实时矩阵校验",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "D-NET-SDC",
+      "name": "网络端到端 SDC 检测",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "H-SDC-SCREEN",
+      "name": "在线压测与异常资源筛除",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "R-HCCL-ELASTIC",
+      "name": "HCCL 通信域弹性重建",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    },
+    {
+      "id": "R-CANN-GRAPH",
+      "name": "CANN 图准备与启动缓存加速",
+      "status": "单点工程参考；适用比例、成功率、失败耗时与开销不完整，未作为独立工程措施计算收益。",
+      "simulationReady": false
+    }
+  ],
+  "fullEvidenceSha256": "17771b0a9e7e0aa87859aac254b615710874c5a3b9bb83287c9c19dc16128a67"
+}

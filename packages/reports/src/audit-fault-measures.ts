@@ -5,6 +5,7 @@ import {
   auditPercent as pct,
 } from "../../contracts/src/audit-recovery-budget";
 import { esc } from "./audit-decision-pages";
+import { measureRankingHtml } from "./audit-measure-ranking";
 
 const fields = [
   "downtime",
@@ -202,5 +203,5 @@ export function faultMeasureClosureHtml(
     )
     .join(
       "",
-    )}</tbody></table></div><p class="analysis-note">表中前后为现状与突破两套组合，总损失还包含污染等账项；行内减损不能全部归给一项措施。停机、回滚与污染不混称为中断时长。</p><div class="analysis-named-measures">${cardsHtml}</div><p class="analysis-note">${necessity ? `本快照的三项回退核查均固定其余突破参数，${necessity.n}条同种子配对轨迹，完整突破端点精确复现。条形共用线性小时尺度；条件减损有交互，不可相加，不替代Shapley分摊。` : "组合达成结果与单项机制收益分开；需要补充与当前快照一致的单项回退核查。"} 共同改进还包括选定中断FIT治理、快速检测、自动恢复及漏检追溯；Agent仅通过人工追加耗时预算建模，尚非实测产品收益。</p></section>`;
+    )}</tbody></table></div><p class="analysis-note">表中前后为现状与突破两套组合，总损失还包含污染等账项；行内减损不能全部归给一项措施。停机、回滚与污染不混称为中断时长。</p><div class="analysis-named-measures">${cardsHtml}</div><p class="analysis-note">${necessity ? `本快照的三项回退核查均固定其余突破参数，${necessity.n}条同种子配对轨迹，完整突破端点精确复现。条形共用线性小时尺度；条件减损有交互，不可相加，不替代Shapley分摊。` : "组合达成结果与单项机制收益分开；需要补充与当前快照一致的单项回退核查。"} 共同改进还包括选定中断FIT治理、快速检测、自动恢复及漏检追溯；Agent仅通过人工追加耗时预算建模，尚非实测产品收益。</p></section>${measureRankingHtml(result, d, cards)}`;
 }
