@@ -18,12 +18,21 @@ export function componentLossSources(stage: Stage) {
     .sort((a, b) => b.actualHours - a.actualHours || a.id.localeCompare(b.id));
 }
 
-const tone = (hours: number) =>
-  hours >= 50
-    ? ["#a51f2d", "#fff0f2"]
-    : hours >= 20
-      ? ["#9d3a06", "#fff2e9"]
-      : ["#175b8f", "#eff5fa"];
+/** Fixed absolute-hour scale shared by every cluster size and scenario. */
+export function architectureLossFill(hours: number) {
+  const t = Math.min(1, Math.log1p(Math.max(0, hours)) / Math.log1p(600));
+  return (
+    "#" +
+    [255, 247, 248]
+      .map((v, i) =>
+        Math.round(v + ([223, 101, 114][i] - v) * t)
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("")
+  );
+}
+const tone = (hours: number) => ["#132738", architectureLossFill(hours)];
 const text = (
   x: number,
   y: number,
@@ -46,19 +55,22 @@ const rect = (
 const path = (d: string, dashed = false) =>
   `<path d="${d}" fill="none" stroke="#175b8f" stroke-width="2"${dashed ? ' stroke-dasharray="6 4"' : ""}/>`;
 
-/** Same Atlas 950 reference hierarchy, with loss labels inside the actual component positions. */
+/** Same Atlas 950 hierarchy; every evaluated module carries its absolute loss hours. */
 export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
   const t = atlas.architecture.topology!,
     root = stage.nodes.find((n) => n.id === "system")!,
     lookup = (id: string) => stage.nodes.find((n) => n.id === id),
     ranking = componentLossSources(stage),
     rank = new Map(ranking.map((n, i) => [n.id, i + 1]));
-  const value = (id: string) => lookup(id)?.actualHours;
-  const hours = (id: string) =>
-    value(id) == null ? "待评估" : `${num(value(id), 2)}h`;
+  const hours = (id: string) => {
+    const n = lookup(id);
+    return n ? `${num(n.actualHours, 2)}h` : "待评估";
+  };
+  const fill = (id: string) =>
+    lookup(id) ? architectureLossFill(lookup(id)!.actualHours) : "#f1f5f8";
   const group = (id: string, content: string) => {
     const n = lookup(id);
-    return `<g data-atlas-node="${esc(id)}" data-analysis-node="${esc(id)}" role="button" tabindex="0" aria-label="${esc(n?.name ?? id)}"><title>${esc(n ? `${n.name}；当前损失${num(n.actualHours, 3)}h；等效FIT ${num(n.fit, 2)}；A ${pct(n.availability, 3)}；分配目标 ${pct(n.target, 3)}；全规模数量 ${num(n.quantity, 0)}` : "快照未包含此部件")}</title>${content}</g>`;
+    return `<g data-atlas-node="${esc(id)}" data-analysis-node="${esc(id)}"${n ? ` data-module-loss="${n.actualHours}"` : ""} role="button" tabindex="0" aria-label="${esc(n?.name ?? id)}"><title>${esc(n ? `${n.name}；${stage.name}损失${num(n.actualHours, 3)}h；目标损失预算${num(n.allowedHours, 3)}h；A ${pct(n.availability, 3)}；分配目标 ${pct(n.target, 3)}；全规模数量 ${num(n.quantity, 0)}` : "快照未包含此部件")}</title>${content}</g>`;
   };
   const part = (
     id: string,
@@ -67,24 +79,16 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     y: number,
     w: number,
     h: number,
-  ) => {
-    const n = lookup(id),
-      [color, fill] = tone(n?.actualHours ?? 0);
-    return group(
+  ) =>
+    group(
       id,
-      rect(x, y, w, h, fill, color) +
-        text(
-          x + 7,
-          y + 21,
-          `${rank.has(id) ? "TOP" + rank.get(id) + " " : ""}${label}`,
-          12,
-          color,
-          true,
-        ) +
-        text(x + 7, y + 49, hours(id), 17, color, true) +
-        (h > 78 ? text(x + 7, y + 70, `FIT ${num(n?.fit, 1)}`, 11) : ""),
+      rect(x, y, w, h, fill(id), "#ad6871") +
+        text(x + 7, y + 21, label, 13, "#132738", true) +
+        text(x + 7, y + 49, hours(id), 17, "#132738", true) +
+        (h >= 78
+          ? text(x + 7, y + 70, `损失 TOP${rank.get(id) ?? "—"}`, 11)
+          : ""),
     );
-  };
   const network = (
     id: string,
     label: string,
@@ -95,21 +99,33 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
   ) =>
     group(
       id,
-      rect(x, y, w, h, "#edf4fa", "#7097b5") +
-        text(x + 12, y + 24, label, 15, "#175b8f", true) +
-        text(x + 12, y + 49, `损失 ${hours(id)}`, 14, "#175b8f", true),
+      rect(x, y, w, h, fill(id), "#ad6871") +
+        text(x + 12, y + 24, label, 15, "#132738", true) +
+        text(x + 12, y + 49, `损失 ${hours(id)}`, 15, "#132738", true),
+    );
+  const header = (
+    id: string,
+    label: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    size = 14,
+  ) =>
+    group(
+      id,
+      rect(x, y, w, h, "#fff", "#9db3c2") +
+        rect(x, y, w, 34, fill(id), "none", 0) +
+        text(x + 12, y + 23, label, size, "#132738", true),
     );
   const racks = t.cardsPerSupernode / t.cardsPerRack;
   const cabinetCount = t.interconnectRacksPerSupernode ?? 2;
-  const drawnCabinets = Math.min(4, Math.max(1, cabinetCount));
-  const planeCount = Math.max(0, t.planesPerSupernode ?? 0);
-  const cabHeight = drawnCabinets > 2 ? 134 : 286;
   let body =
     text(28, 34, "ATLAS 950 / 部件损失定位", 17, "#175b8f", true) +
     text(
       28,
       68,
-      `${num(root.quantity, 0)}卡 · ${esc(stage.name)} · 总损失 ${num(root.actualHours, 3)}h`,
+      `${num(root.quantity, 0)}卡 · ${stage.name} · 总损失 ${num(root.actualHours, 3)}h`,
       23,
       "#153b56",
       true,
@@ -117,20 +133,11 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     text(
       28,
       94,
-      "部件数字为全规模汇总；图中展开代表单元。红≥50h，橙20–50h，蓝<20h。",
+      "数字为全规模损失；底色越红，损失越多。图中仅展开代表单元，父层汇总不重复相加。",
       14,
     ) +
-    group(
-      "hardware-scaleout",
-      rect(28, 114, 750, 75, "#eff5fa") +
-        text(44, 140, "02 跨超节点参数面 · Leaf / Spine", 16, "#175b8f", true) +
-        text(
-          44,
-          167,
-          `Leaf ${num(lookup("hardware-leaf-extra")?.quantity, 0)}台 / ${hours("hardware-leaf-extra")}；Spine ${num(lookup("hardware-spine-extra")?.quantity, 0)}台 / ${hours("hardware-spine-extra")}`,
-          14,
-        ),
-    ) +
+    network("hardware-leaf-extra", "02 跨超节点 · Leaf", 28, 114, 366, 75) +
+    network("hardware-spine-extra", "02 跨超节点 · Spine", 412, 114, 366, 75) +
     network(
       "hardware-storage",
       "03 共享存储 / 检查点与数据服务",
@@ -143,94 +150,96 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     text(
       46,
       234,
-      `代表性超节点 · ${t.cardsPerSupernode}NPU · ${racks}计算柜 + ${cabinetCount}互联柜`,
+      `参考超节点（物理范围示意） · ${t.cardsPerSupernode}NPU · ${racks}计算柜 + ${cabinetCount}互联柜`,
       17,
       "#153b56",
       true,
     ) +
-    group(
+    header(
       "hardware-rack",
-      rect(44, 250, 656, 118, "#f0f5f8") +
-        text(
-          60,
-          278,
-          `01 计算柜：每柜 ${t.cardsPerRack} NPU；全规模 ${num(lookup("hardware-rack")?.quantity, 0)}柜`,
-          15,
-          "#153b56",
-          true,
-        ) +
-        rect(60, 297, 158, 42, "#e2ebf3", "#95aebe", 3) +
-        text(76, 324, "代表性计算柜", 17, "#175b8f", true) +
-        text(
-          242,
-          324,
-          `× ${racks} 柜 / 超节点；下方只展开1个`,
-          17,
-          "#153b56",
-          true,
-        ) +
-        text(
-          60,
-          357,
-          "下方展开柜内一个节点 / 一组计算板；各部件损失不能乘绘制数量。",
-          13,
-        ),
+      `01 计算柜 · 计算责任损失 ${hours("hardware-rack")}`,
+      44,
+      250,
+      656,
+      118,
+      16,
     ) +
-    group(
+    text(
+      60,
+      318,
+      `每柜 ${t.cardsPerRack} NPU；全规模 ${num(lookup("hardware-rack")?.quantity, 0)}柜`,
+      16,
+    ) +
+    text(
+      60,
+      350,
+      `× ${racks}柜 / 超节点；下方只展开1个。柜内IO / UB / L1另归02网络预算。`,
+      14,
+    ) +
+    header(
       "hardware-node",
-      rect(44, 388, 656, 359, "#fff", "#8fa9bc") +
-        text(
-          60,
-          415,
-          "计算柜内：计算板 / NPU模组 / 主机侧 / 网络刀片",
-          15,
-          "#153b56",
-          true,
-        ),
+      `计算节点 · 计算责任损失 ${hours("hardware-node")}`,
+      44,
+      388,
+      656,
+      359,
+      15,
     ) +
-    group(
+    header(
       "hardware-board",
-      rect(60, 433, 430, 262, "#f8fbfc", "#95aebe") +
-        text(72, 456, `计算板 · ${t.cardsPerBoard} NPU`, 13, "#153b56", true) +
-        Array.from(
-          { length: Math.min(8, t.cardsPerBoard) },
-          (_, i) =>
-            rect(
-              190 + i * 35,
-              442,
-              28,
-              23,
-              i ? "#eaf1f6" : "#d5e6f3",
-              "#9fb8c9",
-              2,
-            ) + text(199 + i * 35, 458, `${i + 1}`, 11, "#175b8f"),
-        ).join(""),
+      `计算板 · 汇总 ${hours("hardware-board")} · ${t.cardsPerBoard} NPU/板`,
+      60,
+      433,
+      430,
+      273,
+      13,
     ) +
-    group(
+    header(
       "hardware-module",
-      rect(68, 482, 414, 201, "#fff", "#7d9ab0") +
-        text(80, 505, "NPU1模组：芯片 + HBM + 模组连接", 14, "#153b56", true),
+      `NPU模组 · 汇总 ${hours("hardware-module")}`,
+      68,
+      482,
+      414,
+      201,
+      14,
     ) +
-    group(
+    header(
       "hardware-chip",
-      rect(76, 523, 296, 126, "#f4f7fa", "#9bb1c2") +
-        text(86, 542, "NPU芯片", 12, "#153b56", true),
+      `NPU芯片 · 汇总 ${hours("hardware-chip")}`,
+      76,
+      523,
+      296,
+      126,
+      12,
     ) +
-    part("object-CORE", "CORE", 82, 551, 90, 88) +
-    part("object-SRAM", "SRAM", 179, 551, 90, 88) +
-    part("object-IOD", "IOD", 276, 551, 90, 88) +
+    part("object-CORE", "CORE", 82, 562, 90, 78) +
+    part("object-SRAM", "SRAM", 179, 562, 90, 78) +
+    part("object-IOD", "IOD", 276, 562, 90, 78) +
     part("object-HBM", "HBM", 382, 523, 92, 126) +
     path("M372 595H382") +
     group(
       "object-MODULE",
-      text(
-        80,
-        671,
-        `TOP${rank.get("object-MODULE") ?? "—"} 模组连接 ${hours("object-MODULE")}；板级 ${hours("hardware-board-extra")}`,
-        13,
-        "#175b8f",
-        true,
-      ),
+      rect(76, 654, 398, 25, fill("object-MODULE"), "#ad6871", 2) +
+        text(
+          82,
+          672,
+          `模组连接 ${hours("object-MODULE")}`,
+          12,
+          "#132738",
+          true,
+        ),
+    ) +
+    group(
+      "hardware-board-extra",
+      rect(76, 686, 398, 17, fill("hardware-board-extra"), "#ad6871", 2) +
+        text(
+          82,
+          699,
+          `板级互联 ${hours("hardware-board-extra")}`,
+          10,
+          "#132738",
+          true,
+        ),
     ) +
     network(
       "hardware-l1",
@@ -250,81 +259,54 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     ) +
     network("hardware-ubnic", "02 UB NIC", 510, 654, 172, 67) +
     path("M490 474H510") +
-    path("M366 551H376V476H500V580H510") +
+    path("M366 556H376V476H500V580H510") +
     path("M596 614V654") +
     ["CPU", "DDR", "SSD"]
       .map((name, i) => {
         const id = "object-" + name,
-          x = 60 + i * 146,
-          [color, fill] = tone(value(id) ?? 0);
+          x = 60 + i * 146;
         return group(
           id,
-          rect(x, 709, 138, 29, fill, color) +
-            text(
-              x + 7,
-              729,
-              `TOP${rank.get(id) ?? "—"} ${name} ${hours(id)}`,
-              11,
-              color,
-              true,
-            ),
+          rect(x, 709, 138, 29, fill(id), "#ad6871") +
+            text(x + 7, 729, `${name} ${hours(id)}`, 12, "#132738", true),
         );
       })
       .join("") +
-    group(
+    header(
       "hardware-l2",
-      rect(756, 250, 398, 343) +
-        text(
-          772,
-          273,
-          `02 互联柜 / L2汇总 ${hours("hardware-l2")}`,
-          16,
-          "#175b8f",
-          true,
-        ) +
-        Array.from({ length: drawnCabinets }, (_, c) => {
-          const x = 768 + (c % 2) * 191,
-            y = 290 + Math.floor(c / 2) * 144;
-          const planes = Array.from(
-            { length: Math.min(8, planeCount) },
-            (_, i) => i,
-          ).filter(
-            (i) =>
-              Math.floor((i * drawnCabinets) / Math.max(1, planeCount)) === c,
-          );
-          return (
-            rect(x, y, 183, cabHeight, "#f3f7fb") +
-            text(x + 12, y + 24, `互联柜${c + 1}`, 15, "#175b8f", true) +
-            planes
-              .map((i, j) => {
-                const yy = y + 43 + j * (drawnCabinets > 2 ? 39 : 51);
-                return (
-                  text(x + 8, yy + 21, `P${i + 1}`, 12, "#175b8f", true) +
-                  [0, 1]
-                    .map(
-                      (k) =>
-                        rect(x + 39 + k * 68, yy, 59, 29, "#dfeaf4") +
-                        text(x + 56 + k * 68, yy + 20, "L2", 13, "#175b8f"),
-                    )
-                    .join("")
-                );
-              })
-              .join("")
-          );
-        }).join(""),
+      `02 互联柜 / L2 · 损失 ${hours("hardware-l2")}`,
+      756,
+      250,
+      398,
+      343,
+      16,
     ) +
+    text(
+      772,
+      315,
+      `${cabinetCount}互联柜 / 超节点；${num(t.planesPerSupernode ?? 0, 0)}个交换平面`,
+      16,
+    ) +
+    text(772, 343, "损失为全规模L2汇总，不按示意柜数重复计入。", 13) +
+    rect(778, 368, 354, 63, fill("hardware-l2"), "#ad6871") +
+    text(
+      794,
+      395,
+      `L2交换集合 · ${hours("hardware-l2")}`,
+      17,
+      "#132738",
+      true,
+    ) +
+    text(794, 420, "多平面互联 · 逻辑汇总展示", 13) +
+    path("M862 431V466H1048V431") +
+    text(778, 501, "通信路径：NPU → L1 → 光模块 → L2", 15, "#175b8f", true) +
+    text(778, 536, "故障与冗余条件以模式参数为准", 14) +
+    text(778, 568, "可点击L2查看模式、分配及前后损失", 14) +
     group(
       "object-OPT",
-      rect(756, 626, 398, 103, "#edf4fa", "#7097b5") +
-        text(772, 652, "02 光模块 · 2+2保护组", 16, "#175b8f", true) +
-        text(
-          772,
-          680,
-          `损失 ${hours("object-OPT")} · 等效FIT ${num(lookup("object-OPT")?.fit, 2)}`,
-          15,
-          "#175b8f",
-          true,
-        ) +
+      rect(756, 626, 398, 103, fill("object-OPT"), "#ad6871") +
+        text(772, 652, "02 光模块 · 2+2保护组", 16, "#132738", true) +
+        text(772, 680, `损失 ${hours("object-OPT")}`, 18, "#132738", true) +
         text(
           772,
           710,
@@ -343,26 +325,16 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
       "04 供电 / 冷却 / 管理",
       `供电${hours("object-POWER")} · 冷却${hours("object-COOL")} · 管理${hours("object-MGMT")}`,
     ],
-    [
-      "hardware-other",
-      414,
-      "05 软件与其他",
-      `TOP${rank.get("object-UNKNOWN") ?? "—"} 软件/未归因 ${hours("object-UNKNOWN")}`,
-    ],
-    [
-      "overhead",
-      800,
-      "06 保存 / 检测开销",
-      `保存检测 ${hours("overhead")}；回滚归入触发故障部件`,
-    ],
+    ["hardware-other", 414, "05 软件与其他", "含软件故障与未归因事件"],
+    ["overhead", 800, "06 保存 / 检测开销", "保存阻塞单列；回滚归触发故障部件"],
   ] as const) {
     body +=
       path(`M${x + 180} 755V783`, true) +
       group(
         id,
-        rect(x, 783, 372, 94, "#f1f6fa") +
-          text(x + 15, 810, title, 17, "#153b56", true) +
-          text(x + 15, 839, detail, 13, "#175b8f", true) +
+        rect(x, 783, 372, 94, fill(id), "#ad6871") +
+          text(x + 15, 808, `${title} · ${hours(id)}`, 16, "#132738", true) +
+          text(x + 15, 837, detail, 13) +
           text(
             x + 15,
             863,
@@ -371,26 +343,36 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
           ),
       );
   }
+  body +=
+    text(
+      28,
+      904,
+      "边界表示物理包含；实线为通信/数据路径，虚线为跨域连接。计算柜内的网络刀片归02网络。",
+      14,
+    ) + text(28, 928, "共用损失色尺：浅粉 → 红（h，连续对数色阶）", 13);
+  for (let i = 0; i < 120; i++) {
+    const loss = Math.expm1((i / 119) * Math.log1p(600));
+    body += rect(
+      28 + i * 4.5,
+      939,
+      4.6,
+      12,
+      architectureLossFill(loss),
+      "none",
+      0,
+    );
+  }
+  for (const v of [0, 1, 10, 100, 600])
+    body += text(28 + (Math.log1p(v) / Math.log1p(600)) * 534, 972, `${v}`, 12);
   return (
     body +
     text(
-      28,
-      909,
-      "边界表示物理包含；实线通信/数据路径，虚线跨域连接。IO/UB/L1在计算柜内，预算归02网络。",
-      14,
-    ) +
-    text(
-      28,
-      938,
-      "FIT为每NPU等效事件率，已含规模与拓扑分担；各器件A、目标和完整模式可点击查看。",
-      14,
-    ) +
-    text(
-      28,
-      967,
-      "父层损失包含子部件，不可重复累加。结构为950参考；节点密度、柜数、端口及BOM仍按项目输入核对。",
+      610,
+      940,
+      "父层为子部件汇总，不能重复相加；色深不表示超预算比例。",
       13,
-    )
+    ) +
+    text(610, 968, "结构为950参考；数量、端口与BOM按项目输入核对。", 13)
   );
 }
 

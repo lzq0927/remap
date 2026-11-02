@@ -224,10 +224,10 @@ function metricRows(stage: AnalysisStage, ids: readonly string[]) {
       const n = get(stage, id);
       if (!n) return [];
       return [
-        `<button type="button" data-analysis-node="${esc(id)}">${esc(n.name)}</button>`,
-        `${pct(n.availability)}<small>目标 ${pct(n.target)}</small>`,
-        `${hours(n.actualHours)}<small>预算 ${hours(n.allowedHours)} h</small>`,
-        `${num(n.fit, 3)}<small>中断 ${num(n.hardFit, 3)}</small>`,
+        `<button type="button" data-analysis-node="${esc(id)}">${id === "system" ? "合计 / 集群" : esc(n.name)}</button>`,
+        `${pct(n.availability, 3)}<small>目标 ${pct(n.target, 3)}</small>`,
+        hours(n.actualHours),
+        hours(n.allowedHours),
         period(n.mtbfHours),
         `${num(n.mttrSeconds, 1)}<small>条件预算 ${num(n.targetMttrSeconds, 1)} 秒</small>`,
         n.gapHours == null
@@ -240,11 +240,12 @@ function metricRows(stage: AnalysisStage, ids: readonly string[]) {
 export function allocationMetrics(stage: AnalysisStage, parentId = "system") {
   const ids =
     parentId === "system"
-      ? decisionDomains.map(([id]) => id)
+      ? [...decisionDomains.map(([id]) => id), "system"]
       : stage.nodes.filter((n) => n.parentId === parentId).map((n) => n.id);
   return card(
     "子系统现状与分解目标",
-    `<p>先对照本轮实际值与冻结的责任预算；点击子系统可查看部件、故障来源及机制条件。</p>${table(["子系统 / 部件", "可用度 / 分解目标", "损失 / 预算 h", "全类等效FIT / 中断FIT", "MTBF", "等效MTTR / 预算", "损失差距"], metricRows(stage, ids))}<p class="analysis-note">FIT单位为每NPU等效十亿小时，已按本规模数量/暴露折算；中断到达率 = 卡数 × 中断FIT / 10⁹。可用度是责任损失折算，父子层不能重复相加或连乘。</p>`,
+    `<p>先对照${esc(stage.name)}快照损失与冻结的目标损失预算；点击子系统可查看部件、故障来源及机制条件。</p>${table(["子系统 / 部件", "可用度 / 分解目标", stage.trainingScenario?.id === "current" ? "现状损失 h" : `${esc(stage.name)}损失 h`, "目标损失预算 h", "MTBF", "等效MTTR / 预算", "损失差距"], metricRows(stage, ids))}<p class="analysis-note">目标损失预算由AGREE分配并冻结，等于评估窗口 × (1 − 分解目标可用度)，并非改进后的预测损失。可用度是责任损失折算，父子层不能重复相加或连乘。</p>`,
+    "analysis-allocation",
   );
 }
 function containment(
@@ -255,7 +256,7 @@ function containment(
 ) {
   const n = get(stage, id);
   if (!n) return "";
-  return `<div class="analysis-enclosure ${className}" data-contains="${id}" data-budget-status="${n.allowedHours == null ? "unallocated" : (n.gapHours ?? 0) > 1e-8 ? "gap" : "within"}"><div class="analysis-enclosure-title"><button type="button" data-analysis-node="${id}">${esc(n.name)}</button><span>数量 ${num(n.quantity, 0)}</span></div><small>A ${pct(n.availability)} → ${pct(n.target)} · 损失 ${hours(n.actualHours)} / ${hours(n.allowedHours)} h</small><b class="analysis-node-gap">${n.allowedHours == null ? "目标待分配" : (n.gapHours ?? 0) > 1e-8 ? `超预算 ${hours(n.gapHours)} h` : `预算余量 ${hours(-(n.gapHours ?? 0))} h`}</b>${n.hardFit > 0 ? `<small class="analysis-node-metrics">等效FIT ${num(n.fit, 2)} · MTBF ${period(n.mtbfHours)} · MTTR ${num(n.mttrSeconds, 1)}s</small>` : ""}${children}</div>`;
+  return `<div class="analysis-enclosure ${className}" data-contains="${id}" data-budget-status="${n.allowedHours == null ? "unallocated" : (n.gapHours ?? 0) > 1e-8 ? "gap" : "within"}"><div class="analysis-enclosure-title"><button type="button" data-analysis-node="${id}">${esc(n.name)}</button><span>数量 ${num(n.quantity, 0)}</span></div><small>A ${pct(n.availability)} → ${pct(n.target)} · 损失 ${hours(n.actualHours)} / ${hours(n.allowedHours)} h</small><b class="analysis-node-gap">${n.allowedHours == null ? "目标待分配" : (n.gapHours ?? 0) > 1e-8 ? `超预算 ${hours(n.gapHours)} h` : `预算余量 ${hours(-(n.gapHours ?? 0))} h`}</b>${n.hardFit > 0 ? `<small class="analysis-node-metrics">MTBF ${period(n.mtbfHours)} · MTTR ${num(n.mttrSeconds, 1)}s</small>` : ""}${children}</div>`;
 }
 function communicationGraph() {
   const t = (x: number, y: number, v: string) =>

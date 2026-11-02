@@ -94,7 +94,8 @@ test("default analysis selects the frozen baseline; views preserve all snapshots
   const html = analysisWorkbenchHtml(comparison, 500000);
   for (const text of [
     "子系统现状与分解目标",
-    "全类等效FIT",
+    "现状损失 h",
+    "目标损失预算 h",
     "MTBF",
     "等效MTTR",
     "损失来源",
