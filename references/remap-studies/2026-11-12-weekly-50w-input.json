@@ -1,0 +1,255 @@
+{
+  "source": "用户本轮确认输入；未提供实测暴露卡时",
+  "profile": {
+    "schemaVersion": "weekly-2026-11-12.v1",
+    "cards": 500000,
+    "hours": 168,
+    "currentAvailabilityReference": 0.6,
+    "improvedAvailabilityTarget": 0.95,
+    "hbmNpuFitPerCard": 1700,
+    "shares": {
+      "hbm": 0.15,
+      "npu": 0.15,
+      "optical": 0.35
+    },
+    "silentShare": 0.014,
+    "aiCoreShareOfSilent": 0.85,
+    "reductions": {
+      "hbm": 0.6,
+      "aiCoreSilent": 0.6,
+      "optical": 0.9
+    },
+    "detection": {
+      "current": 0.9,
+      "improved": 0.9
+    },
+    "missedRecoveryHours": {
+      "current": 48,
+      "improved": 48
+    },
+    "eventLossHours": {
+      "current": {
+        "hbm": null,
+        "npu-other": null,
+        "aicore-sdc": null,
+        "optical": null,
+        "other": null
+      },
+      "improved": {
+        "hbm": null,
+        "npu-other": null,
+        "aicore-sdc": null,
+        "optical": null,
+        "other": null
+      }
+    },
+    "evidenceNote": "用户提供的50万卡周度场景：每卡HBM＋NPU合计1700 FIT，两类各占全部故障15%；光模块35%。SDC占全部故障1.4%，其中AICore占85%；检出率90%，漏检恢复48h。改进：HBM降60%、AICore SDC降60%、光模块降90%。现状60%为参考；95%为配合系统快恢的目标，快恢参数待补。未提供实测暴露卡时与置信区间。"
+  },
+  "result": {
+    "method": "weekly-additive-loss-budget.v1",
+    "current": {
+      "stage": "current",
+      "modes": [
+        {
+          "id": "hbm",
+          "name": "HBM · 全部模式（细分待补）",
+          "fitPerCard": 850,
+          "events": 71.4,
+          "missedEvents": 0,
+          "missedLossHours": 0,
+          "knownLossHours": 0,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 1
+        },
+        {
+          "id": "npu-other",
+          "name": "NPU · 除AICore静默外的模式",
+          "fitPerCard": 782.5666666666666,
+          "events": 65.7356,
+          "missedEvents": 0,
+          "missedLossHours": 0,
+          "knownLossHours": 0,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 1
+        },
+        {
+          "id": "aicore-sdc",
+          "name": "AICore · 静默数据污染",
+          "fitPerCard": 67.43333333333334,
+          "events": 5.6644000000000005,
+          "missedEvents": 0.5664399999999999,
+          "missedLossHours": 27.189119999999996,
+          "knownLossHours": 27.189119999999996,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 0.83816
+        },
+        {
+          "id": "optical",
+          "name": "光模块 · 全部模式（细分待补）",
+          "fitPerCard": 1983.3333333333333,
+          "events": 166.6,
+          "missedEvents": 0,
+          "missedLossHours": 0,
+          "knownLossHours": 0,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 1
+        },
+        {
+          "id": "other",
+          "name": "其余来源 · 待归属部件和模式",
+          "fitPerCard": 1983.3333333333333,
+          "events": 166.6,
+          "missedEvents": 0,
+          "missedLossHours": 0,
+          "knownLossHours": 0,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 1
+        }
+      ],
+      "totalFitPerCard": 5666.666666666666,
+      "total": {
+        "knownLossHours": 27.189119999999996,
+        "lossHours": null,
+        "complete": false,
+        "budgetAvailability": null,
+        "budgetAvailabilityCeiling": 0.83816,
+        "events": 476
+      },
+      "npu": {
+        "knownLossHours": 27.189119999999996,
+        "lossHours": null,
+        "complete": false,
+        "budgetAvailability": null,
+        "budgetAvailabilityCeiling": 0.83816,
+        "events": 71.4
+      },
+      "compute": {
+        "knownLossHours": 27.189119999999996,
+        "lossHours": null,
+        "complete": false,
+        "budgetAvailability": null,
+        "budgetAvailabilityCeiling": 0.83816,
+        "events": 142.8
+      }
+    },
+    "improved": {
+      "stage": "improved",
+      "modes": [
+        {
+          "id": "hbm",
+          "name": "HBM · 全部模式（细分待补）",
+          "fitPerCard": 340,
+          "events": 28.56,
+          "missedEvents": 0,
+          "missedLossHours": 0,
+          "knownLossHours": 0,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 1
+        },
+        {
+          "id": "npu-other",
+          "name": "NPU · 除AICore静默外的模式",
+          "fitPerCard": 782.5666666666666,
+          "events": 65.7356,
+          "missedEvents": 0,
+          "missedLossHours": 0,
+          "knownLossHours": 0,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 1
+        },
+        {
+          "id": "aicore-sdc",
+          "name": "AICore · 静默数据污染",
+          "fitPerCard": 26.973333333333336,
+          "events": 2.26576,
+          "missedEvents": 0.22657599999999997,
+          "missedLossHours": 10.875647999999998,
+          "knownLossHours": 10.875647999999998,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 0.935264
+        },
+        {
+          "id": "optical",
+          "name": "光模块 · 全部模式（细分待补）",
+          "fitPerCard": 198.3333333333333,
+          "events": 16.659999999999997,
+          "missedEvents": 0,
+          "missedLossHours": 0,
+          "knownLossHours": 0,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 1
+        },
+        {
+          "id": "other",
+          "name": "其余来源 · 待归属部件和模式",
+          "fitPerCard": 1983.3333333333333,
+          "events": 166.6,
+          "missedEvents": 0,
+          "missedLossHours": 0,
+          "knownLossHours": 0,
+          "complete": false,
+          "lossHours": null,
+          "budgetAvailability": null,
+          "budgetAvailabilityCeiling": 1
+        }
+      ],
+      "totalFitPerCard": 3331.2066666666665,
+      "total": {
+        "knownLossHours": 10.875647999999998,
+        "lossHours": null,
+        "complete": false,
+        "budgetAvailability": null,
+        "budgetAvailabilityCeiling": 0.935264,
+        "events": 279.82136
+      },
+      "npu": {
+        "knownLossHours": 10.875647999999998,
+        "lossHours": null,
+        "complete": false,
+        "budgetAvailability": null,
+        "budgetAvailabilityCeiling": 0.935264,
+        "events": 68.00136
+      },
+      "compute": {
+        "knownLossHours": 10.875647999999998,
+        "lossHours": null,
+        "complete": false,
+        "budgetAvailability": null,
+        "budgetAvailabilityCeiling": 0.935264,
+        "events": 96.56136000000001
+      }
+    },
+    "referenceLossHours": 67.2,
+    "targetLossHours": 8.400000000000007,
+    "knownBudgetExcessHours": 2.4756479999999907,
+    "coreMissedBudgetExcessHours": 2.4756479999999907,
+    "minimumDetectionWithWholeBudget": 0.9227632229362333,
+    "maximumMissedHoursWithWholeBudget": 37.073652990608046,
+    "residualSilentFitPerCard": 11.900000000000004,
+    "assumptions": [
+      "每周事件数＝每卡等效FIT×活动卡数×168/10^9；不再乘HBM颗数、光模块数量或代际倍率。",
+      "NPU总量包含AICore静默分支；全系统只相加互斥模式。其余15%静默故障的部件归属待补，已包含在其他模式总量内，不另加事件。",
+      "损失＝事件数×单次等效损失，按连续卡时暴露计算；未消除故障重叠、跨周恢复和共享恢复链，不能视为离散事件仿真结果。",
+      "A预算＝1−损失/168；部分已知损失只给预算可用度上界。若为负，表示加总负荷已超过一周，并非物理可用度。",
+      "60%为用户参考现状；95%为目标。单次等效损失须含检测、诊断、人工等待、恢复、回滚及影响范围；未提供的时长保留待补。"
+    ]
+  }
+}

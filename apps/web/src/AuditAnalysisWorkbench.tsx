@@ -21,7 +21,11 @@ export default function AuditAnalysisWorkbench({
     [view, setView] = useState<AnalysisView>("overview"),
     [stageName, setStageName] = useState<string>(),
     [parentId, setParentId] = useState("system"),
+    [architectureDisplay, setArchitectureDisplay] = useState<
+      "selected" | "current" | "improved" | "both"
+    >("selected"),
     [detail, setDetail] = useState(""),
+    [detailStageName, setDetailStageName] = useState<string>(),
     [full, setFull] = useState(false);
   const cards = controlledCards ?? localCards;
   const ctx = useMemo(
@@ -29,8 +33,16 @@ export default function AuditAnalysisWorkbench({
     [result, cards, stageName],
   );
   const html = useMemo(
-    () => analysisWorkbenchHtml(result, cards, view, stageName, parentId),
-    [result, cards, view, stageName, parentId],
+    () =>
+      analysisWorkbenchHtml(
+        result,
+        cards,
+        view,
+        stageName,
+        parentId,
+        architectureDisplay,
+      ),
+    [result, cards, view, stageName, parentId, architectureDisplay],
   );
   if (!ctx)
     return (
@@ -135,34 +147,60 @@ export default function AuditAnalysisWorkbench({
         </label>
       </div>
       {view === "architecture" && (
-        <label>
-          分解层级{" "}
-          <select
-            aria-label="分析分解层级"
-            value={parentId}
-            onChange={(e) => setParentId(e.target.value)}
-          >
-            <option value="system">系统六个责任域</option>
-            {ctx.stage.nodes
-              .filter(
-                (n) =>
-                  n.id !== "system" &&
-                  ctx.stage.nodes.some((c) => c.parentId === n.id),
-              )
-              .map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.name}
-                </option>
-              ))}
-          </select>
-        </label>
+        <div className="analysis-toolbar">
+          <label>
+            架构对比{" "}
+            <select
+              aria-label="架构快照对比"
+              value={architectureDisplay}
+              onChange={(e) => {
+                setArchitectureDisplay(
+                  e.target.value as typeof architectureDisplay,
+                );
+                setDetail("");
+              }}
+            >
+              <option value="selected">所选快照</option>
+              <option value="current">现状</option>
+              <option value="improved">改进后</option>
+              <option value="both">现状与改进后对比</option>
+            </select>
+          </label>
+          <label>
+            分解层级{" "}
+            <select
+              aria-label="分析分解层级"
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+            >
+              <option value="system">系统六个责任域</option>
+              {ctx.stage.nodes
+                .filter(
+                  (n) =>
+                    n.id !== "system" &&
+                    ctx.stage.nodes.some((c) => c.parentId === n.id),
+                )
+                .map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
       )}
       <div
         onClick={(e) => {
           const target = (e.target as Element).closest<HTMLElement>(
             "[data-analysis-node]",
           );
-          if (target) setDetail(target.dataset.analysisNode ?? "");
+          if (target) {
+            setDetail(target.dataset.analysisNode ?? "");
+            setDetailStageName(
+              target.closest<HTMLElement>("[data-analysis-stage]")?.dataset
+                .analysisStage ?? ctx.stage.name,
+            );
+          }
         }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
@@ -186,7 +224,13 @@ export default function AuditAnalysisWorkbench({
             </button>
             <div
               dangerouslySetInnerHTML={{
-                __html: analysisNodeDetail(ctx.stage, d, cards, detail),
+                __html: analysisNodeDetail(
+                  analysisContext(result, cards, detailStageName)?.stage ??
+                    ctx.stage,
+                  d,
+                  cards,
+                  detail,
+                ),
               }}
             />
           </div>

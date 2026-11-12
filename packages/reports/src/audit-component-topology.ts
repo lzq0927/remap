@@ -82,6 +82,8 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
     const n = lookup(id);
     return n ? `${num(n.actualHours, 2)}h` : "待评估";
   };
+  const availability = (id: string) =>
+    `A ${pct(lookup(id)?.availability ?? null, 2)}`;
   const fill = (id: string) =>
     lookup(id) ? architectureLossFill(lookup(id)!.actualHours) : "#f1f5f8";
   const stroke = (id: string) =>
@@ -109,9 +111,15 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
           "#132738",
           true,
         ) +
-        text(x + 7, y + 49, hours(id), 17, "#132738", true) +
+        text(x + 7, y + 45, hours(id), 16, "#132738", true) +
+        text(x + 7, y + 62, availability(id), 11, "#132738", true) +
         (h >= 78
-          ? text(x + 7, y + 70, `损失 TOP${rank.get(id) ?? "—"}`, 11)
+          ? text(
+              x + 7,
+              y + (h >= 100 ? 89 : 75),
+              `损失 TOP${rank.get(id) ?? "—"}`,
+              h >= 100 ? 11 : 9,
+            )
           : ""),
     );
   const network = (
@@ -126,7 +134,8 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
       id,
       rect(x, y, w, h, fill(id), stroke(id)) +
         text(x + 12, y + 24, label, 15, "#132738", true) +
-        text(x + 12, y + 49, `损失 ${hours(id)}`, 15, "#132738", true),
+        text(x + 12, y + 45, `损失 ${hours(id)}`, 15, "#132738", true) +
+        text(x + 12, y + 62, availability(id), 12, "#132738", true),
     );
   const header = (
     id: string,
@@ -141,7 +150,15 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
       id,
       rect(x, y, w, h, "#fff", "#9db3c2") +
         rect(x, y, w, 34, fill(id), "none", 0) +
-        text(x + 12, y + 23, label, size, "#132738", true),
+        text(
+          x + 12,
+          y + 23,
+          label,
+          Math.min(size, ((w - 118) / label.length) * 1.4),
+          "#132738",
+          true,
+        ) +
+        text(x + w - 94, y + 23, availability(id), 11, "#132738", true),
     );
   const racks = t.cardsPerSupernode / t.cardsPerRack;
   const cabinetCount = t.interconnectRacksPerSupernode ?? 2;
@@ -256,7 +273,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
         text(
           82,
           672,
-          `模组连接 ${hours("object-MODULE")}`,
+          `模组连接 ${hours("object-MODULE")} · ${availability("object-MODULE")}`,
           12,
           "#132738",
           true,
@@ -276,7 +293,7 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
         text(
           82,
           699,
-          `板级互联 ${hours("hardware-board-extra")}`,
+          `板级互联 ${hours("hardware-board-extra")} · ${availability("hardware-board-extra")}`,
           10,
           "#132738",
           true,
@@ -309,7 +326,8 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
         return group(
           id,
           rect(x, 709, 138, 29, fill(id), stroke(id)) +
-            text(x + 7, 729, `${name} ${hours(id)}`, 12, "#132738", true),
+            text(x + 5, 721, `${name} ${hours(id)}`, 11, "#132738", true) +
+            text(x + 5, 734, availability(id), 10, "#132738", true),
         );
       })
       .join("") +
@@ -347,7 +365,14 @@ export function componentTopologyReference(stage: Stage, atlas: AuditAtlas) {
       "object-OPT",
       rect(756, 626, 398, 103, fill("object-OPT"), stroke("object-OPT")) +
         text(772, 652, "02 光模块 · 2+2保护组", 16, "#132738", true) +
-        text(772, 680, `损失 ${hours("object-OPT")}`, 18, "#132738", true) +
+        text(
+          772,
+          680,
+          `损失 ${hours("object-OPT")} · ${availability("object-OPT")}`,
+          17,
+          "#132738",
+          true,
+        ) +
         text(
           772,
           710,

@@ -269,4 +269,32 @@ test("saved three-stage comparison survives workflow replay and exposes 126 loss
     w.getByRole("table", { name: "三阶段机制参数演进" }),
   ).toContainText("失败时");
   await expect(w).toContainText("归因基线不同");
+  await w
+    .getByRole("button", { name: "01 可用度目标分解分配", exact: true })
+    .click();
+  await w.getByLabel("架构快照对比", { exact: true }).selectOption("both");
+  const currentArchitecture = w.locator('[data-analysis-stage="现状"]');
+  const improvedArchitecture = w.locator('[data-analysis-stage="突破性改进"]');
+  await expect(currentArchitecture).toBeVisible();
+  await expect(improvedArchitecture).toBeVisible();
+  const improvedHbm = improvedArchitecture
+    .locator('g[data-atlas-node="object-HBM"]')
+    .first();
+  await expect(improvedHbm).toContainText("A ");
+  await improvedHbm.click();
+  const dialog = page.getByRole("dialog", {
+    name: "子系统分解详情",
+    exact: true,
+  });
+  await expect(dialog.getByRole("heading")).toContainText("突破性改进");
+  await page.keyboard.press("Escape");
+  await w.getByLabel("架构快照对比", { exact: true }).selectOption("current");
+  await expect(improvedArchitecture).toHaveCount(0);
+  await w.getByLabel("架构快照对比", { exact: true }).selectOption("improved");
+  await expect(currentArchitecture).toHaveCount(0);
+  await expect(improvedArchitecture).toBeVisible();
+  await page.screenshot({
+    path: "artifacts/weekly-reliability/historical-architecture.png",
+    fullPage: true,
+  });
 });

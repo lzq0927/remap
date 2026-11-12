@@ -125,6 +125,41 @@ test("horizontal source bars partition the original ledger without counting pare
   }
 });
 
+test("architecture comparison keeps stage identity, visible module availability and frozen values", () => {
+  const before = structuredClone(comparison);
+  const both = analysisWorkbenchHtml(
+    comparison,
+    500000,
+    "architecture",
+    undefined,
+    "system",
+    "both",
+  );
+  expect(both).toContain('data-analysis-stage="现状"');
+  expect(both).toContain('data-analysis-stage="突破性改进"');
+  const current = analysisWorkbenchHtml(
+    comparison,
+    500000,
+    "architecture",
+    undefined,
+    "system",
+    "current",
+  );
+  expect(current).not.toContain('data-analysis-stage="突破性改进"');
+  const improved = analysisWorkbenchHtml(
+    comparison,
+    500000,
+    "architecture",
+    undefined,
+    "system",
+    "improved",
+  );
+  expect(improved).not.toContain('data-analysis-stage="现状"');
+  const hbm = both.match(/<g data-atlas-node="object-HBM"[\s\S]*?<\/g>/)?.[0];
+  expect(hbm).toMatch(/<text[^>]*>A [\d.]+%<\/text>/);
+  expect(comparison).toEqual(before);
+});
+
 test("component hotspots rank disjoint leaves at each scale and conserve the saved loss ledger", () => {
   const before = structuredClone(comparison);
   for (const cards of [10000, 500000]) {

@@ -727,10 +727,10 @@ export function analysisNodeDetail(
       descendants.has(e.nodeId),
   );
   return card(
-    `${esc(n.name)} · 来源与目标`,
+    `${esc(n.name)} · ${esc(stage.name)} · 来源与目标`,
     table(
       [
-        "现状可用度 / 目标",
+        "所选快照可用度 / 目标",
         "数量 / 全类等效FIT",
         "MTBF",
         "等效MTTR / 条件预算",
@@ -915,9 +915,37 @@ export function analysisWorkbenchHtml(
   view: WorkflowAnalysisView = "overview",
   stageName?: string,
   parentId = "system",
-) {
+  architectureDisplay:
+    | "selected"
+    | "current"
+    | "improved"
+    | "both" = "selected",
+): string {
   const ctx = analysisContext(result, cards, stageName);
   if (!ctx) return "";
+  if (view === "architecture" && architectureDisplay !== "selected") {
+    const current =
+      ctx.scale.scenarios.find((s) => s.trainingScenario?.id === "current") ??
+      ctx.baseline;
+    const improved =
+      ctx.stage.name !== current.name
+        ? ctx.stage
+        : (ctx.scale.scenarios.find(
+            (s) => s.trainingScenario?.id === "breakthrough",
+          ) ??
+          ctx.scale.scenarios.filter((s) => s.name !== current.name).at(-1));
+    const selected =
+      architectureDisplay === "both"
+        ? [current, improved]
+        : [architectureDisplay === "current" ? current : improved];
+    return selected
+      .map((s) =>
+        s
+          ? `<div data-analysis-stage="${esc(s.name)}">${analysisWorkbenchHtml(result, cards, view, s.name, parentId)}</div>`
+          : '<p class="analysis-empty">本次结果尚未包含改进快照，请先完成改进方案评估。</p>',
+      )
+      .join("");
+  }
   const { d, stage, baseline, root } = ctx;
   cards = ctx.scale.cards;
   const architecture =

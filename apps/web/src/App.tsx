@@ -4,6 +4,7 @@ import {
   isFourPart,
 } from "../../../packages/contracts/src/reliability-workflow";
 import AuditExperiments from "./AuditExperiments";
+import WeeklyReliability from "./WeeklyReliability";
 import {
   assessmentModels,
   runAssessmentModel,
@@ -1239,6 +1240,7 @@ function Workbench({ task, onHome }: { task: Task; onHome: () => void }) {
         )}
         {page === "workbench" && (
           <>
+            {scenario === "training" && <WeeklyReliability />}
             {scenario === "training" && (
               <section className="assessment-settings" aria-label="模型设置">
                 <div className="assessment-current">
