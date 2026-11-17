@@ -15,6 +15,7 @@ import {
   hours,
   percent,
   points,
+  saveFile,
   scale,
   times,
 } from "./format";
@@ -251,12 +252,9 @@ export function downloadReport(
   analysis: Analysis,
   verification: VerificationResult | null,
 ) {
-  const blob = new Blob([buildReport(title, model, analysis, verification)], {
-      type: "text/html;charset=utf-8",
-    }),
-    link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = title.replace(/[\\/:*?"<>|]/g, "_") + "-可用度设计报告.html";
-  link.click();
-  URL.revokeObjectURL(link.href);
+  saveFile(
+    title + "-可用度设计报告.html",
+    buildReport(title, model, analysis, verification),
+    "text/html;charset=utf-8",
+  );
 }

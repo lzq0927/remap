@@ -190,8 +190,9 @@ export default function StepVerify() {
                 {result.design.histogramTail > 0 &&
                   `最左一根还包含 ${result.design.histogramTail} 个更低的窗口（最低 ${percent(result.design.min)}），通常是遇到了长时间漏检。`}
                 系统 MTBF 仿真值 {duration(result.design.mtbfHours)}
-                ，单次等效损失 {duration(result.design.mttrHours)}，每个窗口平均{" "}
-                {count(result.design.events, 1)} 次故障。
+                ，单次等效损失 {duration(
+                  result.design.mttrHours,
+                )}，每个窗口平均 {count(result.design.events, 1)} 次故障。
               </p>
             </section>
             <section className="rw-card" aria-label="逐项判定">

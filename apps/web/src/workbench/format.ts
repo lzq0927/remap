@@ -42,3 +42,15 @@ export const scale = (cards: number) =>
 function trim(value: number, digits: number) {
   return String(Number(value.toFixed(digits)));
 }
+
+/** 把内容保存为本地文件。链接需先挂到页面上，文件名才会生效。 */
+export function saveFile(name: string, content: string, type: string) {
+  const url = URL.createObjectURL(new Blob([content], { type })),
+    link = document.createElement("a");
+  link.href = url;
+  link.download = name.replace(/[\\/:*?"<>|]/g, "_");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

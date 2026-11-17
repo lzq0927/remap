@@ -27,7 +27,7 @@ import {
   type VerificationResult,
 } from "../../../../packages/core/src/index";
 import type { Task } from "./Home";
-import { percent, points } from "./format";
+import { percent, points, saveFile } from "./format";
 import { NumberField, Status, type Tone } from "./ui";
 import StepAllocate from "./StepAllocate";
 import StepAssess from "./StepAssess";
@@ -302,14 +302,11 @@ export default function Workbench({
                 <button
                   role="menuitem"
                   onClick={() => {
-                    const blob = new Blob([JSON.stringify(model, null, 2)], {
-                      type: "application/json",
-                    });
-                    const link = document.createElement("a");
-                    link.href = URL.createObjectURL(blob);
-                    link.download = task.name + "-模型.json";
-                    link.click();
-                    URL.revokeObjectURL(link.href);
+                    saveFile(
+                      task.name + "-模型.json",
+                      JSON.stringify(model, null, 2),
+                      "application/json",
+                    );
                   }}
                 >
                   导出模型参数（JSON）
