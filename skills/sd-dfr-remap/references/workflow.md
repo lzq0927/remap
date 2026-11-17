@@ -26,4 +26,4 @@ RBD/BDD按结构指标求解；固定窗口训练可用度需要停机、回滚�
 | 机制设计   | core_model_save、core_analysis  | 改 `measures`；`contributions` 为 Shapley 贡献，`recommendation` 为推荐方案             |
 | 机制验证   | core_verify                     | 独立离散事件仿真；返回逐项判定 `checks` 与结论 `verdict`                                |
 
-口径：A = (1 − 公共开销) / (1 + ρ)，ρ = Σ λᵢ·MTTRᵢ；分配、评估、设计都在 ρ 上进行，方法说明见 docs/2026-11-17-四步工作台重构.md。模型里的 `modes` 是故障模式库、`measures` 是可靠性措施库、`groups` 与 `modules` 是架构；措施的 `applicability` 是适用比例（0–1），`effects[].op` 取 reduce / set / add。保存模型前先读取，再在原模型上修改；每个故障率和恢复参数写明来源，措施的 `evidence` 如实填写 verified / planned / assumed。仿真通过只说明“参数成立时可以达标”。上表四个工具不改变经典工作台（专家模式）的六阶段或四部分执行记录。
+口径：A = (1 − 公共开销) / (1 + ρ)，ρ = Σ λᵢ·MTTRᵢ；分配、评估、设计都在 ρ 上进行，方法说明见 docs/2026-11-17-四步工作台重构.md。模型里的 `modes` 是故障模式库、`measures` 是可靠性措施库、`groups` 与 `modules` 是架构，模块的 `anchor` 是它在系统架构图上的位置（aicore / npu / hbm / node / l1 / l2 / optical / storage / power / management / software，留空表示不画在图上）；措施的 `applicability` 是适用比例（0–1），`effects[].op` 取 reduce / set / add。保存模型前先读取，再在原模型上修改；每个故障率和恢复参数写明来源，措施的 `evidence` 如实填写 verified / planned / assumed。仿真通过只说明“参数成立时可以达标”。上表四个工具不改变经典工作台（专家模式）的六阶段或四部分执行记录。

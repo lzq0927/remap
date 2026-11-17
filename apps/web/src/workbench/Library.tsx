@@ -11,6 +11,9 @@ import {
 import {
   coreModelSchema,
   defaultMeasures,
+  diagramSlotNames,
+  diagramSlots,
+  upgradeCoreModel,
   evidenceStateNames,
   evidenceStates,
   faultKindNames,
@@ -60,13 +63,15 @@ export default function Library({
     try {
       const data = JSON.parse(await file.text());
       // 兼容两种文件：只含基础库的文件，或完整的模型参数文件。
-      const parsed = coreModelSchema.safeParse({
-        ...model,
-        groups: data.groups ?? model.groups,
-        modules: data.modules ?? model.modules,
-        modes: data.modes ?? model.modes,
-        measures: data.measures ?? model.measures,
-      });
+      const parsed = coreModelSchema.safeParse(
+        upgradeCoreModel({
+          ...model,
+          groups: data.groups ?? model.groups,
+          modules: data.modules ?? model.modules,
+          modes: data.modes ?? model.modes,
+          measures: data.measures ?? model.measures,
+        }),
+      );
       if (!parsed.success)
         throw new Error(
           parsed.error.issues
@@ -605,7 +610,6 @@ function ModuleLibrary() {
                   void d.groups.push({
                     id: newId("group"),
                     name: "新分组",
-                    layout: "grid",
                   }),
               )
             }
@@ -615,7 +619,7 @@ function ModuleLibrary() {
           </button>
         </div>
         <p className="rw-hint">
-          分组是架构图最外层的框。“串成路径”适合网络这类按顺序连接的部件，模块之间会画上箭头。
+          分组用于在表格里归类模块，例如计算、网络、存储。
         </p>
         <div className="rw-group-editor">
           {model.groups.map((group) => {
@@ -632,19 +636,6 @@ function ModuleLibrary() {
                     })
                   }
                 />
-                <select
-                  aria-label={group.name + " 的画法"}
-                  value={group.layout}
-                  onChange={(e) =>
-                    update((d) => {
-                      d.groups.find((g) => g.id === group.id)!.layout = e.target
-                        .value as "grid" | "chain";
-                    })
-                  }
-                >
-                  <option value="grid">并列摆放</option>
-                  <option value="chain">串成路径</option>
-                </select>
                 <button
                   className="rw-icon-button"
                   aria-label={"删除分组 " + group.name}
@@ -677,7 +668,7 @@ function ModuleLibrary() {
           </button>
         </div>
         <p className="rw-hint">
-          模块是分配目标和统计损失的单位，按表中顺序画在架构图上。上级部件相同的模块会被框在一起。
+          模块是分配目标和统计损失的单位。架构图按超节点的硬件拓扑绘制，每个模块标注在所选的硬件位置上；选“不画在图上”的模块列在图的下方。
         </p>
         <div className="rw-table-wrap">
           <table className="rw-table is-edit">
@@ -685,7 +676,7 @@ function ModuleLibrary() {
               <tr>
                 <th>分组</th>
                 <th>模块</th>
-                <th>上级部件</th>
+                <th>架构图上的位置</th>
                 <th className="is-num">每卡数量</th>
                 <th className="is-num">重要度 ω</th>
                 <th className="is-num">故障模式</th>
@@ -726,15 +717,26 @@ function ModuleLibrary() {
                       />
                     </td>
                     <td>
-                      <TextField
-                        label={module.name + " 的上级部件"}
-                        value={module.container}
-                        maxLength={40}
-                        placeholder="可留空"
-                        onCommit={(container) =>
-                          patch(module.id, { container })
+                      <select
+                        aria-label={module.name + " 在架构图上的位置"}
+                        value={
+                          (diagramSlots as readonly string[]).includes(
+                            module.anchor,
+                          )
+                            ? module.anchor
+                            : ""
                         }
-                      />
+                        onChange={(e) =>
+                          patch(module.id, { anchor: e.target.value })
+                        }
+                      >
+                        <option value="">不画在图上</option>
+                        {diagramSlots.map((slot) => (
+                          <option key={slot} value={slot}>
+                            {diagramSlotNames[slot]}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td>
                       <NumberField

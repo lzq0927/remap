@@ -244,7 +244,7 @@ export function modelHash(model: CoreModel) {
   const numeric = {
     scenario: model.scenario,
     modules: model.modules.map(
-      ({ note: _note, name: _name, container: _container, ...rest }) => rest,
+      ({ note: _note, name: _name, anchor: _anchor, ...rest }) => rest,
     ),
     modes: model.modes.map(
       ({ evidence: _evidence, name: _name, ...rest }) => rest,

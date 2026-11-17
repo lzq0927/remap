@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Plus, Timer, Trash2, TrendingUp } from "lucide-react";
 import {
+  diagramSlotNames,
+  diagramSlots,
   faultKindNames,
   faultKinds,
   lossPerEvent,
@@ -87,22 +89,22 @@ export default function StepAssess() {
 
       <ArchitectureDiagram
         views={["baseline", "design"]}
-        title="架构图"
-        hint="每个框是一个模块，标出可用度与目标、每卡 FIT、损失时间与预算。点击模块可查看并修改它的故障模式和恢复参数。"
+        title="系统架构图"
+        hint="按超节点的硬件拓扑绘制，每个模块的可用度与目标、每卡 FIT、损失时间与预算标在对应硬件上。点击硬件可查看并修改它的故障模式和恢复参数。"
         onSelect={setSelected}
-        footer={(groupId) => (
+        actions={
           <button
-            className="rw-tile-add"
+            className="rw-button"
             onClick={() => {
-              const module = blankModule(groupId);
+              const module = blankModule(model.groups[0].id);
               update((d) => void d.modules.push(module));
               setSelected(module.id);
             }}
           >
-            <Plus size={14} aria-hidden />
+            <Plus size={15} aria-hidden />
             添加模块
           </button>
-        )}
+        }
       />
 
       <section className="rw-card" aria-label="差距明细">
@@ -382,14 +384,23 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
           </select>
         </label>
         <label className="is-wide">
-          <span>上级部件（架构图中归入同名的框，可留空）</span>
-          <TextField
-            label="上级部件"
-            value={module.container}
-            maxLength={40}
-            placeholder="例如：NPU 模组"
-            onCommit={(container) => patchModule({ container })}
-          />
+          <span>架构图上的位置</span>
+          <select
+            aria-label="架构图上的位置"
+            value={
+              (diagramSlots as readonly string[]).includes(module.anchor)
+                ? module.anchor
+                : ""
+            }
+            onChange={(e) => patchModule({ anchor: e.target.value })}
+          >
+            <option value="">不画在图上（列在图下方）</option>
+            {diagramSlots.map((slot) => (
+              <option key={slot} value={slot}>
+                {diagramSlotNames[slot]}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="is-wide">
           <span>说明</span>

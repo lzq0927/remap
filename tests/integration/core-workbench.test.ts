@@ -36,8 +36,11 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     // 早期保存的模型缺少后来新增的字段，读取时补默认值，不丢数据
     const store = app.taskServices.resolve(task.id).store,
       legacy = JSON.parse(JSON.stringify(model));
-    for (const group of legacy.groups) delete group.layout;
-    for (const module of legacy.modules) delete module.container;
+    for (const group of legacy.groups) group.layout = "chain";
+    for (const module of legacy.modules) {
+      delete module.anchor;
+      module.container = "";
+    }
     for (const measure of legacy.measures) {
       delete measure.applicability;
       delete measure.source;
@@ -49,7 +52,8 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     );
     const upgraded = (await app.inject(path)).json();
     expect(upgraded.model.scenario.target).toBe(0.85);
-    expect(upgraded.model.groups[1].layout).toBe("grid");
+    expect(upgraded.model.groups[1]).toEqual({ id: "network", name: "网络" });
+    expect(upgraded.model.modules[0].anchor).toBe("aicore");
     expect(upgraded.model.measures[0].applicability).toBe(1);
     expect(upgraded.hash).toBe(modelHash(upgraded.model));
     await app.inject({ method: "PUT", url: path, payload: { model } });

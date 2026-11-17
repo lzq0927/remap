@@ -125,6 +125,6 @@ export const blankModule = (groupId: string) => ({
   unitsPerCard: 1,
   importance: 1,
   complexity: null,
-  container: "",
+  anchor: "",
   note: "",
 });

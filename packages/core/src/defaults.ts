@@ -482,7 +482,7 @@ export function defaultCoreModel(): CoreModel {
     groupId: string,
     name: string,
     note: string,
-    options: { unitsPerCard?: number; container?: string } = {},
+    options: { unitsPerCard?: number; anchor?: string } = {},
   ) => ({
     id,
     groupId,
@@ -490,7 +490,7 @@ export function defaultCoreModel(): CoreModel {
     unitsPerCard: options.unitsPerCard ?? 1,
     importance: 1,
     complexity: null,
-    container: options.container ?? "",
+    anchor: options.anchor ?? id,
     note,
   });
   return {
@@ -504,40 +504,44 @@ export function defaultCoreModel(): CoreModel {
       passRatio: 0.9,
     },
     groups: [
-      { id: "compute", name: "计算", layout: "grid" },
-      { id: "network", name: "网络", layout: "chain" },
-      { id: "storage", name: "存储", layout: "grid" },
-      { id: "facility", name: "供电、冷却与管理", layout: "grid" },
-      { id: "software", name: "软件与调度", layout: "grid" },
+      { id: "compute", name: "计算" },
+      { id: "network", name: "网络" },
+      { id: "storage", name: "存储" },
+      { id: "facility", name: "供电、冷却与管理" },
+      { id: "software", name: "软件与调度" },
     ],
     modules: [
-      module("aicore", "compute", "AICore", "NPU 内的计算核；只承载静默分支", {
-        container: "NPU 模组",
-      }),
+      module("aicore", "compute", "AICore", "NPU 内的计算核；只承载静默分支"),
       module(
         "npu",
         "compute",
         "NPU 其余部分",
         "SRAM、逻辑、封装等除 AICore 静默以外的 NPU 故障",
-        { container: "NPU 模组" },
       ),
-      module("hbm", "compute", "HBM", "按每卡等效 FIT 计，不再乘 HBM 颗数", {
-        container: "NPU 模组",
-      }),
+      module("hbm", "compute", "HBM", "按每卡等效 FIT 计，不再乘 HBM 颗数"),
       module("node", "compute", "节点与板级", "CPU、DDR、SSD、模组与板级连接"),
-      module("iod-l1", "network", "IO Die 与 L1 互联", "片内 IO Die、D2D 通路"),
+      module(
+        "iod-l1",
+        "network",
+        "IO Die 与 L1 互联",
+        "片内 IO Die、D2D 通路",
+        {
+          anchor: "l1",
+        },
+      ),
       module(
         "optical",
         "network",
         "光模块",
         "按每卡约 4 只折算，使其占全部故障约 35%；数量待 BOM 确认",
-        { unitsPerCard: 4 },
+        { unitsPerCard: 4, anchor: "optical" },
       ),
       module(
         "l2-fabric",
         "network",
         "L2 / Leaf / Spine 与网卡",
         "UB 网卡、IO 转换板、L1/L2 互联设备",
+        { anchor: "l2" },
       ),
       module("storage", "storage", "存储系统", "共享检查点与存储服务"),
       module("power", "facility", "供电与冷却", "柜级供电、液冷与风扇"),

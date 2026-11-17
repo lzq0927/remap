@@ -53,23 +53,21 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   await expect(steps.locator('[aria-current="step"]')).toContainText(
     "可用度评估",
   );
-  const architecture = page.getByRole("region", {
-    name: "架构图",
-    exact: true,
-  });
-  // 架构图：分组 → 上级部件 → 模块，标出现状与目标可用度、FIT、损失与预算
+  const architecture = page.getByRole("region", { name: "系统架构图" });
+  // 架构图按硬件拓扑绘制，指标标在对应硬件上：现状与目标可用度、FIT、损失与预算
+  await expect(
+    architecture.getByRole("img", { name: "系统架构图（现状）" }),
+  ).toBeVisible();
+  await expect(architecture).toContainText("代表性超节点 · 1024 NPU 模组");
+  await expect(architecture).toContainText("互联柜 1");
+  await expect(
+    architecture.getByRole("button", { name: /可用度/ }),
+  ).toHaveCount(13);
   const hbm = architecture.getByRole("button", { name: /^HBM，/ });
   await expect(hbm).toContainText("95.33%");
   await expect(hbm).toContainText("99.63%");
-  await expect(hbm).toContainText("850");
-  await expect(hbm).toContainText("5.42 h");
-  await expect(hbm).toContainText("0.59 h");
-  await expect(
-    architecture.getByRole("region", { name: "计算分组" }),
-  ).toContainText("NPU 模组");
-  await expect(
-    architecture.getByRole("region", { name: "网络分组" }).getByRole("button"),
-  ).toHaveCount(4);
+  await expect(hbm).toContainText("850 FIT");
+  await expect(hbm).toContainText("5.42 h / 0.59 h");
   await architecture.getByRole("tab", { name: "设计后" }).click();
   await expect(hbm).toContainText("98.08%");
   await architecture.getByRole("tab", { name: "现状" }).click();
@@ -129,7 +127,7 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
     page
       .getByRole("region", { name: "架构上的设计结果" })
       .getByRole("group", { name: /^光模块，设计后可用度/ }),
-  ).toContainText("预算");
+  ).toContainText("200 FIT");
 
   // 第 4 步：独立仿真，结果按任务保存
   await page.getByRole("button", { name: "下一步：机制验证" }).click();
@@ -224,21 +222,23 @@ test("基础库配置：故障模式库、措施库和架构模块可以增删�
   await share.press("Enter");
   await expect(summary).toContainText("79.69%");
 
-  // 架构模块：上级部件决定架构图里的嵌套
+  // 架构模块：可以指定每个模块标注在架构图的哪个硬件上
   await page.getByRole("tab", { name: /架构模块/ }).click();
   const modules = page.getByRole("region", { name: "架构模块" });
   await expect(modules.getByRole("row")).toHaveCount(12);
-  const container = modules.getByLabel("节点与板级 的上级部件");
-  await container.fill("计算节点");
-  await container.press("Enter");
+  await modules
+    .getByLabel("节点与板级 在架构图上的位置")
+    .selectOption({ label: "不画在图上" });
   await page.getByRole("button", { name: "返回四步流程" }).click();
   await page
     .getByRole("navigation", { name: "四步工作流" })
     .getByRole("button", { name: /可用度评估/ })
     .click();
-  await expect(page.getByRole("region", { name: "计算分组" })).toContainText(
-    "计算节点",
-  );
+  const diagram = page.getByRole("region", { name: "系统架构图" });
+  await expect(diagram).toContainText("没有画在图上的模块");
+  await expect(
+    diagram.getByRole("button", { name: /^节点与板级，现状可用度/ }),
+  ).toContainText("673 FIT");
 
   await expect
     .poll(

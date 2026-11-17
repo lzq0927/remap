@@ -8,9 +8,11 @@ import {
   coreModelVersion,
   createEvaluator,
   defaultCoreModel,
+  diagramSlots,
   gaps,
   lossPerEvent,
   modelHash,
+  parseCoreModel,
   recommend,
   shapley,
   simulate,
@@ -526,21 +528,30 @@ describe("模型校验", () => {
     const ratio = defaultCoreModel();
     ratio.measures[0].effects[0].value = 1.5;
     expect(coreModelSchema.safeParse(ratio).success).toBe(false);
-    // 早期保存的模型没有架构图与适用比例字段，读取时补默认值
+    // 早期保存的模型：没有适用比例与架构图位置，带有已废弃的画法字段
     const legacy = JSON.parse(JSON.stringify(defaultCoreModel()));
-    for (const group of legacy.groups) delete group.layout;
-    for (const module of legacy.modules) delete module.container;
+    for (const group of legacy.groups) group.layout = "grid";
+    for (const module of legacy.modules) {
+      delete module.anchor;
+      module.container = "NPU 模组";
+    }
     for (const measure of legacy.measures) {
       delete measure.applicability;
       delete measure.source;
     }
-    const upgraded = coreModelSchema.parse(legacy);
-    expect(upgraded.groups[0].layout).toBe("grid");
-    expect(upgraded.modules[0].container).toBe("");
+    expect(coreModelSchema.safeParse(legacy).success).toBe(false);
+    const upgraded = parseCoreModel(legacy);
+    expect(upgraded.modules.map((m) => m.anchor)).toEqual(
+      defaultCoreModel().modules.map((m) => m.anchor),
+    );
+    expect(upgraded.modules.find((m) => m.id === "iod-l1")!.anchor).toBe("l1");
     expect(upgraded.measures[0]).toMatchObject({
       applicability: 1,
       source: "",
     });
+    expect(legacy.groups[0].layout).toBe("grid"); // 不改动传入的对象
+    for (const module of defaultCoreModel().modules)
+      expect(diagramSlots, module.id).toContain(module.anchor);
     const extra = { ...defaultCoreModel(), unknown: 1 };
     expect(coreModelSchema.safeParse(extra).success).toBe(false);
   });

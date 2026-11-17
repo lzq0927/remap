@@ -25,14 +25,38 @@ export const faultKindNames: Record<FaultKind, string> = {
   sdc: "静默",
 };
 
-export const groupSchema = z
-  .object({
-    id,
-    name: label,
-    /** 架构图中的画法：grid 并列摆放；chain 按顺序串成一条路径。 */
-    layout: z.enum(["grid", "chain"]).default("grid"),
-  })
-  .strict();
+export const groupSchema = z.object({ id, name: label }).strict();
+/**
+ * 架构图上的位置。架构图按 Atlas 950 超节点的硬件拓扑绘制，
+ * 每个模块标注在对应的硬件上；不在此列表中的模块列在图下方。
+ */
+export const diagramSlots = [
+  "aicore",
+  "npu",
+  "hbm",
+  "node",
+  "l1",
+  "l2",
+  "optical",
+  "storage",
+  "power",
+  "management",
+  "software",
+] as const;
+export type DiagramSlot = (typeof diagramSlots)[number];
+export const diagramSlotNames: Record<DiagramSlot, string> = {
+  aicore: "NPU 模组 · AICore",
+  npu: "NPU 模组 · 其余逻辑",
+  hbm: "NPU 模组 · HBM",
+  node: "计算节点与板级",
+  l1: "IO Die 与 L1 互联刀片",
+  l2: "L2 / Leaf / Spine 与网卡",
+  optical: "光模块",
+  storage: "共享存储",
+  power: "供电与冷却",
+  management: "管理面",
+  software: "软件栈",
+};
 export const moduleSchema = z
   .object({
     id,
@@ -44,8 +68,8 @@ export const moduleSchema = z
     importance: z.number().finite().gt(0).max(1),
     /** AGREE 复杂度 n 的人工取值；为空时按分配设置的口径自动取值。 */
     complexity: z.number().finite().positive().max(1e9).nullable(),
-    /** 架构图中所属的上级部件（如“NPU 模组”）；为空表示直接放在分组内。 */
-    container: z.string().trim().max(40).default(""),
+    /** 架构图上的位置（diagramSlots 之一）；为空表示不画在图上。 */
+    anchor: z.string().trim().max(24).default(""),
     note,
   })
   .strict();
@@ -248,6 +272,43 @@ export type FaultMode = z.infer<typeof faultModeSchema>;
 export type Measure = z.infer<typeof measureSchema>;
 export type MeasureEffect = z.infer<typeof effectSchema>;
 
+// 默认模块（含早期版本的标识）在架构图上的位置。
+const anchorById: Record<string, DiagramSlot> = {
+  aicore: "aicore",
+  npu: "npu",
+  hbm: "hbm",
+  node: "node",
+  "iod-l1": "l1",
+  optical: "optical",
+  "l2-fabric": "l2",
+  interconnect: "l2",
+  storage: "storage",
+  power: "power",
+  facility: "power",
+  management: "management",
+  software: "software",
+};
+
+/**
+ * 把早期保存的模型整理成当前结构：去掉已废弃的字段，
+ * 并给没有架构图位置的默认模块补上位置。不认识的内容原样保留，交给校验处理。
+ */
+export function upgradeCoreModel(input: unknown): unknown {
+  if (!input || typeof input !== "object") return input;
+  const model = structuredClone(input) as Record<string, unknown>;
+  if (Array.isArray(model.groups))
+    for (const group of model.groups)
+      if (group && typeof group === "object") delete group.layout;
+  if (Array.isArray(model.modules))
+    for (const module of model.modules)
+      if (module && typeof module === "object") {
+        delete module.container;
+        if (module.anchor === undefined)
+          module.anchor = anchorById[module.id] ?? "";
+      }
+  return model;
+}
+
 export function parseCoreModel(input: unknown): CoreModel {
-  return coreModelSchema.parse(input);
+  return coreModelSchema.parse(upgradeCoreModel(input));
 }

@@ -9,6 +9,7 @@ import {
   defaultCoreModel,
   expectedSimulationEvents,
   modelHash,
+  upgradeCoreModel,
   verificationLimits,
   verify,
   type CoreModel,
@@ -31,7 +32,7 @@ const verifySchema = z
   .strict();
 
 function parseModel(input: unknown): CoreModel {
-  const parsed = coreModelSchema.safeParse(input);
+  const parsed = coreModelSchema.safeParse(upgradeCoreModel(input));
   if (!parsed.success)
     throw new DomainError(
       "SCHEMA_INVALID",
@@ -47,8 +48,10 @@ function parseModel(input: unknown): CoreModel {
 export function registerCoreRoutes(app: FastifyInstance, tasks: TaskServices) {
   const load = (store: Store) => {
     const saved = store.documents(modelKind)[0];
-    // 早期保存的模型缺少后来新增的字段，读取时按结构定义补默认值。
-    const parsed = saved ? coreModelSchema.safeParse(saved.model) : null;
+    // 早期保存的模型字段与现在不同，读取时整理成当前结构。
+    const parsed = saved
+      ? coreModelSchema.safeParse(upgradeCoreModel(saved.model))
+      : null;
     return {
       model: parsed?.success ? parsed.data : defaultCoreModel(),
       revision: (saved?.revision as number | undefined) ?? 0,
