@@ -1,13 +1,13 @@
 import type { CoreModel, EvidenceState, Measure } from "./model";
-import { applyMeasures, assess } from "./assess";
+import { applyMeasures, assess, createEvaluator } from "./assess";
 
-const availabilityOf = (model: CoreModel, enabled: ReadonlySet<string>) =>
-  assess(model, applyMeasures(model, enabled)).system.availability;
 const enabledIds = (model: CoreModel) =>
   model.measures.filter((m) => m.enabled).map((m) => m.id);
 
-/** 精确枚举的上限：2^14 个子集，每个只需一次解析评估。 */
+/** Shapley 精确枚举的上限：2^14 个子集，每个只需一次解析评估。 */
 export const exactSubsetLimit = 14;
+/** 推荐方案穷举搜索允许的评估次数。 */
+const searchBudget = 8000;
 
 function mulberry(seed: number) {
   let state = seed >>> 0;
@@ -26,6 +26,7 @@ function mulberry(seed: number) {
  */
 export function shapley(model: CoreModel, ids: string[] = enabledIds(model)) {
   const n = ids.length,
+    availabilityOf = createEvaluator(model),
     result = new Map<string, number>(ids.map((id) => [id, 0]));
   if (!n) return { values: result, exact: true };
   if (n <= exactSubsetLimit) {
@@ -33,7 +34,6 @@ export function shapley(model: CoreModel, ids: string[] = enabledIds(model)) {
       value = new Float64Array(size);
     for (let mask = 0; mask < size; mask++)
       value[mask] = availabilityOf(
-        model,
         new Set(ids.filter((_, i) => mask & (1 << i))),
       );
     const factorial = [1];
@@ -63,10 +63,10 @@ export function shapley(model: CoreModel, ids: string[] = enabledIds(model)) {
       [order[i], order[j]] = [order[j], order[i]];
     }
     const active = new Set<string>();
-    let previous = availabilityOf(model, active);
+    let previous = availabilityOf(active);
     for (const id of order) {
       active.add(id);
-      const next = availabilityOf(model, active);
+      const next = availabilityOf(active);
       result.set(id, result.get(id)! + (next - previous) / samples);
       previous = next;
     }
@@ -90,22 +90,23 @@ export interface MeasureContribution {
 
 export function contributions(model: CoreModel) {
   const active = enabledIds(model),
+    availabilityOf = createEvaluator(model),
     activeSet = new Set(active),
-    base = availabilityOf(model, new Set()),
-    designed = availabilityOf(model, activeSet),
+    base = availabilityOf(new Set()),
+    designed = availabilityOf(activeSet),
     shares = shapley(model, active);
   const items: MeasureContribution[] = model.measures.map((measure) => {
     const toggled = new Set(activeSet);
     if (measure.enabled) toggled.delete(measure.id);
     else toggled.add(measure.id);
-    const other = availabilityOf(model, toggled);
+    const other = availabilityOf(toggled);
     return {
       id: measure.id,
       name: measure.name,
       direction: measure.direction,
       enabled: measure.enabled,
       evidence: measure.evidence,
-      standalone: availabilityOf(model, new Set([measure.id])) - base,
+      standalone: availabilityOf(new Set([measure.id])) - base,
       marginal: measure.enabled ? designed - other : other - designed,
       shapley: shares.values.get(measure.id) ?? 0,
     };
@@ -120,12 +121,12 @@ const evidenceRank: Record<EvidenceState, number> = {
 };
 
 export interface Recommendation {
-  /** met：现有设计已达标；add：补充这些措施即可达标；short：措施库全部启用仍不达标。 */
+  /** met：现有设计已达标；add：补充这些措施即可达标；short：措施库用尽仍不达标。 */
   kind: "met" | "add" | "short";
   /** 在已启用措施之外建议补充的措施。 */
   add: string[];
   availability: number;
-  /** 启用措施库全部措施时的可用度。 */
+  /** 措施库能达到的最高可用度（逐步加入有提升的措施得到）。 */
   ceiling: number;
   /** 仍差多少可用度（kind 为 short 时大于 0）。 */
   shortfall: number;
@@ -133,6 +134,8 @@ export interface Recommendation {
   furtherReduction: number;
   /** 已启用但去掉后仍达标的措施。 */
   removable: string[];
+  /** 推荐的补充措施是否经穷举确认为数量最少；否则为逐步选取的结果。 */
+  minimal: boolean;
 }
 
 /**
@@ -141,10 +144,11 @@ export interface Recommendation {
  */
 export function recommend(model: CoreModel): Recommendation {
   const target = model.scenario.target,
+    availabilityOf = createEvaluator(model),
     active = new Set(enabledIds(model)),
-    current = availabilityOf(model, active),
+    current = availabilityOf(active),
     all = new Set(model.measures.map((m) => m.id)),
-    ceiling = availabilityOf(model, all),
+    ceiling = availabilityOf(all),
     candidates = model.measures.filter((m) => !m.enabled);
   const removable =
     current >= target
@@ -153,7 +157,7 @@ export function recommend(model: CoreModel): Recommendation {
             if (!m.enabled) return false;
             const rest = new Set(active);
             rest.delete(m.id);
-            return availabilityOf(model, rest) >= target;
+            return availabilityOf(rest) >= target;
           })
           .map((m) => m.id)
       : [];
@@ -166,66 +170,96 @@ export function recommend(model: CoreModel): Recommendation {
       shortfall: 0,
       furtherReduction: 0,
       removable,
+      minimal: true,
     };
+  const withAdded = (picked: Measure[]) =>
+    availabilityOf(new Set([...active, ...picked.map((m) => m.id)]));
   let best: { ids: string[]; rank: number; availability: number } | null = null;
-  if (candidates.length <= exactSubsetLimit) {
-    for (let mask = 1; mask < 1 << candidates.length; mask++) {
-      const picked = candidates.filter((_, i) => mask & (1 << i));
-      if (best && picked.length > best.ids.length) continue;
-      const value = availabilityOf(
-        model,
-        new Set([...active, ...picked.map((m) => m.id)]),
-      );
-      if (value < target) continue;
-      const rank = picked.reduce((sum, m) => sum + evidenceRank[m.evidence], 0);
-      if (
-        !best ||
-        picked.length < best.ids.length ||
-        rank < best.rank ||
-        (rank === best.rank && value > best.availability)
-      )
-        best = { ids: picked.map((m) => m.id), rank, availability: value };
-    }
-  } else {
-    // 候选过多时逐步加入边际收益最大的措施。
-    const chosen = new Set(active),
-      added: string[] = [];
-    let value = current;
-    while (value < target) {
-      let pick: { id: string; value: number } | null = null;
-      for (const measure of candidates) {
-        if (chosen.has(measure.id)) continue;
-        const next = availabilityOf(model, new Set([...chosen, measure.id]));
-        if (!pick || next > pick.value) pick = { id: measure.id, value: next };
+  // 先按数量从少到多穷举，找到即为“最少补充”；组合数超出预算时改用逐步加入。
+  let budget = searchBudget;
+  for (let size = 1; size <= candidates.length && !best; size++) {
+    let combos = 1;
+    for (let i = 0; i < size; i++)
+      combos = (combos * (candidates.length - i)) / (i + 1);
+    if (combos > budget) break;
+    budget -= combos;
+    const index = Array.from({ length: size }, (_, i) => i);
+    for (;;) {
+      const picked = index.map((i) => candidates[i]),
+        value = withAdded(picked);
+      if (value >= target) {
+        const rank = picked.reduce(
+          (sum, m) => sum + evidenceRank[m.evidence],
+          0,
+        );
+        if (
+          !best ||
+          rank < best.rank ||
+          (rank === best.rank && value > best.availability)
+        )
+          best = { ids: picked.map((m) => m.id), rank, availability: value };
       }
-      if (!pick || pick.value <= value) break;
-      chosen.add(pick.id);
-      added.push(pick.id);
-      value = pick.value;
+      let at = size - 1;
+      while (at >= 0 && index[at] === candidates.length - size + at) at--;
+      if (at < 0) break;
+      index[at]++;
+      for (let k = at + 1; k < size; k++) index[k] = index[k - 1] + 1;
     }
-    if (value >= target) best = { ids: added, rank: 0, availability: value };
+  }
+  const minimal = !!best;
+  let reach: Measure[] = [];
+  if (!best) {
+    // 逐步加入边际收益最大的措施；有些措施带代价，所以只在确有提升时加入。
+    let value = current;
+    for (;;) {
+      let pick: { measure: Measure; value: number } | null = null;
+      for (const measure of candidates) {
+        if (reach.includes(measure)) continue;
+        const next = withAdded([...reach, measure]);
+        if (!pick || next > pick.value) pick = { measure, value: next };
+      }
+      if (!pick || pick.value <= value + 1e-12) break;
+      reach.push(pick.measure);
+      value = pick.value;
+      if (value >= target) break;
+    }
+    if (value >= target) {
+      // 达标后剔除去掉也不影响达标的项。
+      for (const measure of [...reach].reverse()) {
+        const fewer = reach.filter((m) => m !== measure);
+        if (withAdded(fewer) >= target) reach = fewer;
+      }
+      best = {
+        ids: reach.map((m) => m.id),
+        rank: 0,
+        availability: withAdded(reach),
+      };
+    }
   }
   if (best)
     return {
       kind: "add",
       add: best.ids,
       availability: best.availability,
-      ceiling,
+      ceiling: Math.max(ceiling, best.availability),
       shortfall: 0,
       furtherReduction: 0,
       removable: [],
+      minimal,
     };
-  const full = assess(model, applyMeasures(model, all)).system,
+  const reachIds = new Set([...active, ...reach.map((m) => m.id)]),
+    full = assess(model, applyMeasures(model, reachIds)).system,
     allowed = (1 - full.overhead) / target - 1;
   return {
     kind: "short",
-    add: candidates.map((m) => m.id),
-    availability: ceiling,
-    ceiling,
-    shortfall: target - ceiling,
+    add: reach.map((m) => m.id),
+    availability: full.availability,
+    ceiling: full.availability,
+    shortfall: target - full.availability,
     furtherReduction:
       full.load > 0 ? Math.min(1, Math.max(0, 1 - allowed / full.load)) : 0,
     removable: [],
+    minimal: false,
   };
 }
 
@@ -257,8 +291,7 @@ export function solveEffect(
           : m,
       ),
     };
-    return availabilityOf(
-      trial,
+    return createEvaluator(trial)(
       new Set(trial.measures.filter((m) => m.enabled).map((m) => m.id)),
     );
   };

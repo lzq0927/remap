@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   Lightbulb,
+  Pencil,
   Plus,
   Timer,
   Trash2,
@@ -9,30 +10,30 @@ import {
 } from "lucide-react";
 import {
   evidenceStateNames,
-  evidenceStates,
-  faultKindNames,
   measureParamNames,
-  measureParams,
   solveEffect,
-  type CoreModel,
-  type EvidenceState,
   type Measure,
   type MeasureContribution,
   type MeasureDirection,
-  type MeasureEffect,
-  type MeasureParam,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
 import { usageText } from "./StepAssess";
-import { duration, fit, hours, percent, points } from "./format";
+import ArchitectureDiagram from "./ArchitectureDiagram";
+import MeasureDialog from "./MeasureDialog";
 import {
-  Dialog,
+  applyEffect,
+  baseValue,
+  formatParam,
+  isRatio,
+  targetText,
+} from "./helpers";
+import { hours, percent, points } from "./format";
+import {
   Disclosure,
   DurationField,
   Formula,
   NumberField,
   Status,
-  TextField,
   Toggle,
   useTooltip,
   type Tone,
@@ -44,7 +45,7 @@ const directionInfo: Record<
 > = {
   mtbf: {
     title: "提升 MTBF",
-    hint: "让故障更少发生：降低器件失效率、筛除薄弱个体、增加纠错。",
+    hint: "让故障更少发生：降低器件失效率、筛除薄弱个体、增加纠错与冗余。",
     icon: TrendingUp,
   },
   mttr: {
@@ -53,31 +54,6 @@ const directionInfo: Record<
     icon: Timer,
   },
 };
-const isRatio = (param: MeasureParam) =>
-  param === "coverage" || param === "impact" || param === "overhead";
-const formatParam = (param: MeasureParam, value: number) =>
-  param === "fit"
-    ? fit(value) + " FIT"
-    : isRatio(param)
-      ? percent(value)
-      : duration(value);
-const applyEffect = (effect: MeasureEffect, base: number) =>
-  effect.op === "set"
-    ? effect.value
-    : effect.param === "coverage"
-      ? 1 - (1 - base) * (1 - effect.value)
-      : base * (1 - effect.value);
-
-/** 措施作用对象的现状取值；各模式不同时返回 null。 */
-function baseValue(model: CoreModel, measure: Measure, param: MeasureParam) {
-  if (param === "overhead") return model.scenario.overhead;
-  const values = model.modes
-    .filter((mode) => measure.modeIds.includes(mode.id))
-    .map((mode) => mode[param]);
-  return values.length && values.every((v) => Math.abs(v - values[0]) < 1e-12)
-    ? values[0]
-    : null;
-}
 
 export default function StepDesign() {
   const { model, analysis, update } = useWorkbench(),
@@ -91,9 +67,11 @@ export default function StepDesign() {
       baselineGaps,
     } = analysis,
     [adding, setAdding] = useState<MeasureDirection>(),
+    [editing, setEditing] = useState<string>(),
     target = model.scenario.target,
     nameOf = (id: string) =>
-      model.measures.find((m) => m.id === id)?.name ?? id;
+      model.measures.find((m) => m.id === id)?.name ?? id,
+    editingMeasure = model.measures.find((m) => m.id === editing);
   const enable = (ids: string[]) =>
     update((d) => {
       for (const measure of d.measures)
@@ -141,9 +119,13 @@ export default function StepDesign() {
                 {((target - design.system.availability) * 100).toFixed(2)} pp。
               </strong>
               <p>
-                在已启用措施的基础上，最少再启用{" "}
-                <b>{recommendation.add.map(nameOf).join("、")}</b>，可达到{" "}
+                在已启用措施的基础上，
+                {recommendation.minimal ? "最少再启用" : "建议再启用"}{" "}
+                <b>{recommendation.add.map(nameOf).join("、")}</b>
+                （共 {recommendation.add.length} 项），可达到{" "}
                 {percent(recommendation.availability)}。
+                {!recommendation.minimal &&
+                  "这组措施按提升大小逐步选出，每一项都不可少，但不保证数量最少。"}
               </p>
             </div>
             <button
@@ -158,21 +140,24 @@ export default function StepDesign() {
           <>
             <div>
               <strong>
-                措施库全部启用也只能到 {percent(recommendation.ceiling)}
-                ，距目标还差 {(recommendation.shortfall * 100).toFixed(2)} pp。
+                把措施库里有提升的措施都启用，也只能到{" "}
+                {percent(recommendation.ceiling)}，距目标还差{" "}
+                {(recommendation.shortfall * 100).toFixed(2)} pp。
               </strong>
               <p>
-                要补齐差距，需要在全部启用的基础上，把所有故障率或所有单次损失再降低{" "}
+                要补齐差距，还需要把所有故障率或所有单次损失再降低{" "}
                 <b>{percent(recommendation.furtherReduction, 0)}</b>
                 。可以加大现有措施的参数，或新增措施。
               </p>
             </div>
-            <button
-              className="rw-button"
-              onClick={() => enable(recommendation.add)}
-            >
-              全部启用
-            </button>
+            {recommendation.add.length > 0 && (
+              <button
+                className="rw-button"
+                onClick={() => enable(recommendation.add)}
+              >
+                启用这 {recommendation.add.length} 项
+              </button>
+            )}
           </>
         )}
       </section>
@@ -182,7 +167,13 @@ export default function StepDesign() {
           {(["mtbf", "mttr"] as const).map((direction) => {
             const info = directionInfo[direction],
               Icon = info.icon,
-              items = model.measures.filter((m) => m.direction === direction);
+              items = model.measures.filter((m) => m.direction === direction),
+              gainOf = (m: Measure) =>
+                contributions.items.find((c) => c.id === m.id)!,
+              on = items.filter((m) => m.enabled),
+              off = items
+                .filter((m) => !m.enabled)
+                .sort((a, b) => gainOf(b).marginal - gainOf(a).marginal);
             return (
               <section
                 key={direction}
@@ -193,6 +184,9 @@ export default function StepDesign() {
                   <h2 className={"rw-direction is-" + direction}>
                     <Icon size={18} aria-hidden />
                     {info.title}
+                    <small>
+                      已启用 {on.length} / {items.length}
+                    </small>
                   </h2>
                   <button
                     className="rw-button"
@@ -203,20 +197,30 @@ export default function StepDesign() {
                   </button>
                 </div>
                 <p className="rw-hint">{info.hint}</p>
-                {items.length === 0 && (
-                  <p className="rw-empty">还没有这个方向的措施。</p>
+                {on.length === 0 && (
+                  <p className="rw-empty">这个方向还没有启用措施。</p>
                 )}
                 <div className="rw-measures">
-                  {items.map((measure) => (
+                  {on.map((measure) => (
                     <MeasureCard
                       key={measure.id}
                       measure={measure}
-                      contribution={
-                        contributions.items.find((c) => c.id === measure.id)!
-                      }
+                      contribution={gainOf(measure)}
+                      onEdit={() => setEditing(measure.id)}
                     />
                   ))}
                 </div>
+                <Candidates
+                  items={off}
+                  render={(measure) => (
+                    <MeasureCard
+                      key={measure.id}
+                      measure={measure}
+                      contribution={gainOf(measure)}
+                      onEdit={() => setEditing(measure.id)}
+                    />
+                  )}
+                />
               </section>
             );
           })}
@@ -242,9 +246,15 @@ export default function StepDesign() {
         </aside>
       </div>
 
-      <section className="rw-card" aria-label="各模块设计前后">
+      <ArchitectureDiagram
+        views={["design", "baseline"]}
+        title="架构上的设计结果"
+        hint="切换“设计后”与“现状”，对照每个模块离目标还有多远。"
+      />
+
+      <Disclosure title="各模块设计前后明细">
         <div className="rw-card-head">
-          <h2>各模块设计前后</h2>
+          <span />
           <span className="rw-legend">
             <span className="rw-key is-before" />
             现状
@@ -332,7 +342,7 @@ export default function StepDesign() {
           没有加措施的模块，损失小时会略有增加：系统停机少了、运行时间变长，同样的故障率在窗口内发生的次数就更多。是否超预算按损失负荷判定，不受此影响。个别模块超出预算时，可以回到第
           1 步换一种分配方法，或继续针对该模块加措施。
         </p>
-      </section>
+      </Disclosure>
 
       <Disclosure title="设计方法与依据">
         <div className="rw-explain">
@@ -342,7 +352,7 @@ export default function StepDesign() {
                 <strong>措施如何生效。</strong>
                 每项措施只改动它所作用的故障模式的参数：提升 MTBF 的措施改故障率
                 FIT；降低 MTTR
-                的措施改检出率、检测时间、恢复时间、回滚重算、漏检损失或影响系数。改完后用第
+                的措施改检出率、检测时间、恢复时间、回滚重算、漏检损失或影响系数。措施不一定对所有故障都有效，所以每项措施有一个“适用比例”，参数按它在现值与目标值之间折算。同一个参数被多项措施“设为”新值时只取最好的一项，不叠加；“按比例降低”的则连乘。改完后用第
                 2 步同一套公式重新评估，所以“设计后”与“现状”可以直接比较。
               </p>
             </li>
@@ -359,7 +369,7 @@ export default function StepDesign() {
             <li>
               <p>
                 <strong>推荐方案怎么来的。</strong>
-                在已启用措施的基础上，枚举其余措施的所有组合，找出能达标的最少一组；数量相同时优先证据更充分的，其次选可用度更高的。措施库全部启用仍不够时，按
+                在已启用措施的基础上，按数量从少到多穷举其余措施的组合，找到的第一组即数量最少；数量相同时优先证据更充分的，其次选可用度更高的。候选很多、穷举不完时，改为逐步加入提升最大的措施，达标后再剔除可以去掉的项：这时每一项都不可少，但不保证数量最少。措施库用尽仍不够时，按
                 ρ 与目标 ρ* 的比值给出还需整体降低的比例。
               </p>
             </li>
@@ -374,41 +384,77 @@ export default function StepDesign() {
       </Disclosure>
 
       {adding && (
-        <AddMeasure direction={adding} onClose={() => setAdding(undefined)} />
+        <MeasureDialog
+          direction={adding}
+          onClose={() => setAdding(undefined)}
+        />
+      )}
+      {editingMeasure && (
+        <MeasureDialog
+          measure={editingMeasure}
+          onClose={() => setEditing(undefined)}
+        />
       )}
     </div>
   );
 }
 
+/** 候选措施列表：先显示提升最大的几项，其余按需展开。 */
+function Candidates({
+  items,
+  render,
+}: {
+  items: Measure[];
+  render: (measure: Measure) => ReactNode;
+}) {
+  const [all, setAll] = useState(false),
+    limit = 5;
+  if (!items.length) return null;
+  return (
+    <>
+      <h3 className="rw-subhead">
+        候选措施 {items.length} 项<small>按启用后还能提升多少排序</small>
+      </h3>
+      <div className="rw-candidates">
+        {(all ? items : items.slice(0, limit)).map(render)}
+      </div>
+      {items.length > limit && (
+        <button className="rw-more" onClick={() => setAll(!all)}>
+          <ChevronDown size={15} aria-hidden />
+          {all
+            ? "只显示前 " + limit + " 项"
+            : `显示全部 ${items.length} 项候选`}
+        </button>
+      )}
+    </>
+  );
+}
+
+/** 措施卡片：已启用时显示参数；候选措施默认只显示一行，展开后可调参数。 */
 function MeasureCard({
   measure,
   contribution,
+  onEdit,
 }: {
   measure: Measure;
   contribution: MeasureContribution;
+  onEdit: () => void;
 }) {
   const { model, analysis, update } = useWorkbench(),
     [open, setOpen] = useState(false);
   const patch = (mutate: (m: Measure) => void) =>
     update((d) => mutate(d.measures.find((m) => m.id === measure.id)!));
-  const modules = [
-    ...new Set(
-      model.modes
-        .filter((mode) => measure.modeIds.includes(mode.id))
-        .map((mode) => model.modules.find((m) => m.id === mode.moduleId)!.name),
-    ),
-  ];
-  const targetText = !measure.modeIds.length
-    ? "公共开销"
-    : measure.modeIds.length === model.modes.length
-      ? "全部故障模式"
-      : modules.length > 4
-        ? `${modules.slice(0, 3).join("、")} 等 ${modules.length} 个模块`
-        : modules.join("、");
-  const gain = measure.enabled ? contribution.shapley : contribution.marginal;
+  const gain = measure.enabled ? contribution.shapley : contribution.marginal,
+    showEffects = measure.enabled || open;
 
   return (
-    <article className={"rw-measure" + (measure.enabled ? " is-on" : "")}>
+    <article
+      className={
+        "rw-measure" +
+        (measure.enabled ? " is-on" : " is-candidate") +
+        (open ? " is-open" : "")
+      }
+    >
       <header>
         <Toggle
           label={(measure.enabled ? "停用 " : "启用 ") + measure.name}
@@ -417,133 +463,119 @@ function MeasureCard({
         />
         <div className="rw-measure-title">
           <strong>{measure.name}</strong>
-          <small>作用于：{targetText}</small>
+          <small>
+            作用于：{targetText(model, measure)}
+            {measure.applicability < 1 &&
+              ` · 适用 ${percent(measure.applicability, 0)}`}
+          </small>
         </div>
         <div className="rw-measure-gain">
           <strong className={gain < 0 ? "is-bad" : ""}>{points(gain)}</strong>
           <small>{measure.enabled ? "贡献" : "启用后可再提升"}</small>
         </div>
+        <button
+          className="rw-icon-button"
+          aria-expanded={open}
+          aria-label={(open ? "收起 " : "展开 ") + measure.name}
+          title={open ? "收起" : "参数、依据与参数反推"}
+          onClick={() => setOpen(!open)}
+        >
+          <ChevronDown size={16} />
+        </button>
       </header>
-      <div className="rw-effects">
-        {measure.effects.map((effect, index) => {
-          const base = baseValue(model, measure, effect.param),
-            label = `${measure.name} · ${measureParamNames[effect.param]}`,
-            commit = (value: number) =>
-              patch((m) => void (m.effects[index].value = value));
-          return (
-            <div key={index} className="rw-effect">
-              <span className="rw-effect-name">
-                {measureParamNames[effect.param]}
-              </span>
-              <span className="rw-effect-from">
-                {base === null ? "各模式不同" : formatParam(effect.param, base)}
-              </span>
-              <span className="rw-effect-arrow" aria-hidden>
-                →
-              </span>
-              {effect.op === "reduce" ? (
-                <>
-                  <span className="rw-effect-op">降低</span>
+      {showEffects && (
+        <div className="rw-effects">
+          {measure.effects.map((effect, index) => {
+            const base = baseValue(model, measure, effect.param),
+              label = `${measure.name} · ${measureParamNames[effect.param]}`,
+              commit = (value: number) =>
+                patch((m) => void (m.effects[index].value = value));
+            return (
+              <div key={index} className="rw-effect">
+                <span className="rw-effect-name">
+                  {measureParamNames[effect.param]}
+                </span>
+                <span className="rw-effect-from">
+                  {base === null
+                    ? "各模式不同"
+                    : formatParam(effect.param, base)}
+                </span>
+                <span className="rw-effect-arrow" aria-hidden>
+                  →
+                </span>
+                {effect.op !== "set" && (
+                  <span className="rw-effect-op">
+                    {effect.op === "add"
+                      ? "增加"
+                      : effect.param === "coverage"
+                        ? "漏检率降低"
+                        : "降低"}
+                  </span>
+                )}
+                {effect.op === "reduce" || isRatio(effect.param) ? (
                   <NumberField
-                    label={label + "的降低比例"}
+                    label={label + (effect.op === "reduce" ? "的降低比例" : "")}
                     value={effect.value}
                     factor={100}
                     min={0}
                     max={1}
-                    digits={2}
+                    digits={3}
                     suffix="%"
-                    width={92}
+                    width={100}
                     onCommit={commit}
                   />
-                  {base !== null && (
+                ) : effect.param === "fit" ? (
+                  <NumberField
+                    label={label}
+                    value={effect.value}
+                    min={0}
+                    max={1e7}
+                    digits={2}
+                    suffix="FIT"
+                    width={112}
+                    onCommit={commit}
+                  />
+                ) : (
+                  <DurationField
+                    label={label}
+                    value={effect.value}
+                    onCommit={commit}
+                  />
+                )}
+                {base !== null &&
+                  (effect.op !== "set" || measure.applicability < 1) && (
                     <span className="rw-effect-to">
-                      = {formatParam(effect.param, applyEffect(effect, base))}
+                      ={" "}
+                      {formatParam(
+                        effect.param,
+                        applyEffect(effect, base, measure.applicability),
+                      )}
                     </span>
                   )}
-                </>
-              ) : effect.param === "fit" ? (
-                <NumberField
-                  label={label}
-                  value={effect.value}
-                  min={0}
-                  max={1e7}
-                  digits={2}
-                  suffix="FIT"
-                  width={112}
-                  onCommit={commit}
-                />
-              ) : isRatio(effect.param) ? (
-                <NumberField
-                  label={label}
-                  value={effect.value}
-                  factor={100}
-                  min={0}
-                  max={1}
-                  digits={3}
-                  suffix="%"
-                  width={104}
-                  onCommit={commit}
-                />
-              ) : (
-                <DurationField
-                  label={label}
-                  value={effect.value}
-                  onCommit={commit}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <button
-        className="rw-measure-more"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <ChevronDown size={15} aria-hidden />
-        {open ? "收起" : "依据、证据与参数反推"}
-      </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {open && (
         <div className="rw-measure-detail">
           <label>
-            <span>名称</span>
-            <TextField
-              label={measure.name + " 的名称"}
-              value={measure.name}
-              fallback="未命名措施"
-              onCommit={(name) => patch((m) => void (m.name = name))}
+            <span>适用比例</span>
+            <NumberField
+              label={measure.name + " 的适用比例"}
+              value={measure.applicability}
+              factor={100}
+              min={0}
+              max={1}
+              digits={1}
+              suffix="%"
+              width={100}
+              onCommit={(v) => patch((m) => void (m.applicability = v))}
             />
           </label>
-          <label>
-            <span>工程依据</span>
-            <TextField
-              label={measure.name + " 的工程依据"}
-              value={measure.rationale}
-              maxLength={600}
-              placeholder="这项措施为什么能达到上面的参数"
-              onCommit={(rationale) =>
-                patch((m) => void (m.rationale = rationale))
-              }
-            />
-          </label>
-          <label>
-            <span>证据状态</span>
-            <select
-              aria-label={measure.name + " 的证据状态"}
-              value={measure.evidence}
-              onChange={(e) =>
-                patch(
-                  (m) => void (m.evidence = e.target.value as EvidenceState),
-                )
-              }
-            >
-              {evidenceStates.map((state) => (
-                <option key={state} value={state}>
-                  {evidenceStateNames[state]}
-                </option>
-              ))}
-            </select>
-          </label>
+          {measure.rationale && (
+            <p className="rw-measure-why">{measure.rationale}</p>
+          )}
           <dl className="rw-measure-numbers">
             <div>
               <dt>单独启用</dt>
@@ -553,6 +585,16 @@ function MeasureCard({
               <dt>{measure.enabled ? "去掉后损失" : "加入后提升"}</dt>
               <dd>{points(contribution.marginal)}</dd>
             </div>
+            <div>
+              <dt>证据</dt>
+              <dd>{evidenceStateNames[measure.evidence]}</dd>
+            </div>
+            {measure.source && (
+              <div>
+                <dt>出处</dt>
+                <dd>{measure.source}</dd>
+              </div>
+            )}
           </dl>
           <Solver
             measure={measure}
@@ -561,25 +603,30 @@ function MeasureCard({
               measure.enabled
             }
           />
-          <button
-            className="rw-button is-danger"
-            onClick={() => {
-              if (window.confirm(`删除措施“${measure.name}”？`))
-                update((d) => {
-                  d.measures = d.measures.filter((m) => m.id !== measure.id);
-                });
-            }}
-          >
-            <Trash2 size={15} aria-hidden />
-            删除措施
-          </button>
+          <div className="rw-measure-actions">
+            <button className="rw-button" onClick={onEdit}>
+              <Pencil size={15} aria-hidden />
+              编辑作用范围与依据
+            </button>
+            <button
+              className="rw-button is-danger"
+              onClick={() => {
+                if (window.confirm(`删除措施“${measure.name}”？`))
+                  update((d) => {
+                    d.measures = d.measures.filter((m) => m.id !== measure.id);
+                  });
+              }}
+            >
+              <Trash2 size={15} aria-hidden />
+              删除
+            </button>
+          </div>
         </div>
       )}
     </article>
   );
 }
 
-/** 参数反推：其余措施不变，这个参数要调到多少才刚好达标。 */
 function Solver({ measure, met }: { measure: Measure; met: boolean }) {
   const { model, update } = useWorkbench();
   const solved = useMemo(
@@ -689,203 +736,5 @@ function ContributionChart({ items }: { items: MeasureContribution[] }) {
       </ul>
       {tooltip.node}
     </div>
-  );
-}
-
-function AddMeasure({
-  direction,
-  onClose,
-}: {
-  direction: MeasureDirection;
-  onClose: () => void;
-}) {
-  const { model, update } = useWorkbench();
-  const params = measureParams.filter((p) =>
-    direction === "mtbf" ? p === "fit" : p !== "fit",
-  );
-  const [name, setName] = useState(""),
-    [param, setParam] = useState<MeasureParam>(params[0]),
-    [op, setOp] = useState<"reduce" | "set">("reduce"),
-    [value, setValue] = useState(0.5),
-    [modeIds, setModeIds] = useState<string[]>([]);
-  const needsModes = param !== "overhead",
-    valid = name.trim().length > 0 && (!needsModes || modeIds.length > 0);
-  const toggle = (ids: string[], on: boolean) =>
-    setModeIds((current) =>
-      on
-        ? [...new Set([...current, ...ids])]
-        : current.filter((id) => !ids.includes(id)),
-    );
-  const choose = (nextParam: MeasureParam, nextOp: "reduce" | "set") => {
-    setParam(nextParam);
-    setOp(nextOp);
-    setValue(
-      nextOp === "reduce"
-        ? 0.5
-        : nextParam === "fit"
-          ? 100
-          : nextParam === "coverage"
-            ? 0.99
-            : nextParam === "impact"
-              ? 0.1
-              : nextParam === "overhead"
-                ? 0.01
-                : 60 / 3600,
-    );
-  };
-
-  return (
-    <Dialog
-      title={"添加措施 · " + directionInfo[direction].title}
-      onClose={onClose}
-      footer={
-        <>
-          <button className="rw-button" onClick={onClose}>
-            取消
-          </button>
-          <button
-            className="rw-button is-primary"
-            disabled={!valid}
-            onClick={() => {
-              update((d) => {
-                d.measures.push({
-                  id: "measure-" + Date.now().toString(36),
-                  name: name.trim(),
-                  direction,
-                  modeIds: needsModes ? modeIds : [],
-                  effects: [{ param, op, value }],
-                  enabled: true,
-                  evidence: "assumed",
-                  rationale: "",
-                });
-              });
-              onClose();
-            }}
-          >
-            添加并启用
-          </button>
-        </>
-      }
-    >
-      <div className="rw-form">
-        <label className="is-wide">
-          <span>措施名称</span>
-          <input
-            aria-label="措施名称"
-            autoFocus
-            value={name}
-            maxLength={80}
-            placeholder={
-              direction === "mtbf"
-                ? "例如：电源模块降额设计"
-                : "例如：故障自动隔离"
-            }
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        <label>
-          <span>改变的参数</span>
-          <select
-            aria-label="改变的参数"
-            value={param}
-            onChange={(e) => choose(e.target.value as MeasureParam, op)}
-          >
-            {params.map((p) => (
-              <option key={p} value={p}>
-                {measureParamNames[p]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>改变方式</span>
-          <select
-            aria-label="改变方式"
-            value={op}
-            onChange={(e) => choose(param, e.target.value as "reduce" | "set")}
-          >
-            <option value="reduce">
-              {param === "coverage" ? "漏检率按比例降低" : "在现值上按比例降低"}
-            </option>
-            <option value="set">直接设为新值</option>
-          </select>
-        </label>
-        <label>
-          <span>{op === "reduce" ? "降低比例" : "新值"}</span>
-          {op === "reduce" || isRatio(param) ? (
-            <NumberField
-              label="措施取值"
-              value={value}
-              factor={100}
-              min={0}
-              max={1}
-              digits={3}
-              suffix="%"
-              onCommit={setValue}
-            />
-          ) : param === "fit" ? (
-            <NumberField
-              label="措施取值"
-              value={value}
-              min={0}
-              max={1e7}
-              digits={2}
-              suffix="FIT"
-              onCommit={setValue}
-            />
-          ) : (
-            <DurationField label="措施取值" value={value} onCommit={setValue} />
-          )}
-        </label>
-      </div>
-      {needsModes && (
-        <fieldset className="rw-mode-picker">
-          <legend>
-            作用于哪些故障模式
-            <span>
-              <button
-                type="button"
-                className="rw-link"
-                onClick={() =>
-                  toggle(
-                    model.modes.map((m) => m.id),
-                    true,
-                  )
-                }
-              >
-                全选
-              </button>
-              <button
-                type="button"
-                className="rw-link"
-                onClick={() => setModeIds([])}
-              >
-                清空
-              </button>
-            </span>
-          </legend>
-          {model.modules.map((module) => {
-            const modes = model.modes.filter((m) => m.moduleId === module.id);
-            if (!modes.length) return null;
-            return (
-              <div key={module.id}>
-                <strong>{module.name}</strong>
-                {modes.map((mode) => (
-                  <label key={mode.id}>
-                    <input
-                      type="checkbox"
-                      checked={modeIds.includes(mode.id)}
-                      onChange={(e) => toggle([mode.id], e.target.checked)}
-                    />
-                    {mode.name}
-                    <small>{faultKindNames[mode.kind]}</small>
-                  </label>
-                ))}
-              </div>
-            );
-          })}
-        </fieldset>
-      )}
-    </Dialog>
   );
 }

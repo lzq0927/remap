@@ -18,7 +18,7 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     expect(initial.verification).toBeNull();
 
     const model = defaultCoreModel();
-    model.scenario.target = 0.9;
+    model.scenario.target = 0.85;
     model.measures.find((m) => m.id === "elastic-recover")!.enabled = true;
     const saved = await app.inject({
       method: "PUT",
@@ -27,15 +27,36 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     });
     expect(saved.statusCode, saved.body).toBe(200);
     expect(saved.json()).toMatchObject({ revision: 1, hash: modelHash(model) });
-    expect((await app.inject(path)).json().model.scenario.target).toBe(0.9);
+    expect((await app.inject(path)).json().model.scenario.target).toBe(0.85);
     // 任务之间互不影响
     expect(
       (await app.inject(`/api/tasks/${other.id}/core`)).json().revision,
     ).toBe(0);
 
+    // 早期保存的模型缺少后来新增的字段，读取时补默认值，不丢数据
+    const store = app.taskServices.resolve(task.id).store,
+      legacy = JSON.parse(JSON.stringify(model));
+    for (const group of legacy.groups) delete group.layout;
+    for (const module of legacy.modules) delete module.container;
+    for (const measure of legacy.measures) {
+      delete measure.applicability;
+      delete measure.source;
+    }
+    store.putDocument(
+      "core-model",
+      { model: legacy, revision: 1, savedAt: "2026-11-17T00:00:00.000Z" },
+      "core-model",
+    );
+    const upgraded = (await app.inject(path)).json();
+    expect(upgraded.model.scenario.target).toBe(0.85);
+    expect(upgraded.model.groups[1].layout).toBe("grid");
+    expect(upgraded.model.measures[0].applicability).toBe(1);
+    expect(upgraded.hash).toBe(modelHash(upgraded.model));
+    await app.inject({ method: "PUT", url: path, payload: { model } });
+
     const analysis = (await app.inject(path + "/analysis")).json();
     expect(analysis.hash).toBe(modelHash(model));
-    expect(analysis.design.system.availability).toBeGreaterThan(0.9);
+    expect(analysis.design.system.availability).toBeGreaterThan(0.85);
     expect(analysis.recommendation.kind).toBe("met");
 
     const verified = await app.inject({
@@ -47,7 +68,7 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     const result = verified.json();
     expect(result).toMatchObject({
       sequence: 1,
-      modelRevision: 1,
+      modelRevision: 2,
       seed: 11,
       trials: 400,
     });
@@ -91,7 +112,7 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
         })
       ).statusCode,
     ).toBe(400);
-    expect((await app.inject(path)).json().revision).toBe(1);
+    expect((await app.inject(path)).json().revision).toBe(2);
 
     // 规模过大的仿真在运行前被拒绝，并提示可行的窗口数
     const huge = defaultCoreModel();
@@ -110,7 +131,7 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     const reset = (
       await app.inject({ method: "POST", url: path + "/reset", payload: {} })
     ).json();
-    expect(reset.revision).toBe(3);
+    expect(reset.revision).toBe(4);
     expect(reset.model).toEqual(defaultCoreModel());
   } finally {
     await app.close();

@@ -3,11 +3,11 @@ import {
   evidenceStateNames,
   faultKindNames,
   lossPerEvent,
-  measureParamNames,
   type Analysis,
   type CoreModel,
   type VerificationResult,
 } from "../../../../packages/core/src/index";
+import { effectText } from "./helpers";
 import {
   count,
   duration,
@@ -182,20 +182,8 @@ ${table(
     return [
       m.name,
       m.direction === "mtbf" ? "提升 MTBF" : "降低 MTTR",
-      m.effects
-        .map(
-          (e) =>
-            measureParamNames[e.param] +
-            (e.op === "reduce"
-              ? " 降低 " + percent(e.value)
-              : " 设为 " +
-                (e.param === "fit"
-                  ? fit(e.value) + " FIT"
-                  : ["coverage", "impact", "overhead"].includes(e.param)
-                    ? percent(e.value)
-                    : duration(e.value))),
-        )
-        .join("；"),
+      m.effects.map(effectText).join("；") +
+        (m.applicability < 1 ? `（适用 ${percent(m.applicability, 0)}）` : ""),
       points(c.shapley),
       points(c.standalone),
       evidenceStateNames[m.evidence],

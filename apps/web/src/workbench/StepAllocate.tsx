@@ -7,6 +7,7 @@ import {
   type AllocationMethod,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
+import ArchitectureDiagram from "./ArchitectureDiagram";
 import { duration, fit, hours, percent } from "./format";
 import { Disclosure, Formula, NumberField } from "./ui";
 
@@ -371,6 +372,12 @@ export default function StepAllocate() {
             {info.fit}
           </p>
         </section>
+
+        <ArchitectureDiagram
+          views={["target"]}
+          title="架构上的目标"
+          hint="把上表的结果放回架构：每个框是该模块的目标可用度和损失预算，分组和上级部件的数值由其内部模块合成。"
+        />
 
         <Disclosure title="对比四种方法的分配结果">
           <div className="rw-table-wrap">

@@ -8,63 +8,163 @@ export interface ResolvedParameters {
 
 const higherIsBetter = (param: MeasureParam) => param === "coverage";
 
+const bounded = (param: MeasureParam, value: number) =>
+  param === "coverage" || param === "impact" || param === "overhead"
+    ? Math.min(1, Math.max(0, value))
+    : Math.max(0, value);
+
+type Change = {
+  id: string;
+  op: "set" | "reduce" | "add";
+  value: number;
+  share: number;
+};
+const modeParams = [
+  "fit",
+  "coverage",
+  "detectHours",
+  "recoverHours",
+  "reworkHours",
+  "missedLossHours",
+  "impact",
+] as const;
+
+/** 预先整理“哪些措施改哪个故障模式的哪个参数”，供反复求值时使用。 */
+function indexChanges(model: CoreModel) {
+  const position = new Map(model.modes.map((mode, i) => [mode.id, i]));
+  const perMode: Change[][][] = model.modes.map(() => modeParams.map(() => [])),
+    overhead: Change[] = [];
+  for (const measure of model.measures)
+    for (const effect of measure.effects) {
+      const change: Change = {
+        id: measure.id,
+        op: effect.op,
+        value: effect.value,
+        share: measure.applicability,
+      };
+      if (effect.param === "overhead") overhead.push(change);
+      else {
+        const column = modeParams.indexOf(effect.param);
+        for (const modeId of measure.modeIds) {
+          const row = position.get(modeId);
+          if (row !== undefined) perMode[row][column].push(change);
+        }
+      }
+    }
+  return { perMode, overhead };
+}
+
+function resolveParam(
+  list: Change[],
+  enabled: ReadonlySet<string>,
+  param: MeasureParam,
+  base: number,
+) {
+  if (!list.length) return base;
+  const up = higherIsBetter(param);
+  let value = base,
+    touched = false,
+    assigned: number | null = null;
+  // “设为”：按适用比例折算后，取其中最好的一项。
+  for (const c of list)
+    if (c.op === "set" && enabled.has(c.id)) {
+      const candidate = base + c.share * (c.value - base);
+      assigned =
+        assigned === null
+          ? candidate
+          : up
+            ? Math.max(assigned, candidate)
+            : Math.min(assigned, candidate);
+    }
+  if (assigned !== null) {
+    value = assigned;
+    touched = true;
+  }
+  for (const c of list)
+    if (c.op === "reduce" && enabled.has(c.id)) {
+      const ratio = c.share * c.value;
+      value = up ? 1 - (1 - value) * (1 - ratio) : value * (1 - ratio);
+      touched = true;
+    }
+  for (const c of list)
+    if (c.op === "add" && enabled.has(c.id)) {
+      value += c.share * c.value;
+      touched = true;
+    }
+  return touched ? bounded(param, value) : base;
+}
+
+const enabledSet = (model: CoreModel) =>
+  new Set(model.measures.filter((m) => m.enabled).map((m) => m.id));
+
 /**
  * 把启用的措施作用到基线参数上。结果与措施顺序无关：
- * 同一参数的多个“设为”取更优值，多个“降低”连乘；检出率的“降低”作用在漏检率上。
+ * 每项措施先算出“完全适用时”的目标值，再按适用比例在现值与目标值之间折算；
+ * 同一参数上多项“设为”取改善最大的一项，多项“降低”按剩余比例连乘
+ * （检出率作用在漏检率上），“增加”逐项累加。
  */
 export function applyMeasures(
   model: CoreModel,
-  enabled: ReadonlySet<string> = new Set(
-    model.measures.filter((m) => m.enabled).map((m) => m.id),
-  ),
+  enabled: ReadonlySet<string> = enabledSet(model),
 ): ResolvedParameters {
-  const sets = new Map<string, number[]>(),
-    reductions = new Map<string, number[]>();
-  const push = (map: Map<string, number[]>, key: string, value: number) =>
-    map.set(key, [...(map.get(key) ?? []), value]);
-  for (const measure of model.measures) {
-    if (!enabled.has(measure.id)) continue;
-    for (const effect of measure.effects) {
-      const targets =
-        effect.param === "overhead" ? ["overhead"] : measure.modeIds;
-      for (const target of targets)
-        push(
-          effect.op === "set" ? sets : reductions,
-          target + "\u0000" + effect.param,
-          effect.value,
-        );
-    }
-  }
-  const resolve = (target: string, param: MeasureParam, base: number) => {
-    const key = target + "\u0000" + param,
-      assigned = sets.get(key);
-    let value = base;
-    if (assigned)
-      value = higherIsBetter(param)
-        ? Math.max(...assigned)
-        : Math.min(...assigned);
-    for (const ratio of reductions.get(key) ?? [])
-      value = higherIsBetter(param)
-        ? 1 - (1 - value) * (1 - ratio)
-        : value * (1 - ratio);
-    return value;
-  };
+  const { perMode, overhead } = indexChanges(model);
   return {
-    overhead: resolve("overhead", "overhead", model.scenario.overhead),
-    modes: model.modes.map((mode) => ({
-      ...mode,
-      fit: resolve(mode.id, "fit", mode.fit),
-      coverage: resolve(mode.id, "coverage", mode.coverage),
-      detectHours: resolve(mode.id, "detectHours", mode.detectHours),
-      recoverHours: resolve(mode.id, "recoverHours", mode.recoverHours),
-      reworkHours: resolve(mode.id, "reworkHours", mode.reworkHours),
-      missedLossHours: resolve(
-        mode.id,
-        "missedLossHours",
-        mode.missedLossHours,
-      ),
-      impact: resolve(mode.id, "impact", mode.impact),
-    })),
+    overhead: resolveParam(
+      overhead,
+      enabled,
+      "overhead",
+      model.scenario.overhead,
+    ),
+    modes: model.modes.map((mode, row) => {
+      const next = { ...mode };
+      modeParams.forEach((param, column) => {
+        next[param] = resolveParam(
+          perMode[row][column],
+          enabled,
+          param,
+          mode[param],
+        );
+      });
+      return next;
+    }),
+  };
+}
+
+/**
+ * 只求系统可用度的快速通道，结果与 assess(applyMeasures()) 相同。
+ * 贡献分摊和方案搜索要对成千上万种措施组合求值，用它避免重复构造明细。
+ */
+export function createEvaluator(model: CoreModel) {
+  const { perMode, overhead } = indexChanges(model),
+    units = new Map(model.modules.map((m) => [m.id, m.unitsPerCard])),
+    scale = model.modes.map(
+      (mode) => ((units.get(mode.moduleId) ?? 1) * model.scenario.cards) / 1e9,
+    );
+  return (enabled: ReadonlySet<string>) => {
+    let load = 0;
+    for (let row = 0; row < model.modes.length; row++) {
+      const mode = model.modes[row],
+        lists = perMode[row],
+        value = (column: number) =>
+          resolveParam(
+            lists[column],
+            enabled,
+            modeParams[column],
+            mode[modeParams[column]],
+          );
+      const coverage = value(1);
+      load +=
+        value(0) *
+        scale[row] *
+        value(6) *
+        (coverage * (value(2) + value(3) + value(4)) +
+          (1 - coverage) * value(5));
+    }
+    return (
+      (1 -
+        resolveParam(overhead, enabled, "overhead", model.scenario.overhead)) /
+      (1 + load)
+    );
   };
 }
 

@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ChevronRight,
+  Database,
   FileDown,
   MoreHorizontal,
   ShieldCheck,
@@ -33,6 +34,7 @@ import StepAllocate from "./StepAllocate";
 import StepAssess from "./StepAssess";
 import StepDesign from "./StepDesign";
 import StepVerify from "./StepVerify";
+import Library from "./Library";
 import { downloadReport } from "./report";
 
 export type SavedVerification = VerificationResult & {
@@ -90,6 +92,7 @@ export default function Workbench({
     [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved"),
     [verifying, setVerifying] = useState(false),
     [menu, setMenu] = useState(false),
+    [library, setLibrary] = useState(false),
     [step, setStep] = useState(() => {
       const saved = Number(sessionStorage.getItem("remap.step." + task.id));
       return Number.isInteger(saved) && saved >= 0 && saved < 4 ? saved : 0;
@@ -145,6 +148,7 @@ export default function Workbench({
   const goto = useCallback(
     (next: number) => {
       const bounded = Math.max(0, Math.min(3, next));
+      setLibrary(false);
       setStep(bounded);
       sessionStorage.setItem("remap.step." + task.id, String(bounded));
       window.scrollTo({ top: 0 });
@@ -270,6 +274,17 @@ export default function Workbench({
                 ? "保存失败"
                 : "已保存"}
           </span>
+          <button
+            className={"rw-button" + (library ? " is-active" : "")}
+            aria-pressed={library}
+            onClick={() => {
+              setLibrary(!library);
+              window.scrollTo({ top: 0 });
+            }}
+          >
+            <Database size={16} aria-hidden />
+            基础库配置
+          </button>
           <button
             className="rw-button"
             onClick={() =>
@@ -458,8 +473,10 @@ export default function Workbench({
             return (
               <button
                 key={item.id}
-                className={"rw-step" + (index === step ? " is-active" : "")}
-                aria-current={index === step ? "step" : undefined}
+                className={
+                  "rw-step" + (index === step && !library ? " is-active" : "")
+                }
+                aria-current={index === step && !library ? "step" : undefined}
                 onClick={() => goto(index)}
               >
                 <span className="rw-step-index">
@@ -484,34 +501,40 @@ export default function Workbench({
           </p>
         )}
 
-        <main className="rw-main">
-          <header className="rw-step-head">
-            <h1>
-              第 {step + 1} 步　{steps[step].name}
-            </h1>
-            <p>{purposes[step]}</p>
-          </header>
-          <StepView />
-          <footer className="rw-step-nav">
-            {step > 0 ? (
-              <button className="rw-button" onClick={() => goto(step - 1)}>
-                <ArrowLeft size={16} aria-hidden />
-                上一步：{steps[step - 1].name}
-              </button>
-            ) : (
-              <span />
-            )}
-            {step < 3 && (
-              <button
-                className="rw-button is-primary"
-                onClick={() => goto(step + 1)}
-              >
-                下一步：{steps[step + 1].name}
-                <ArrowRight size={16} aria-hidden />
-              </button>
-            )}
-          </footer>
-        </main>
+        {library ? (
+          <main className="rw-main">
+            <Library title={task.name} onBack={() => setLibrary(false)} />
+          </main>
+        ) : (
+          <main className="rw-main">
+            <header className="rw-step-head">
+              <h1>
+                第 {step + 1} 步　{steps[step].name}
+              </h1>
+              <p>{purposes[step]}</p>
+            </header>
+            <StepView />
+            <footer className="rw-step-nav">
+              {step > 0 ? (
+                <button className="rw-button" onClick={() => goto(step - 1)}>
+                  <ArrowLeft size={16} aria-hidden />
+                  上一步：{steps[step - 1].name}
+                </button>
+              ) : (
+                <span />
+              )}
+              {step < 3 && (
+                <button
+                  className="rw-button is-primary"
+                  onClick={() => goto(step + 1)}
+                >
+                  下一步：{steps[step + 1].name}
+                  <ArrowRight size={16} aria-hidden />
+                </button>
+              )}
+            </footer>
+          </main>
+        )}
       </div>
     </WorkbenchContext.Provider>
   );

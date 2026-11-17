@@ -47,8 +47,10 @@ function parseModel(input: unknown): CoreModel {
 export function registerCoreRoutes(app: FastifyInstance, tasks: TaskServices) {
   const load = (store: Store) => {
     const saved = store.documents(modelKind)[0];
+    // 早期保存的模型缺少后来新增的字段，读取时按结构定义补默认值。
+    const parsed = saved ? coreModelSchema.safeParse(saved.model) : null;
     return {
-      model: (saved?.model as CoreModel | undefined) ?? defaultCoreModel(),
+      model: parsed?.success ? parsed.data : defaultCoreModel(),
       revision: (saved?.revision as number | undefined) ?? 0,
       savedAt: (saved?.savedAt as string | undefined) ?? null,
     };

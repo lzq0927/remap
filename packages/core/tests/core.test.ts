@@ -6,6 +6,7 @@ import {
   assess,
   coreModelSchema,
   coreModelVersion,
+  createEvaluator,
   defaultCoreModel,
   gaps,
   lossPerEvent,
@@ -20,7 +21,7 @@ import {
 
 /** 两个模块、数值可手算的小模型。 */
 function tiny(): CoreModel {
-  return {
+  return coreModelSchema.parse({
     schemaVersion: coreModelVersion,
     name: "手算样例",
     scenario: {
@@ -107,7 +108,7 @@ function tiny(): CoreModel {
     ],
     allocation: { method: "agree", complexityBasis: "fit", customWeights: {} },
     source: "",
-  };
+  });
 }
 
 describe("评估：串联可修系统的更新报酬模型", () => {
@@ -147,9 +148,11 @@ describe("评估：串联可修系统的更新报酬模型", () => {
         direction: "mttr",
         modeIds: ["b1"],
         effects: [{ param: "coverage", op: "reduce", value: 0.5 }],
+        applicability: 1,
         enabled: true,
         evidence: "assumed",
         rationale: "",
+        source: "",
       },
       {
         id: "y",
@@ -160,6 +163,8 @@ describe("评估：串联可修系统的更新报酬模型", () => {
         enabled: true,
         evidence: "assumed",
         rationale: "",
+        source: "",
+        applicability: 1,
       },
     );
     const forward = applyMeasures(model),
@@ -172,6 +177,88 @@ describe("评估：串联可修系统的更新报酬模型", () => {
     expect(forward.modes[1].coverage).toBeCloseTo(0.9, 12);
     expect(reversed.modes[0].fit).toBeCloseTo(forward.modes[0].fit, 9);
     expect(lossPerEvent(forward.modes[1])).toBeCloseTo(0.9 * 1 + 0.1 * 11, 12);
+  });
+});
+
+describe("措施生效规则", () => {
+  it("适用比例在现值与目标值之间折算", () => {
+    const model = tiny();
+    model.measures = [
+      {
+        id: "half",
+        name: "半数适用",
+        direction: "mttr",
+        modeIds: ["a1"],
+        effects: [
+          { param: "recoverHours", op: "set", value: 0.1 },
+          { param: "fit", op: "reduce", value: 0.4 },
+          { param: "coverage", op: "set", value: 0.5 },
+        ],
+        applicability: 0.5,
+        enabled: true,
+        evidence: "assumed",
+        rationale: "",
+        source: "",
+      },
+    ];
+    const mode = applyMeasures(model).modes[0];
+    expect(mode.recoverHours).toBeCloseTo(0.5 * 0.5 + 0.5 * 0.1, 12);
+    expect(mode.fit).toBeCloseTo(50000 * (1 - 0.5 * 0.4), 9);
+    // 目标值比现值差时也照常折算，不会被忽略
+    expect(mode.coverage).toBeCloseTo(0.75, 12);
+    model.measures[0].applicability = 0;
+    expect(applyMeasures(model).modes[0]).toEqual(model.modes[0]);
+  });
+  it("多项“设为”取最好的一项，“增加”逐项累加并受上下限约束", () => {
+    const model = tiny();
+    const make = (
+      id: string,
+      effects: CoreModel["measures"][number]["effects"],
+    ) => ({
+      id,
+      name: id,
+      direction: "mttr" as const,
+      modeIds: ["b1"],
+      effects,
+      applicability: 1,
+      enabled: true,
+      evidence: "assumed" as const,
+      rationale: "",
+      source: "",
+    });
+    model.measures = [
+      make("s1", [{ param: "recoverHours", op: "set", value: 0.6 }]),
+      make("s2", [{ param: "recoverHours", op: "set", value: 0.4 }]),
+      make("a1", [
+        { param: "recoverHours", op: "add", value: 0.05 },
+        { param: "overhead", op: "add", value: 0.01 },
+      ]),
+      make("a2", [
+        { param: "overhead", op: "add", value: 0.02 },
+        { param: "coverage", op: "add", value: 0.9 },
+      ]),
+    ];
+    const resolved = applyMeasures(model);
+    expect(resolved.modes[1].recoverHours).toBeCloseTo(0.45, 12);
+    expect(resolved.overhead).toBeCloseTo(0.03, 12);
+    expect(resolved.modes[1].coverage).toBe(1);
+  });
+  it("快速求值与完整评估给出相同的系统可用度", () => {
+    const model = defaultCoreModel(),
+      evaluate = createEvaluator(model),
+      ids = model.measures.map((m) => m.id);
+    for (const pick of [
+      [],
+      ids,
+      ids.filter((_, i) => i % 2),
+      ids.slice(5, 20),
+    ]) {
+      const enabled = new Set(pick);
+      expect(evaluate(enabled)).toBeCloseTo(
+        assess(model, applyMeasures(model, enabled)).system.availability,
+        14,
+      );
+    }
   });
 });
 
@@ -257,7 +344,7 @@ describe("分配：各方法都与系统目标闭合", () => {
 describe("设计：贡献分摊、推荐与参数反推", () => {
   it("Shapley 分摊之和等于设计后与现状之差", () => {
     const model = defaultCoreModel();
-    for (const measure of model.measures) measure.enabled = true;
+    model.measures.forEach((measure, index) => (measure.enabled = index < 12));
     const result = analyze(model),
       sum = result.contributions.items.reduce(
         (total, c) => total + c.shapley,
@@ -273,35 +360,76 @@ describe("设计：贡献分摊、推荐与参数反推", () => {
       ...model,
       measures: [...model.measures].reverse(),
     });
-    for (const item of result.contributions.items)
+    for (const item of result.contributions.items.filter((c) => c.enabled))
       expect(shuffled.values.get(item.id)).toBeCloseTo(item.shapley, 10);
   });
-  it("默认场景：用户四项措施不足，推荐补充最少的措施达标", () => {
+  it("措施很多时改用抽样，分摊之和仍然闭合且可复现", () => {
+    const model = defaultCoreModel();
+    for (const measure of model.measures) measure.enabled = true;
+    const first = analyze(model),
+      again = analyze(model),
+      sum = first.contributions.items.reduce(
+        (total, c) => total + c.shapley,
+        0,
+      );
+    expect(first.contributions.exact).toBe(false);
+    expect(sum).toBeCloseTo(
+      first.design.system.availability - first.baseline.system.availability,
+      10,
+    );
+    expect(again.contributions.items).toEqual(first.contributions.items);
+  });
+  it("默认场景：用户四项措施不足，采用推荐的补充措施后达标", () => {
     const model = defaultCoreModel(),
       result = analyze(model);
+    expect(model.measures.length).toBeGreaterThanOrEqual(28);
+    expect(model.measures.filter((m) => m.enabled).map((m) => m.id)).toEqual([
+      "hbm-ecc",
+      "aicore-screening",
+      "optical-reliability",
+      "sdc-detection",
+    ]);
     expect(result.baseline.system.availability).toBeCloseTo(0.6505, 3);
     expect(result.design.system.availability).toBeCloseTo(0.7969, 3);
     expect(result.recommendation.kind).toBe("add");
-    expect(result.recommendation.add).toHaveLength(2);
+    expect(result.recommendation.add.length).toBeGreaterThan(0);
     const adopted = structuredClone(model);
     for (const measure of adopted.measures)
       if (result.recommendation.add.includes(measure.id))
         measure.enabled = true;
-    const after = recommend(adopted);
-    expect(after.kind).toBe("met");
-    expect(after.availability).toBeGreaterThanOrEqual(model.scenario.target);
-    // 任意单独一项候选都不够
-    for (const measure of model.measures.filter((m) => !m.enabled)) {
-      const single = structuredClone(model);
-      single.measures.find((m) => m.id === measure.id)!.enabled = true;
-      expect(analyze(single).design.system.availability).toBeLessThan(0.95);
+    const after = analyze(adopted);
+    expect(after.recommendation.kind).toBe("met");
+    expect(after.design.system.availability).toBeCloseTo(
+      result.recommendation.availability,
+      12,
+    );
+    // 推荐的每一项都不可少：去掉任何一项都会低于目标
+    for (const id of result.recommendation.add) {
+      const without = structuredClone(adopted);
+      without.measures.find((m) => m.id === id)!.enabled = false;
+      expect(analyze(without).design.system.availability, id).toBeLessThan(
+        model.scenario.target,
+      );
     }
+  });
+  it("候选不多时穷举得到数量最少的补充方案", () => {
+    const model = tiny();
+    model.scenario.target = 0.85; // 允许 ρ = 0.1765；现状启用 m-fit 后 ρ = 0.2
+    const result = recommend(model);
+    // 加上 m-cov：ρ = 0.05 + 0.05×(0.95 + 0.05×11) = 0.125，达标
+    expect(result).toMatchObject({
+      kind: "add",
+      add: ["m-cov"],
+      minimal: true,
+    });
+    expect(result.availability).toBeCloseTo(1 / 1.125, 12);
   });
   it("措施库全部启用仍不够时给出还需降低的比例", () => {
     const model = tiny();
     model.scenario.target = 0.99;
     const result = recommend(model);
     expect(result.kind).toBe("short");
+    expect(result.add).toEqual(["m-cov"]);
     // 全部启用：ρ = 0.05 + 0.05×(0.95+0.05×11) = 0.125；允许 0.0101
     expect(result.furtherReduction).toBeCloseTo(1 - (1 / 0.99 - 1) / 0.125, 9);
     expect(result.shortfall).toBeCloseTo(0.99 - 1 / 1.125, 9);
@@ -361,12 +489,11 @@ describe("验证：独立仿真", () => {
       3000,
     );
   });
-  it("达标设计通过全部数值判定，未实测的措施只给出提醒", () => {
-    const model = defaultCoreModel();
+  it("达标设计通过均值与一致性判定，未实测的措施只给出提醒", () => {
+    const model = defaultCoreModel(),
+      add = recommend(model).add;
     for (const measure of model.measures)
-      measure.enabled =
-        measure.enabled ||
-        ["sdc-audit", "elastic-recover"].includes(measure.id);
+      measure.enabled = measure.enabled || add.includes(measure.id);
     model.allocation.method = "arinc";
     const result = verify(model, { trials: 1500, seed: 99 });
     expect(result.modelHash).toBe(modelHash(model));
@@ -399,6 +526,21 @@ describe("模型校验", () => {
     const ratio = defaultCoreModel();
     ratio.measures[0].effects[0].value = 1.5;
     expect(coreModelSchema.safeParse(ratio).success).toBe(false);
+    // 早期保存的模型没有架构图与适用比例字段，读取时补默认值
+    const legacy = JSON.parse(JSON.stringify(defaultCoreModel()));
+    for (const group of legacy.groups) delete group.layout;
+    for (const module of legacy.modules) delete module.container;
+    for (const measure of legacy.measures) {
+      delete measure.applicability;
+      delete measure.source;
+    }
+    const upgraded = coreModelSchema.parse(legacy);
+    expect(upgraded.groups[0].layout).toBe("grid");
+    expect(upgraded.modules[0].container).toBe("");
+    expect(upgraded.measures[0]).toMatchObject({
+      applicability: 1,
+      source: "",
+    });
     const extra = { ...defaultCoreModel(), unknown: 1 };
     expect(coreModelSchema.safeParse(extra).success).toBe(false);
   });

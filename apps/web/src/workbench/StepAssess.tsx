@@ -4,19 +4,19 @@ import {
   faultKindNames,
   faultKinds,
   lossPerEvent,
-  type CoreModel,
   type FaultKind,
   type FaultMode,
   type ModuleGap,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
+import ArchitectureDiagram from "./ArchitectureDiagram";
+import { blankMode, blankModule, dropModes, dropModule } from "./helpers";
 import { count, duration, fit, hours, percent, times } from "./format";
 import {
   Disclosure,
   Drawer,
   DurationField,
   Formula,
-  Meter,
   NumberField,
   Status,
   TextField,
@@ -30,27 +30,6 @@ export const usageText = (gap: ModuleGap) =>
   gap.usage <= 1
     ? "占用预算 " + percent(gap.usage, 0)
     : "超预算 " + times(gap.usage);
-const newId = (prefix: string) =>
-  prefix +
-  "-" +
-  Date.now().toString(36) +
-  Math.floor(Math.random() * 1296).toString(36);
-
-/** 删除故障模式后，同步清理引用它的措施。 */
-function dropModes(draft: CoreModel, ids: Set<string>) {
-  draft.modes = draft.modes.filter((mode) => !ids.has(mode.id));
-  draft.measures = draft.measures
-    .map((measure) => ({
-      ...measure,
-      modeIds: measure.modeIds.filter((id) => !ids.has(id)),
-    }))
-    .filter(
-      (measure) =>
-        measure.modeIds.length > 0 ||
-        measure.effects.every((effect) => effect.param === "overhead"),
-    );
-}
-
 export default function StepAssess() {
   const { model, analysis, update } = useWorkbench(),
     { baseline, allocation, baselineGaps } = analysis,
@@ -106,88 +85,25 @@ export default function StepAssess() {
         ))}
       </section>
 
-      <section className="rw-card" aria-label="架构现状">
-        <div className="rw-card-head">
-          <h2>架构上的现状</h2>
-          <span className="rw-legend">
-            <Status tone="good">预算内</Status>
-            <Status tone="warn">略超（1.2 倍内）</Status>
-            <Status tone="bad">超预算</Status>
-          </span>
-        </div>
-        <p className="rw-hint">
-          每个方块是一个模块。点击可查看并修改它的故障模式和恢复参数。
-        </p>
-        <div className="rw-arch">
-          {model.groups.map((group) => {
-            const summary = baseline.groups.find((g) => g.id === group.id)!;
-            return (
-              <div key={group.id} className="rw-arch-group">
-                <header>
-                  <strong>{group.name}</strong>
-                  <span>
-                    {percent(summary.availability)} · {hours(summary.lossHours)}
-                  </span>
-                </header>
-                {baseline.modules
-                  .filter((m) => m.groupId === group.id)
-                  .map((module) => {
-                    const gap = gapOf(module.id),
-                      tone = gapTone(gap);
-                    return (
-                      <button
-                        key={module.id}
-                        className={"rw-tile is-" + tone}
-                        onClick={() => setSelected(module.id)}
-                        aria-label={`${module.name}，可用度 ${percent(module.availability)}，${usageText(gap)}`}
-                      >
-                        <span className="rw-tile-name">{module.name}</span>
-                        <strong>{percent(module.availability)}</strong>
-                        <dl>
-                          <div>
-                            <dt>FIT / 卡</dt>
-                            <dd>{fit(module.fitPerCard)}</dd>
-                          </div>
-                          <div>
-                            <dt>损失</dt>
-                            <dd>{hours(module.lossHours)}</dd>
-                          </div>
-                        </dl>
-                        <Meter
-                          ratio={gap.usage}
-                          tone={tone}
-                          label={usageText(gap)}
-                        />
-                        <Status tone={tone}>{usageText(gap)}</Status>
-                      </button>
-                    );
-                  })}
-                <button
-                  className="rw-tile-add"
-                  onClick={() => {
-                    const id = newId("module");
-                    update((d) => {
-                      d.modules.push({
-                        id,
-                        groupId: group.id,
-                        name: "新模块",
-                        unitsPerCard: 1,
-                        importance: 1,
-                        complexity: null,
-                        note: "",
-                      });
-                    });
-                    setSelected(id);
-                  }}
-                >
-                  <Plus size={14} aria-hidden />
-                  添加模块
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      <ArchitectureDiagram
+        views={["baseline", "design"]}
+        title="架构图"
+        hint="每个框是一个模块，标出可用度与目标、每卡 FIT、损失时间与预算。点击模块可查看并修改它的故障模式和恢复参数。"
+        onSelect={setSelected}
+        footer={(groupId) => (
+          <button
+            className="rw-tile-add"
+            onClick={() => {
+              const module = blankModule(groupId);
+              update((d) => void d.modules.push(module));
+              setSelected(module.id);
+            }}
+          >
+            <Plus size={14} aria-hidden />
+            添加模块
+          </button>
+        )}
+      />
 
       <section className="rw-card" aria-label="差距明细">
         <div className="rw-card-head">
@@ -382,15 +298,7 @@ export default function StepAssess() {
                   return;
                 const id = selectedModule.id;
                 setSelected(undefined);
-                update((d) => {
-                  const modes = new Set(
-                    d.modes.filter((m) => m.moduleId === id).map((m) => m.id),
-                  );
-                  if (d.modes.length - modes.size < 1) return;
-                  dropModes(d, modes);
-                  d.modules = d.modules.filter((m) => m.id !== id);
-                  delete d.allocation.customWeights[id];
-                });
+                update((d) => void dropModule(d, id));
               }}
             >
               <Trash2 size={15} aria-hidden />
@@ -472,6 +380,16 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
               </option>
             ))}
           </select>
+        </label>
+        <label className="is-wide">
+          <span>上级部件（架构图中归入同名的框，可留空）</span>
+          <TextField
+            label="上级部件"
+            value={module.container}
+            maxLength={40}
+            placeholder="例如：NPU 模组"
+            onCommit={(container) => patchModule({ container })}
+          />
         </label>
         <label className="is-wide">
           <span>说明</span>
@@ -614,24 +532,7 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
       })}
       <button
         className="rw-button"
-        onClick={() =>
-          update((d) => {
-            d.modes.push({
-              id: newId("mode"),
-              moduleId,
-              name: "新故障模式",
-              kind: "hard",
-              fit: 100,
-              coverage: 0.95,
-              detectHours: 10 / 3600,
-              recoverHours: 252 / 3600,
-              reworkHours: 150 / 3600,
-              missedLossHours: 462 / 3600,
-              impact: 1,
-              evidence: "",
-            });
-          })
-        }
+        onClick={() => update((d) => void d.modes.push(blankMode(moduleId)))}
       >
         <Plus size={15} aria-hidden />
         添加故障模式

@@ -240,18 +240,22 @@ export function modelHash(model: CoreModel) {
             .join(",") +
           "}"
         : JSON.stringify(value);
-  // 名称、说明文字和证据文本不影响数值结果，不计入指纹。
+  // 名称、说明、出处和架构图画法不影响数值结果，不计入指纹。
   const numeric = {
     scenario: model.scenario,
-    modules: model.modules.map(({ note: _note, name: _name, ...rest }) => rest),
+    modules: model.modules.map(
+      ({ note: _note, name: _name, container: _container, ...rest }) => rest,
+    ),
     modes: model.modes.map(
       ({ evidence: _evidence, name: _name, ...rest }) => rest,
     ),
     measures: model.measures.map(
-      ({ rationale: _rationale, name: _name, ...rest }) => rest,
+      ({ rationale: _rationale, name: _name, source: _source, ...rest }) =>
+        rest,
     ),
     allocation: model.allocation,
   };
+
   let hash = 0x811c9dc5;
   const text = stable(numeric);
   for (let i = 0; i < text.length; i++)

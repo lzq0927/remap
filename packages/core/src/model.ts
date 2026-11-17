@@ -25,7 +25,14 @@ export const faultKindNames: Record<FaultKind, string> = {
   sdc: "静默",
 };
 
-export const groupSchema = z.object({ id, name: label }).strict();
+export const groupSchema = z
+  .object({
+    id,
+    name: label,
+    /** 架构图中的画法：grid 并列摆放；chain 按顺序串成一条路径。 */
+    layout: z.enum(["grid", "chain"]).default("grid"),
+  })
+  .strict();
 export const moduleSchema = z
   .object({
     id,
@@ -37,6 +44,8 @@ export const moduleSchema = z
     importance: z.number().finite().gt(0).max(1),
     /** AGREE 复杂度 n 的人工取值；为空时按分配设置的口径自动取值。 */
     complexity: z.number().finite().positive().max(1e9).nullable(),
+    /** 架构图中所属的上级部件（如“NPU 模组”）；为空表示直接放在分组内。 */
+    container: z.string().trim().max(40).default(""),
     note,
   })
   .strict();
@@ -88,8 +97,8 @@ export const measureParamNames: Record<MeasureParam, string> = {
 export const effectSchema = z
   .object({
     param: z.enum(measureParams),
-    /** reduce：在现值上按比例降低；set：直接设为新值。 */
-    op: z.enum(["reduce", "set"]),
+    /** reduce：在现值上按比例降低；set：直接设为新值；add：在现值上增加（代价类效果）。 */
+    op: z.enum(["reduce", "set", "add"]),
     value: z.number().finite().min(0).max(1e7),
   })
   .strict()
@@ -123,9 +132,16 @@ export const measureSchema = z
     /** 措施作用的故障模式；仅含 overhead 效果时可为空。 */
     modeIds: z.array(id).max(64),
     effects: z.array(effectSchema).min(1).max(6),
+    /**
+     * 适用比例：所作用的故障中，措施实际适用并成功的比例。
+     * 参数按此比例在现值与目标值之间折算。
+     */
+    applicability: z.number().finite().min(0).max(1).default(1),
     enabled: z.boolean(),
     evidence: z.enum(evidenceStates),
     rationale: note,
+    /** 措施的出处，如现有机制库的编号。 */
+    source: z.string().trim().max(120).default(""),
   })
   .strict();
 
