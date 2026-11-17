@@ -12,6 +12,30 @@ export const registry = [
     "/reliability/capabilities",
   ],
   [
+    "core_model_get",
+    "四步工作台：读取当前任务的统一模型（场景、架构模块、故障模式、可靠性措施、分配方法）、修订号与最近一次验证结果",
+    "GET",
+    "/core",
+  ],
+  [
+    "core_analysis",
+    "四步工作台：读取解析结果——现状与设计后的各模块FIT、MTBF、等效MTTR、可用度、损失时间，目标分配与差距，措施Shapley贡献和推荐方案",
+    "GET",
+    "/core/analysis",
+  ],
+  [
+    "core_model_save",
+    "四步工作台：body={model}，保存完整模型。先用core_model_get读取并在其基础上修改；参数须有来源，措施的证据状态如实填写",
+    "POST",
+    "/core",
+  ],
+  [
+    "core_verify",
+    "四步工作台：body={trials?,seed?}，对已保存模型做独立离散事件仿真，返回均值、置信区间、窗口达标比例和逐项判定；仿真通过不代表措施已有工程证据",
+    "POST",
+    "/core/verify",
+  ],
+  [
     "allocation_preview",
     "目标分解分配工具集：读取当前950架构的AGREE设计分配；provisional表示等待现状证据，不能称为已验证能力",
     "GET",

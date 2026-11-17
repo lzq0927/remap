@@ -14,3 +14,16 @@ workflow_start基于当前inputRevision启动；workflow_save带executionId、ex
 RBD/BDD按结构指标求解；固定窗口训练可用度需要停机、回滚、降速、污染和正常态开销的逐事件账本。AGREE设计先验未包含运行证据时明确provisional；评估后的证据分配另存，不覆盖最初目标。后续优化方案用独立计划/运行，而非覆盖第一轮。
 
 输入变化按最早受影响部分重新核验；原始六阶段执行保留原ID和历史事件，新建专家评估工作流使用四部分。旧任务不能通过映射状态伪造新部分已确认。
+
+## 四步工作台（默认界面）
+
+界面默认进入四步工作台，四步共用一份模型：架构模块 → 故障模式 → 可靠性措施。Agent 通过四个工具读写同一份模型，结果与界面一致：
+
+| 步骤       | 工具                            | 说明                                                                                    |
+| ---------- | ------------------------------- | --------------------------------------------------------------------------------------- |
+| 目标分配   | core_model_get、core_model_save | 改 `allocation.method`（agree / arinc / equal / min-effort / custom）及复杂度、重要度   |
+| 可用度评估 | core_analysis                   | `baseline` 为现状：各模块 FIT、MTBF、等效 MTTR、可用度、损失时间；`baselineGaps` 为差距 |
+| 机制设计   | core_model_save、core_analysis  | 改 `measures`；`contributions` 为 Shapley 贡献，`recommendation` 为推荐方案             |
+| 机制验证   | core_verify                     | 独立离散事件仿真；返回逐项判定 `checks` 与结论 `verdict`                                |
+
+口径：A = (1 − 公共开销) / (1 + ρ)，ρ = Σ λᵢ·MTTRᵢ；分配、评估、设计都在 ρ 上进行，方法说明见 docs/2026-11-17-四步工作台重构.md。保存模型前先读取，再在原模型上修改；每个故障率和恢复参数写明来源，措施的 `evidence` 如实填写 verified / planned / assumed。仿真通过只说明“参数成立时可以达标”。上表四个工具不改变经典工作台（专家模式）的六阶段或四部分执行记录。

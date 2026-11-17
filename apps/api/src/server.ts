@@ -1,5 +1,6 @@
 import { registerAuditExperimentRoutes } from "./audit-experiment-routes";
 import { registerWeeklyReliabilityRoutes } from "./weekly-reliability-routes";
+import { registerCoreRoutes } from "./core-routes";
 import { designAssessment } from "./design-assessment";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -773,6 +774,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   registerAgentRoutes(app, tasks, agentIntegration);
   registerCatalogRoutes(app, tasks);
   registerWeeklyReliabilityRoutes(app, tasks);
+  registerCoreRoutes(app, tasks);
   registerModelingRoutes(app, tasks);
   registerPortableRoutes(app, tasks);
   await options.registerTaskRoutes?.(app, tasks);

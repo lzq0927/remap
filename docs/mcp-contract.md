@@ -39,3 +39,14 @@ input_mapping `{id}` 对应 GET /api/tasks/:taskId/inputs/:id/mapping；只接�
 ### 架构全景关联
 
 架构节点可携带可选 `functionalDomain`（compute/network/storage/facility/control/other），旧输入省略时按对象/子层推导。现有 design_update、analysis_solve 与 report_export 链路保持兼容。全景视图从运行快照派生，包含纯架构、诊断热力图及机制适用参数，不增加新求解操作或自动第二轮。完整规范见 `skills/sd-dfr-remap/references/architecture-atlas.md`。
+
+## 四步工作台工具
+
+四步工作台的四个步骤共用一份任务内模型（文档类型 `core-model`），工具与界面读写同一份数据。
+
+- `core_model_get` → GET `/core`，返回 `{model,revision,savedAt,hash,verification,verificationCount}`；未保存过时返回默认场景，`revision` 为 0。
+- `core_analysis` → GET `/core/analysis`，返回 `{hash,baseline,design,allocation,baselineGaps,designGaps,contributions,recommendation}`。`baseline` 是未加措施的现状，`design` 是启用措施后的结果。
+- `core_model_save` → POST `/core`，body `{model}`。整份替换并使 `revision` 加 1；结构不合法返回 SCHEMA_INVALID，原模型不变。界面使用等价的 PUT。
+- `core_verify` → POST `/core/verify`，body `{trials?,seed?}`（100–20000 个窗口，种子为 32 位无符号整数，省略时随机）。同步返回验证记录并追加保存为 `core-verification-<序号>`；记录带 `modelHash`，与当前模型的 `hash` 不一致即表示参数已变、结果过期。
+
+这四个工具不读写经典工作台的设计、运行和六阶段 / 四部分执行记录。方法与口径见[四步工作台重构](2026-11-17-四步工作台重构.md)。
