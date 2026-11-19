@@ -144,6 +144,14 @@ describe("已知域级约束的五规模评估", () => {
 
   it("整体达标不能覆盖独立域失败，参数反推与验证同时检查域约束", () => {
     const model = novemberReferenceScenario();
+    // Explicit synthetic fast path isolates this constraint test from candidate-library tuning.
+    model.measures.push({
+      ...model.measures.find((m) => m.id === "fast-recover")!,
+      id: "fixture-recover",
+      modeIds: model.modes.map((m) => m.id),
+      applicability: 1,
+      effects: [{ param: "recoverHours", op: "set", value: 0 }],
+    });
     model.measures.forEach((m) => (m.enabled = true));
     model.requirements!.domains.find(
       (d) => d.id === "network",

@@ -27,6 +27,18 @@ export default function MeasureScaleCharts() {
         </select>
       </div>
       <p>{study.basis}</p>
+      {study.mtbfOnly.ids.length > 0 && (
+        <div className="rw-note" aria-label="仅MTBF措施收益">
+          <b>
+            仅启用已选的 {study.mtbfOnly.ids.length}{" "}
+            项降FIT措施，保持现状恢复链：
+          </b>
+          50万卡可用度 {percent(study.mtbfOnly.baseline)} →{" "}
+          {percent(study.mtbfOnly.availability)}， 整系统净减损{" "}
+          {hours(study.mtbfOnly.savedHours)}/周。
+          MTBF组Shapley只分摊这一增益，不包含任何MTTR改进。
+        </div>
+      )}
       <div className="rw-table-wrap">
         <table className="rw-table">
           <thead>
@@ -73,9 +85,24 @@ export default function MeasureScaleCharts() {
               <span>{m.direction === "mtbf" ? "提升MTBF" : "降低MTTR"}</span>
             </h3>
             <p>
-              50万卡单项收益 <b>{points(last.gainPp / 100)}</b> · 减损{" "}
-              <b>{hours(last.savedHours)}/周</b> · {scale(model.scenario.cards)}
-              组合Shapley：
+              50万卡单项收益 <b>{points(last.gainPp / 100)}</b> · 整系统净减损{" "}
+              <b>{hours(last.savedHours)}/周</b>
+              {last.fixedExposureSavedHours !== null && (
+                <>
+                  {" "}
+                  · 按现状恢复链与运行暴露避免的部件损失{" "}
+                  <b>{hours(last.fixedExposureSavedHours)}/周</b>
+                </>
+              )}
+            </p>
+            <p>
+              {m.mtbfOnlyShapleyPp !== null && (
+                <>
+                  50万卡MTBF组Shapley：{points(m.mtbfOnlyShapleyPp / 100)}
+                  （所有MTTR候选关闭）；{" "}
+                </>
+              )}
+              {scale(model.scenario.cards)}全方案Shapley（含MTTR交互）：
               {m.enabled
                 ? points(contribution?.shapley ?? 0)
                 : "未纳入当前组合"}
@@ -93,7 +120,10 @@ export default function MeasureScaleCharts() {
                     <th>仅优化该项可用度</th>
                     <th>周损失</th>
                     <th>增益pp</th>
-                    <th>周减损</th>
+                    <th>整系统净减损</th>
+                    {last.fixedExposureSavedHours !== null && (
+                      <th>现状暴露下避免部件损失</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -104,6 +134,9 @@ export default function MeasureScaleCharts() {
                       <td>{hours(p.lossHours)}</td>
                       <td>{p.gainPp.toFixed(4)}</td>
                       <td>{hours(p.savedHours)}</td>
+                      {p.fixedExposureSavedHours !== null && (
+                        <td>{hours(p.fixedExposureSavedHours)}</td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

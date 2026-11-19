@@ -1,0 +1,3327 @@
+{
+  "case": "2026-11-19-measure-benefits-corrected",
+  "supersedes": "2026-11-19-constrained-five-scales",
+  "model": {
+    "schemaVersion": "remap-core.v1",
+    "name": "恢复阶段收益修正 · 原14项组合未达95%",
+    "scenario": {
+      "cards": 500000,
+      "hours": 168,
+      "target": 0.95,
+      "overhead": 0.006622516556291391,
+      "passRatio": 0.9
+    },
+    "groups": [
+      {
+        "id": "compute",
+        "name": "计算"
+      },
+      {
+        "id": "network",
+        "name": "网络"
+      },
+      {
+        "id": "storage",
+        "name": "存储"
+      },
+      {
+        "id": "facility",
+        "name": "供电、冷却与管理"
+      },
+      {
+        "id": "software",
+        "name": "软件与调度"
+      }
+    ],
+    "modules": [
+      {
+        "id": "aicore",
+        "groupId": "compute",
+        "name": "AICore",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "aicore",
+        "note": "NPU 内的计算核；只承载静默分支"
+      },
+      {
+        "id": "npu",
+        "groupId": "compute",
+        "name": "NPU 其余部分",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "npu",
+        "note": "SRAM、逻辑、封装等除 AICore 静默以外的 NPU 故障"
+      },
+      {
+        "id": "hbm",
+        "groupId": "compute",
+        "name": "HBM",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "hbm",
+        "note": "按每卡等效 FIT 计，不再乘 HBM 颗数"
+      },
+      {
+        "id": "node",
+        "groupId": "compute",
+        "name": "节点与板级",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "node",
+        "note": "CPU、DDR、SSD、模组与板级连接"
+      },
+      {
+        "id": "iod-l1",
+        "groupId": "network",
+        "name": "IO Die 与 L1 互联",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "l1",
+        "note": "片内 IO Die、D2D 通路"
+      },
+      {
+        "id": "optical",
+        "groupId": "network",
+        "name": "光模块",
+        "unitsPerCard": 3.9666666666666663,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "optical",
+        "note": "每卡3.9667只为按35%故障份额与500 FIT折算的等效数量，非实测BOM。"
+      },
+      {
+        "id": "l2-fabric",
+        "groupId": "network",
+        "name": "L2 / Leaf / Spine 与网卡",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "l2",
+        "note": "UB 网卡、IO 转换板、L1/L2 互联设备"
+      },
+      {
+        "id": "storage",
+        "groupId": "storage",
+        "name": "存储系统",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "storage",
+        "note": "共享检查点与存储服务"
+      },
+      {
+        "id": "power",
+        "groupId": "facility",
+        "name": "供电与冷却",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "power",
+        "note": "柜级供电、液冷与风扇"
+      },
+      {
+        "id": "management",
+        "groupId": "facility",
+        "name": "管理面",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "management",
+        "note": "管理刀片、BMC"
+      },
+      {
+        "id": "software",
+        "groupId": "software",
+        "name": "软件与未归因",
+        "unitsPerCard": 1,
+        "importance": 1,
+        "complexity": null,
+        "anchor": "software",
+        "note": "调度、框架及未归因故障"
+      }
+    ],
+    "modes": [
+      {
+        "id": "aicore-sdc",
+        "moduleId": "aicore",
+        "name": "静默数据错误",
+        "kind": "sdc",
+        "fit": 67.43333333333334,
+        "coverage": 0.9,
+        "detectHours": 0.0002777777777777778,
+        "recoverHours": 0.07,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 48,
+        "impact": 1,
+        "evidence": "2026-11-12 周度用户场景：静默占全部故障 1.4%，AICore 占其中 85%；检出率 90%，漏检恢复 48 小时"
+      },
+      {
+        "id": "npu-fault",
+        "moduleId": "npu",
+        "name": "运行中断",
+        "kind": "hard",
+        "fit": 782.5666666666666,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.20825461227529787,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.3082546122752978,
+        "impact": 1,
+        "evidence": "2026-11-12 周度用户场景：NPU 占 15%，扣除 AICore 静默分支"
+      },
+      {
+        "id": "hbm-uce",
+        "moduleId": "hbm",
+        "name": "不可纠正错误",
+        "kind": "hard",
+        "fit": 850,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.20825461227529787,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.3082546122752978,
+        "impact": 1,
+        "evidence": "2026-11-12 周度用户场景：HBM 占 15%"
+      },
+      {
+        "id": "node-fault",
+        "moduleId": "node",
+        "name": "节点与板级中断",
+        "kind": "hard",
+        "fit": 660.9721606667183,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.20825461227529787,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.3082546122752978,
+        "impact": 1,
+        "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+      },
+      {
+        "id": "node-slow",
+        "moduleId": "node",
+        "name": "节点亚健康降速",
+        "kind": "slow",
+        "fit": 12.324300285262165,
+        "coverage": 0.95,
+        "detectHours": 0.004166666666666667,
+        "recoverHours": 0.05,
+        "reworkHours": 0,
+        "missedLossHours": 1.2000000000000002,
+        "impact": 1,
+        "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准；降速 5%，检测等待与漏检损失已按降速比例折算为等效停机时间"
+      },
+      {
+        "id": "iod-fault",
+        "moduleId": "iod-l1",
+        "name": "IO Die 通路失效",
+        "kind": "hard",
+        "fit": 193.0474771889264,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.40624572234060274,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.5062457223406027,
+        "impact": 1,
+        "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+      },
+      {
+        "id": "optical-fault",
+        "moduleId": "optical",
+        "name": "光模块失效",
+        "kind": "hard",
+        "fit": 500,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.40624572234060274,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.5062457223406027,
+        "impact": 1,
+        "evidence": "沿用现有库500 FIT与按35%故障份额折算的等效数量，未作为厂商实测。"
+      },
+      {
+        "id": "fabric-fault",
+        "moduleId": "l2-fabric",
+        "name": "互联设备与网卡中断",
+        "kind": "hard",
+        "fit": 205.93362057542845,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.40624572234060274,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.5062457223406027,
+        "impact": 1,
+        "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+      },
+      {
+        "id": "storage-fault",
+        "moduleId": "storage",
+        "name": "存储服务故障",
+        "kind": "hard",
+        "fit": 129.3235951257179,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.20825461227529787,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.3082546122752978,
+        "impact": 1,
+        "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+      },
+      {
+        "id": "power-fault",
+        "moduleId": "power",
+        "name": "掉电与过热保护",
+        "kind": "hard",
+        "fit": 250.60014712399993,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.20825461227529787,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.3082546122752978,
+        "impact": 1,
+        "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+      },
+      {
+        "id": "power-slow",
+        "moduleId": "power",
+        "name": "散热异常降频",
+        "kind": "slow",
+        "fit": 10.049741923790984,
+        "coverage": 0.95,
+        "detectHours": 0.004166666666666667,
+        "recoverHours": 0.05,
+        "reworkHours": 0,
+        "missedLossHours": 1.2000000000000002,
+        "impact": 1,
+        "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准；降速 5%，检测等待与漏检损失已按降速比例折算为等效停机时间"
+      },
+      {
+        "id": "management-fault",
+        "moduleId": "management",
+        "name": "管理面异常影响作业",
+        "kind": "hard",
+        "fit": 125.9072265907592,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.20825461227529787,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.3082546122752978,
+        "impact": 1,
+        "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+      },
+      {
+        "id": "software-fault",
+        "moduleId": "software",
+        "name": "软件与未归因中断",
+        "kind": "hard",
+        "fit": 383.2750638527297,
+        "coverage": 0.95,
+        "detectHours": 0.002777777777777778,
+        "recoverHours": 0.20825461227529787,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 0.3082546122752978,
+        "impact": 1,
+        "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准；已扣除非 AICore 静默分支"
+      },
+      {
+        "id": "other-sdc",
+        "moduleId": "software",
+        "name": "其余静默数据错误",
+        "kind": "sdc",
+        "fit": 11.9,
+        "coverage": 0.9,
+        "detectHours": 0.0002777777777777778,
+        "recoverHours": 0.07,
+        "reworkHours": 0.08333333333333333,
+        "missedLossHours": 48,
+        "impact": 1,
+        "evidence": "2026-11-12 周度用户场景：静默故障中非 AICore 的 15%，部件归属待补"
+      }
+    ],
+    "measures": [
+      {
+        "id": "hbm-ecc",
+        "name": "HBM 纠错增强",
+        "direction": "mtbf",
+        "modeIds": [
+          "hbm-uce"
+        ],
+        "effects": [
+          {
+            "param": "fit",
+            "op": "reduce",
+            "value": 0.6
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "planned",
+        "rationale": "更强的 ECC 与行列修复把一部分不可纠正错误变为可纠正；可覆盖的错误模式需工程核验。",
+        "source": "用户方案"
+      },
+      {
+        "id": "aicore-screening",
+        "name": "AICore 静默故障压测筛查",
+        "direction": "mtbf",
+        "modeIds": [
+          "aicore-sdc"
+        ],
+        "effects": [
+          {
+            "param": "fit",
+            "op": "reduce",
+            "value": 0.6
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "planned",
+        "rationale": "上线前与在网周期压测筛除易产生静默错误的核；只降低 AICore 静默分支的发生率。",
+        "source": "用户方案"
+      },
+      {
+        "id": "optical-reliability",
+        "name": "光模块可靠性提升",
+        "direction": "mtbf",
+        "modeIds": [
+          "optical-fault"
+        ],
+        "effects": [
+          {
+            "param": "fit",
+            "op": "set",
+            "value": 50
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "planned",
+        "rationale": "器件筛选与链路保护把单只光模块失效率从 500 FIT 降到 50 FIT。",
+        "source": "用户方案"
+      },
+      {
+        "id": "sdc-online-screen",
+        "name": "在线压测与异常资源筛除",
+        "direction": "mtbf",
+        "modeIds": [
+          "aicore-sdc",
+          "other-sdc"
+        ],
+        "effects": [
+          {
+            "param": "fit",
+            "op": "reduce",
+            "value": 0.25
+          }
+        ],
+        "applicability": 1,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "运行中周期压测并筛除异常资源，目标是静默故障发生率下降 25%。只对验证过的资源子集成立；压测占用的时间未计入。",
+        "source": "扩展机制库 H-SDC-SCREEN"
+      },
+      {
+        "id": "memory-predict",
+        "name": "内存故障预测与主动隔离",
+        "direction": "mtbf",
+        "modeIds": [
+          "hbm-uce"
+        ],
+        "effects": [
+          {
+            "param": "fit",
+            "op": "reduce",
+            "value": 0.3
+          }
+        ],
+        "applicability": 1,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "根据可纠正错误的增长趋势提前隔离即将失效的存储单元，把一部分突发故障变成计划内处置。降低 30% 为示例取值，没有现成来源。",
+        "source": "示例措施"
+      },
+      {
+        "id": "power-redundancy",
+        "name": "供电冗余与器件降额",
+        "direction": "mtbf",
+        "modeIds": [
+          "power-fault"
+        ],
+        "effects": [
+          {
+            "param": "fit",
+            "op": "reduce",
+            "value": 0.5
+          }
+        ],
+        "applicability": 1,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "增加电源冗余并对关键器件降额使用，减少保护后仍然掉电的情况。降低 50% 为示例取值，没有现成来源。",
+        "source": "示例措施"
+      },
+      {
+        "id": "sdc-detection",
+        "name": "静默故障在线检测增强",
+        "direction": "mttr",
+        "modeIds": [
+          "aicore-sdc",
+          "other-sdc"
+        ],
+        "effects": [
+          {
+            "param": "coverage",
+            "op": "set",
+            "value": 0.98
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "在线检出率由现状90%提高到98%；与AICore ABFT覆盖剩余漏检90%的条件相配合，AICore组合检出率99.8%。需验证两层检测覆盖、误报与开销，不默认产品已实现。",
+        "source": "本轮模型建议；原用户方案95%，提高至98%待验证"
+      },
+      {
+        "id": "fast-detect",
+        "name": "中断快速检测",
+        "direction": "mttr",
+        "modeIds": [
+          "npu-fault",
+          "hbm-uce",
+          "node-fault",
+          "iod-fault",
+          "optical-fault",
+          "fabric-fault",
+          "storage-fault",
+          "power-fault",
+          "management-fault",
+          "software-fault"
+        ],
+        "effects": [
+          {
+            "param": "coverage",
+            "op": "set",
+            "value": 0.999
+          },
+          {
+            "param": "detectHours",
+            "op": "set",
+            "value": 0.0002777777777777778
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "心跳与错误日志联合判定：99.9% 在 1 秒内发现，其余仍由 60 秒超时兜底。未计误报和检测资源开销。",
+        "source": "基础机制 D-HARD"
+      },
+      {
+        "id": "slow-detect",
+        "name": "亚健康快速检测",
+        "direction": "mttr",
+        "modeIds": [
+          "node-slow",
+          "power-slow"
+        ],
+        "effects": [
+          {
+            "param": "coverage",
+            "op": "set",
+            "value": 0.99
+          },
+          {
+            "param": "detectHours",
+            "op": "set",
+            "value": 0.0004166666666666667
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "95% 在 5 分钟发现提到 99% 在 30 秒发现；按降速 5% 折算，等效检测等待为 1.5 秒。需要区分真实亚健康与负载变化。",
+        "source": "基础机制 D-SLOW"
+      },
+      {
+        "id": "sdc-abft",
+        "name": "算子 ABFT 实时矩阵校验",
+        "direction": "mttr",
+        "modeIds": [
+          "aicore-sdc"
+        ],
+        "effects": [
+          {
+            "param": "coverage",
+            "op": "reduce",
+            "value": 0.9
+          },
+          {
+            "param": "overhead",
+            "op": "add",
+            "value": 0.001
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "在算子内做校验，捕获前一道检测剩余漏检中的 90%；代价是正常运行时约 0.1% 的吞吐损失。",
+        "source": "扩展机制库 D-ABFT"
+      },
+      {
+        "id": "sdc-precision",
+        "name": "FP8 / FP4 计算路径静默检测",
+        "direction": "mttr",
+        "modeIds": [
+          "aicore-sdc"
+        ],
+        "effects": [
+          {
+            "param": "coverage",
+            "op": "reduce",
+            "value": 0.95
+          }
+        ],
+        "applicability": 0,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "为尚未验证的 FP8、FP4 计算路径单独增加检测，目标检出 95%。这两条路径占 AICore 静默风险的份额没有给出，适用比例暂取 0，填入份额后才计收益。",
+        "source": "扩展机制库 D-SDC-FP8、D-SDC-FP4"
+      },
+      {
+        "id": "net-sdc",
+        "name": "网络端到端静默检测",
+        "direction": "mttr",
+        "modeIds": [
+          "other-sdc"
+        ],
+        "effects": [
+          {
+            "param": "coverage",
+            "op": "reduce",
+            "value": 0.95
+          }
+        ],
+        "applicability": 0.44,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "对网络传输做端到端校验，目标检出 95% 的网络静默错误。基线故障库中网络占非 AICore 静默故障约 44%，适用比例据此取值。",
+        "source": "扩展机制库 D-NET-SDC"
+      },
+      {
+        "id": "sdc-audit",
+        "name": "漏检静默故障定期校验",
+        "direction": "mttr",
+        "modeIds": [
+          "aicore-sdc",
+          "other-sdc"
+        ],
+        "effects": [
+          {
+            "param": "missedLossHours",
+            "op": "set",
+            "value": 12
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "定期一致性校验与金标复算把漏检故障的发现时间从 48 小时压到 12 小时。12 小时为设计假设。",
+        "source": "本工作台补充"
+      },
+      {
+        "id": "sdc-step-recover",
+        "name": "静默故障干净 step 恢复",
+        "direction": "mttr",
+        "modeIds": [
+          "aicore-sdc",
+          "other-sdc"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "set",
+            "value": 0.0002777777777777778
+          },
+          {
+            "param": "reworkHours",
+            "op": "set",
+            "value": 0.0002777777777777778
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "已检出的静默故障从保存在内存里的上一个干净 step 恢复：1 秒恢复，最多重做 1 秒计算。不缩短漏检分支。",
+        "source": "基础机制 R-SDC"
+      },
+      {
+        "id": "replay",
+        "name": "通信与算子重执行",
+        "direction": "mttr",
+        "modeIds": [
+          "npu-fault",
+          "hbm-uce",
+          "iod-fault",
+          "optical-fault"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "set",
+            "value": 0.001388888888888889
+          },
+          {
+            "param": "reworkHours",
+            "op": "set",
+            "value": 0
+          }
+        ],
+        "applicability": 0.8,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "瞬态中断先原地重执行：成功时 5 秒恢复且不回滚。基线成功率 90%，再按各模块瞬态故障的占比折减（HBM 约 70% 为可重放的瞬态错误），适用比例综合取 80%。",
+        "source": "基础机制 R-REPLAY"
+      },
+      {
+        "id": "fast-recover",
+        "name": "进程级快速恢复",
+        "direction": "mttr",
+        "modeIds": [
+          "npu-fault",
+          "hbm-uce",
+          "node-fault",
+          "iod-fault"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "set",
+            "value": 0.018421052631578946
+          }
+        ],
+        "applicability": 0.95,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "只重建受影响的进程：95% 在 60 秒内恢复；失败时多花 120 秒后退回整任务重启，这部分已摊入目标值。仍需回滚到检查点。",
+        "source": "基础机制 R-PROCESS"
+      },
+      {
+        "id": "elastic-recover",
+        "name": "DP副本级局部恢复",
+        "direction": "mttr",
+        "modeIds": [
+          "npu-fault",
+          "hbm-uce",
+          "node-fault",
+          "iod-fault"
+        ],
+        "effects": [
+          {
+            "param": "impact",
+            "op": "set",
+            "value": 0.02
+          }
+        ],
+        "applicability": 0.98,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "候选：50个训练DP副本，98%的适用事件仅一个副本暂停，健康副本继续；其余退回全局恢复。DP副本不是机柜或超节点，须验证TP/PP边界、框架成员变化、备用资源及可信状态。当前只用影响系数近似，50与98%未获工程确认。",
+        "source": "基础机制 R-ELASTIC"
+      },
+      {
+        "id": "contain",
+        "name": "故障隔离与传播抑制",
+        "direction": "mttr",
+        "modeIds": [
+          "iod-fault",
+          "fabric-fault"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "set",
+            "value": 0.021277777777777777
+          }
+        ],
+        "applicability": 0.5,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "把互联故障限制在一个域内：180 秒全局停止变为 1 秒全局协调加 1/50 的域局部恢复，等效 4.6 秒（人工兜底的 72 秒期望值不变）。是域级弹性恢复的前提。适用并成功的比例尚无实测，暂取 50%，请按故障注入结果修改。",
+        "source": "扩展机制库 I-CONTAIN"
+      },
+      {
+        "id": "link-local",
+        "name": "链路透明恢复",
+        "direction": "mttr",
+        "modeIds": [
+          "iod-fault",
+          "optical-fault",
+          "fabric-fault"
+        ],
+        "effects": [
+          {
+            "param": "detectHours",
+            "op": "set",
+            "value": 0
+          },
+          {
+            "param": "recoverHours",
+            "op": "set",
+            "value": 0.0005555555555555556
+          },
+          {
+            "param": "reworkHours",
+            "op": "set",
+            "value": 0
+          }
+        ],
+        "applicability": 0.5,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "瞬态链路异常在链路层纠错、重传或重训练，成功后训练继续，总停顿约 2 秒且不回滚。不能覆盖永久损坏。适用并成功的比例尚无实测，暂取 50%，请按故障注入结果修改。",
+        "source": "扩展机制库 R-LINK-LOCAL"
+      },
+      {
+        "id": "fabric-degrade",
+        "name": "网络绕行与降级运行",
+        "direction": "mttr",
+        "modeIds": [
+          "optical-fault",
+          "fabric-fault"
+        ],
+        "effects": [
+          {
+            "param": "detectHours",
+            "op": "set",
+            "value": 0
+          },
+          {
+            "param": "recoverHours",
+            "op": "set",
+            "value": 0.046
+          },
+          {
+            "param": "reworkHours",
+            "op": "set",
+            "value": 0
+          }
+        ],
+        "applicability": 0.5,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "2 秒切换到备用路径后降速运行 30 分钟再恢复，整个降级期等效损失约 165.6 秒，代替 342.5 秒的全局重启。适用并成功的比例尚无实测，暂取 50%，请按故障注入结果修改。",
+        "source": "扩展机制库 R-FABRIC-DEGRADE"
+      },
+      {
+        "id": "control-continuity",
+        "name": "控制面异常下业务连续运行",
+        "direction": "mttr",
+        "modeIds": [
+          "management-fault"
+        ],
+        "effects": [
+          {
+            "param": "detectHours",
+            "op": "set",
+            "value": 0
+          },
+          {
+            "param": "recoverHours",
+            "op": "set",
+            "value": 0.0002777777777777778
+          },
+          {
+            "param": "reworkHours",
+            "op": "set",
+            "value": 0
+          }
+        ],
+        "applicability": 0.5,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "管理面故障不再升级成训练中断：数据面保持运行，训练停顿预算 0–1 秒。适用并成功的比例尚无实测，暂取 50%，请按故障注入结果修改。",
+        "source": "扩展机制库 H-CONTROL-CONTINUITY"
+      },
+      {
+        "id": "recovery-classify",
+        "name": "故障诊断与自动恢复编排",
+        "direction": "mttr",
+        "modeIds": [
+          "aicore-sdc",
+          "other-sdc",
+          "npu-fault",
+          "hbm-uce",
+          "node-fault",
+          "iod-fault",
+          "optical-fault",
+          "fabric-fault",
+          "storage-fault",
+          "power-fault",
+          "management-fault",
+          "software-fault"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "subtract",
+            "value": 0.018
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "候选：诊断后选择重试、进程重启、隔离换卡等动作，将额外2小时人工升级概率从1%降到0.1%，仅减少期望人工耗时64.8秒；保留其余恢复段和校准残差。适用事件、误判与额外尝试开销待验证；这些概率不是厂商实测指标。",
+        "source": "扩展机制库 D-RECOVERY-CLASSIFY；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+      },
+      {
+        "id": "runtime-snapshot",
+        "name": "运行时初始化快照",
+        "direction": "mttr",
+        "modeIds": [
+          "npu-fault",
+          "hbm-uce",
+          "node-fault",
+          "iod-fault",
+          "fabric-fault",
+          "software-fault"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "subtract",
+            "value": 0.0125
+          }
+        ],
+        "applicability": 1,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "用初始化镜像恢复运行时，启动阶段从 60 秒缩到 15 秒，恢复总时长减少 45 秒。",
+        "source": "扩展机制库 R-RUNTIME-SNAPSHOT；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+      },
+      {
+        "id": "warm-process",
+        "name": "预热进程与可信状态接替",
+        "direction": "mttr",
+        "modeIds": [
+          "software-fault"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "subtract",
+            "value": 0.011111111111111112
+          }
+        ],
+        "applicability": 1,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "保持预热的备用进程，启动阶段从 60 秒缩到 20 秒，恢复总时长减少 40 秒。",
+        "source": "扩展机制库 R-WARM-PROCESS；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+      },
+      {
+        "id": "hccl-elastic",
+        "name": "HCCL 通信域弹性重建",
+        "direction": "mttr",
+        "modeIds": [
+          "npu-fault",
+          "iod-fault",
+          "fabric-fault",
+          "software-fault"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "subtract",
+            "value": 0.0125
+          }
+        ],
+        "applicability": 1,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "通信重建阶段从 60 秒压到 15 秒，恢复总时长减少 45 秒。",
+        "source": "扩展机制库 R-HCCL-ELASTIC；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+      },
+      {
+        "id": "cann-graph",
+        "name": "CANN 图准备与启动缓存",
+        "direction": "mttr",
+        "modeIds": [
+          "npu-fault",
+          "node-fault",
+          "fabric-fault",
+          "software-fault"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "subtract",
+            "value": 0.00625
+          }
+        ],
+        "applicability": 1,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "缓存图编译与准备结果，图准备阶段从 30 秒降到 7.5 秒，恢复总时长减少 22.5 秒。",
+        "source": "扩展机制库 R-CANN-GRAPH；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+      },
+      {
+        "id": "lossless-checkpoint",
+        "name": "无损检查点压缩",
+        "direction": "mttr",
+        "modeIds": [
+          "aicore-sdc",
+          "other-sdc",
+          "npu-fault",
+          "hbm-uce",
+          "node-fault",
+          "iod-fault",
+          "optical-fault",
+          "fabric-fault",
+          "storage-fault",
+          "power-fault",
+          "management-fault",
+          "software-fault"
+        ],
+        "effects": [
+          {
+            "param": "recoverHours",
+            "op": "subtract",
+            "value": 0.005555555555555556
+          }
+        ],
+        "applicability": 1,
+        "enabled": false,
+        "evidence": "assumed",
+        "rationale": "检查点压缩后读取 30 秒、解压 10 秒，读取阶段从 60 秒降到 40 秒，恢复总时长减少 20 秒。不改变保存周期。",
+        "source": "扩展机制库 C-LOSSLESS；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+      },
+      {
+        "id": "fast-checkpoint",
+        "name": "更频繁的检查点",
+        "direction": "mttr",
+        "modeIds": [
+          "aicore-sdc",
+          "other-sdc",
+          "npu-fault",
+          "hbm-uce",
+          "node-fault",
+          "iod-fault",
+          "optical-fault",
+          "fabric-fault",
+          "storage-fault",
+          "power-fault",
+          "management-fault",
+          "software-fault"
+        ],
+        "effects": [
+          {
+            "param": "reworkHours",
+            "op": "set",
+            "value": 0.008333333333333333
+          },
+          {
+            "param": "overhead",
+            "op": "set",
+            "value": 0.01639344262295082
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "检查点周期从 300 秒缩到 60 秒、每次保存 1 秒：平均回滚重算降到 30 秒，保存开销由 1.32% 升到 1.64%。",
+        "source": "基础机制 C-FAST"
+      },
+      {
+        "id": "async-checkpoint",
+        "name": "异步检查点保存",
+        "direction": "mttr",
+        "modeIds": [
+          "aicore-sdc",
+          "other-sdc",
+          "npu-fault",
+          "hbm-uce",
+          "node-fault",
+          "iod-fault",
+          "optical-fault",
+          "fabric-fault",
+          "storage-fault",
+          "power-fault",
+          "management-fault",
+          "software-fault"
+        ],
+        "effects": [
+          {
+            "param": "overhead",
+            "op": "set",
+            "value": 0.0033222591362126247
+          },
+          {
+            "param": "reworkHours",
+            "op": "add",
+            "value": 0.002777777777777778
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "rationale": "每次保存对训练的阻塞从 4 秒降到 1 秒，保存开销由 1.32% 降到 0.33%；数据落盘滞后 10 秒，回滚时多重算 10 秒。",
+        "source": "扩展机制库 C-ASYNC"
+      },
+      {
+        "id": "power-continuity-budget",
+        "name": "供电冷却保供与局部隔离",
+        "direction": "mttr",
+        "modeIds": [
+          "power-fault",
+          "power-slow"
+        ],
+        "effects": [
+          {
+            "param": "impact",
+            "op": "reduce",
+            "value": 0.9998134862704432
+          }
+        ],
+        "applicability": 1,
+        "enabled": true,
+        "evidence": "assumed",
+        "source": "按供电与冷却99.999%目标反求的候选",
+        "rationale": "将供电与冷却事件的等效影响缩至现状的0.01865%，预留30%损失负荷余量。源故障率不变；要求独立供电、冷却隔离与备用容量共同成立，未验证共因失效。"
+      },
+      {
+        "id": "network-recovery-budget",
+        "name": "网络分级检测与快速切换",
+        "direction": "mttr",
+        "modeIds": [
+          "iod-fault",
+          "optical-fault",
+          "fabric-fault"
+        ],
+        "effects": [
+          {
+            "param": "coverage",
+            "op": "set",
+            "value": 0.999
+          },
+          {
+            "param": "detectHours",
+            "op": "set",
+            "value": 0.0002777777777777778
+          },
+          {
+            "param": "recoverHours",
+            "op": "set",
+            "value": 0.05665230967183717
+          },
+          {
+            "param": "reworkHours",
+            "op": "set",
+            "value": 0.0002777777777777778
+          },
+          {
+            "param": "missedLossHours",
+            "op": "set",
+            "value": 0.016666666666666666
+          }
+        ],
+        "applicability": 0.99,
+        "enabled": false,
+        "evidence": "assumed",
+        "source": "按网络98%目标反求的候选",
+        "rationale": "以已启用FIT改进为前提，反求恢复段≤203.9s；检出99.9%/1s、回滚1s、漏检60s、适用并成功99%。网络损失负荷留10%余量；需验证路径冗余、带宽和失败升级条件。"
+      }
+    ],
+    "allocation": {
+      "method": "agree",
+      "complexityBasis": "fit",
+      "customWeights": {}
+    },
+    "source": "2026-11-19约束场景；网络63%、非网络合计60%为校准参考，系统目标95%，网络98%，供电与冷却99.999%。固定FIT及AICore检出90%/漏检48h，未观测的中断恢复段按比例反求；非实测硬件参数。 第一版解析刚达95%，开发仿真窗口达标不足90%；增加ABFT和干净step恢复、在线检出98%后冻结，使用不同种子独立复核。 2026-11-19收益审计：六项阶段节省改为从冻结现状减少绝对时长，保留校准残差；三项降FIT措施按现状恢复链独立评价。原95.93%结论撤回，旧快照仅供审计。",
+    "requirements": {
+      "referenceCards": 500000,
+      "systemTarget": 0.95,
+      "overheadBudget": 0.006622516556291391,
+      "scaling": "linear-loss-load",
+      "calibration": [
+        {
+          "modeId": "iod-fault",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.40624572234060274,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.5062457223406027,
+          "source": "网络域单独现状63%约束；按原恢复段比例反求，未作为实测。"
+        },
+        {
+          "modeId": "optical-fault",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.40624572234060274,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.5062457223406027,
+          "source": "网络域单独现状63%约束；按原恢复段比例反求，未作为实测。"
+        },
+        {
+          "modeId": "fabric-fault",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.40624572234060274,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.5062457223406027,
+          "source": "网络域单独现状63%约束；按原恢复段比例反求，未作为实测。"
+        },
+        {
+          "modeId": "npu-fault",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.20825461227529787,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.3082546122752978,
+          "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+        },
+        {
+          "modeId": "hbm-uce",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.20825461227529787,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.3082546122752978,
+          "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+        },
+        {
+          "modeId": "node-fault",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.20825461227529787,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.3082546122752978,
+          "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+        },
+        {
+          "modeId": "storage-fault",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.20825461227529787,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.3082546122752978,
+          "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+        },
+        {
+          "modeId": "power-fault",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.20825461227529787,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.3082546122752978,
+          "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+        },
+        {
+          "modeId": "management-fault",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.20825461227529787,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.3082546122752978,
+          "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+        },
+        {
+          "modeId": "software-fault",
+          "beforeRecoveryHours": 0.07,
+          "afterRecoveryHours": 0.20825461227529787,
+          "beforeMissedHours": 0.16999999999999998,
+          "afterMissedHours": 0.3082546122752978,
+          "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+        }
+      ],
+      "domains": [
+        {
+          "id": "network",
+          "name": "网络域",
+          "moduleIds": [
+            "iod-l1",
+            "optical",
+            "l2-fabric"
+          ],
+          "baselineAvailability": 0.63,
+          "targetAvailability": 0.98,
+          "source": "用户2026-11-19给定：50万卡网络单独评估现状约63%，改进目标约98%。"
+        },
+        {
+          "id": "remaining",
+          "name": "计算等非网络域合计",
+          "moduleIds": [
+            "aicore",
+            "npu",
+            "hbm",
+            "node",
+            "storage",
+            "power",
+            "management",
+            "software"
+          ],
+          "baselineAvailability": 0.6,
+          "targetAvailability": null,
+          "source": "用户2026-11-19确认：除网络以外各域合并后的单独可用度约60%。"
+        },
+        {
+          "id": "power",
+          "name": "供电与冷却整项",
+          "moduleIds": [
+            "power"
+          ],
+          "baselineAvailability": null,
+          "targetAvailability": 0.99999,
+          "source": "用户2026-11-19固定目标99.999%；对应架构图供电与冷却整项，管理面另列。"
+        }
+      ]
+    }
+  },
+  "verification": {
+    "modelHash": "3286c981",
+    "createdAt": "2026-11-19T06:02:47.017Z",
+    "trials": 4096,
+    "seed": 741921120,
+    "target": 0.95,
+    "analytic": {
+      "baseline": 0.4407238130771383,
+      "design": 0.8612603308596583
+    },
+    "baseline": {
+      "trials": 4096,
+      "seed": 741921120,
+      "mean": 0.45184398545469573,
+      "standardDeviation": 0.0713633188140915,
+      "standardError": 0.0011150518564701796,
+      "interval": [
+        0.4496584838160142,
+        0.45402948709337726
+      ],
+      "p05": 0.28859391847350596,
+      "p50": 0.4725614626848509,
+      "p95": 0.5141810862726063,
+      "min": 0.004777139961840511,
+      "max": 0.563964267146531,
+      "passRatio": 0,
+      "events": 216.78369140625,
+      "mtbfHours": 0.3524981714463822,
+      "mttrHours": 0.42246787378610723,
+      "histogram": [
+        {
+          "from": 0.3611993876326798,
+          "to": 0.36964792427909027,
+          "count": 439
+        },
+        {
+          "from": 0.36964792427909027,
+          "to": 0.3780964609255007,
+          "count": 40
+        },
+        {
+          "from": 0.3780964609255007,
+          "to": 0.3865449975719112,
+          "count": 33
+        },
+        {
+          "from": 0.3865449975719112,
+          "to": 0.3949935342183217,
+          "count": 43
+        },
+        {
+          "from": 0.3949935342183217,
+          "to": 0.4034420708647321,
+          "count": 36
+        },
+        {
+          "from": 0.4034420708647321,
+          "to": 0.4118906075111426,
+          "count": 49
+        },
+        {
+          "from": 0.4118906075111426,
+          "to": 0.4203391441575531,
+          "count": 54
+        },
+        {
+          "from": 0.4203391441575531,
+          "to": 0.4287876808039635,
+          "count": 64
+        },
+        {
+          "from": 0.4287876808039635,
+          "to": 0.437236217450374,
+          "count": 88
+        },
+        {
+          "from": 0.437236217450374,
+          "to": 0.44568475409678443,
+          "count": 136
+        },
+        {
+          "from": 0.44568475409678443,
+          "to": 0.4541332907431949,
+          "count": 213
+        },
+        {
+          "from": 0.4541332907431949,
+          "to": 0.4625818273896054,
+          "count": 323
+        },
+        {
+          "from": 0.4625818273896054,
+          "to": 0.47103036403601584,
+          "count": 449
+        },
+        {
+          "from": 0.47103036403601584,
+          "to": 0.4794789006824263,
+          "count": 461
+        },
+        {
+          "from": 0.4794789006824263,
+          "to": 0.4879274373288368,
+          "count": 509
+        },
+        {
+          "from": 0.4879274373288368,
+          "to": 0.49637597397524724,
+          "count": 435
+        },
+        {
+          "from": 0.49637597397524724,
+          "to": 0.5048245106216578,
+          "count": 301
+        },
+        {
+          "from": 0.5048245106216578,
+          "to": 0.5132730472680682,
+          "count": 196
+        },
+        {
+          "from": 0.5132730472680682,
+          "to": 0.5217215839144786,
+          "count": 126
+        },
+        {
+          "from": 0.5217215839144786,
+          "to": 0.5301701205608891,
+          "count": 58
+        },
+        {
+          "from": 0.5301701205608891,
+          "to": 0.5386186572072996,
+          "count": 27
+        },
+        {
+          "from": 0.5386186572072996,
+          "to": 0.54706719385371,
+          "count": 11
+        },
+        {
+          "from": 0.54706719385371,
+          "to": 0.5555157305001206,
+          "count": 4
+        },
+        {
+          "from": 0.5555157305001206,
+          "to": 0.563964267146531,
+          "count": 1
+        }
+      ],
+      "histogramTail": 410,
+      "moduleLossHours": {
+        "aicore": 9.07623343910613,
+        "npu": 8.81716962260886,
+        "hbm": 9.596308915110978,
+        "node": 7.520129397278192,
+        "iod-l1": 3.6462057806633474,
+        "optical": 37.30372494849171,
+        "l2-fabric": 3.890330206714222,
+        "storage": 1.458115542148834,
+        "power": 2.846650312140735,
+        "management": 1.4074889612828752,
+        "software": 6.021788054355847
+      },
+      "overheadLossHours": 0.506065263709258
+    },
+    "design": {
+      "trials": 4096,
+      "seed": 2987370713,
+      "mean": 0.8617622504450031,
+      "standardDeviation": 0.021653299411593562,
+      "standardError": 0.0003383328033061494,
+      "interval": [
+        0.8610991181505231,
+        0.8624253827394831
+      ],
+      "p05": 0.8287934675989885,
+      "p50": 0.8634013995469028,
+      "p95": 0.892168358079161,
+      "min": 0.5898102761088935,
+      "max": 0.9225251147455935,
+      "passRatio": 0,
+      "events": 241.98681640625,
+      "mtbfHours": 0.600877916864873,
+      "mttrHours": 0.09337478043070391,
+      "histogram": [
+        {
+          "from": 0.8366759091863486,
+          "to": 0.8402529594179838,
+          "count": 529
+        },
+        {
+          "from": 0.8402529594179838,
+          "to": 0.843830009649619,
+          "count": 160
+        },
+        {
+          "from": 0.843830009649619,
+          "to": 0.8474070598812542,
+          "count": 179
+        },
+        {
+          "from": 0.8474070598812542,
+          "to": 0.8509841101128894,
+          "count": 210
+        },
+        {
+          "from": 0.8509841101128894,
+          "to": 0.8545611603445247,
+          "count": 242
+        },
+        {
+          "from": 0.8545611603445247,
+          "to": 0.8581382105761598,
+          "count": 272
+        },
+        {
+          "from": 0.8581382105761598,
+          "to": 0.861715260807795,
+          "count": 305
+        },
+        {
+          "from": 0.861715260807795,
+          "to": 0.8652923110394303,
+          "count": 334
+        },
+        {
+          "from": 0.8652923110394303,
+          "to": 0.8688693612710654,
+          "count": 288
+        },
+        {
+          "from": 0.8688693612710654,
+          "to": 0.8724464115027006,
+          "count": 296
+        },
+        {
+          "from": 0.8724464115027006,
+          "to": 0.8760234617343359,
+          "count": 265
+        },
+        {
+          "from": 0.8760234617343359,
+          "to": 0.8796005119659711,
+          "count": 252
+        },
+        {
+          "from": 0.8796005119659711,
+          "to": 0.8831775621976062,
+          "count": 227
+        },
+        {
+          "from": 0.8831775621976062,
+          "to": 0.8867546124292415,
+          "count": 166
+        },
+        {
+          "from": 0.8867546124292415,
+          "to": 0.8903316626608767,
+          "count": 126
+        },
+        {
+          "from": 0.8903316626608767,
+          "to": 0.8939087128925118,
+          "count": 87
+        },
+        {
+          "from": 0.8939087128925118,
+          "to": 0.8974857631241471,
+          "count": 63
+        },
+        {
+          "from": 0.8974857631241471,
+          "to": 0.9010628133557823,
+          "count": 41
+        },
+        {
+          "from": 0.9010628133557823,
+          "to": 0.9046398635874174,
+          "count": 33
+        },
+        {
+          "from": 0.9046398635874174,
+          "to": 0.9082169138190527,
+          "count": 10
+        },
+        {
+          "from": 0.9082169138190527,
+          "to": 0.9117939640506879,
+          "count": 6
+        },
+        {
+          "from": 0.9117939640506879,
+          "to": 0.915371014282323,
+          "count": 3
+        },
+        {
+          "from": 0.915371014282323,
+          "to": 0.9189480645139583,
+          "count": 1
+        },
+        {
+          "from": 0.9189480645139583,
+          "to": 0.9225251147455935,
+          "count": 1
+        }
+      ],
+      "histogramTail": 410,
+      "moduleLossHours": {
+        "aicore": 0.04625285731201598,
+        "npu": 0.4548276846111909,
+        "hbm": 0.19662604685879206,
+        "node": 0.43938658183561746,
+        "iod-l1": 0.22193702129514825,
+        "optical": 5.69591591863769,
+        "l2-fabric": 5.979275791285745,
+        "storage": 1.8882874697847851,
+        "power": 0.0006902863229265491,
+        "management": 1.828369005309163,
+        "software": 5.843897185805562
+      },
+      "overheadLossHours": 0.6284760761806468
+    },
+    "modules": [
+      {
+        "id": "aicore",
+        "name": "AICore",
+        "simulatedLossHours": 0.04625285731201598,
+        "analyticLossHours": 0.05410031852968151,
+        "budgetHours": 0.09044485638846674,
+        "withinBudget": true
+      },
+      {
+        "id": "npu",
+        "name": "NPU 其余部分",
+        "simulatedLossHours": 0.4548276846111909,
+        "analyticLossHours": 0.45428170634457066,
+        "budgetHours": 1.0496163585922063,
+        "withinBudget": true
+      },
+      {
+        "id": "hbm",
+        "name": "HBM",
+        "simulatedLossHours": 0.19662604685879206,
+        "analyticLossHours": 0.19737076307512122,
+        "budgetHours": 1.140061214980673,
+        "withinBudget": true
+      },
+      {
+        "id": "node",
+        "name": "节点与板级",
+        "simulatedLossHours": 0.43938658183561746,
+        "analyticLossHours": 0.43913739583317074,
+        "budgetHours": 0.9030578603707085,
+        "withinBudget": true
+      },
+      {
+        "id": "iod-l1",
+        "name": "IO Die 与 L1 互联",
+        "simulatedLossHours": 0.22193702129514825,
+        "analyticLossHours": 0.22204100516337094,
+        "budgetHours": 0.2656975465660132,
+        "withinBudget": true
+      },
+      {
+        "id": "optical",
+        "name": "光模块",
+        "simulatedLossHours": 5.69591591863769,
+        "analyticLossHours": 5.76062466104394,
+        "budgetHours": 2.729726429802251,
+        "withinBudget": false
+      },
+      {
+        "id": "l2-fabric",
+        "name": "L2 / Leaf / Spine 与网卡",
+        "simulatedLossHours": 5.979275791285745,
+        "analyticLossHours": 5.981376268360735,
+        "budgetHours": 0.2834331664888819,
+        "withinBudget": false
+      },
+      {
+        "id": "storage",
+        "name": "存储系统",
+        "simulatedLossHours": 1.8882874697847851,
+        "analyticLossHours": 1.8957736670811736,
+        "budgetHours": 0.1734550764525819,
+        "withinBudget": false
+      },
+      {
+        "id": "power",
+        "name": "供电与冷却",
+        "simulatedLossHours": 0.0006902863229265491,
+        "analyticLossHours": 0.0006936061165622146,
+        "budgetHours": 0.001606656066554553,
+        "withinBudget": true
+      },
+      {
+        "id": "management",
+        "name": "管理面",
+        "simulatedLossHours": 1.828369005309163,
+        "analyticLossHours": 1.845692616524828,
+        "budgetHours": 0.1688728773198916,
+        "withinBudget": false
+      },
+      {
+        "id": "software",
+        "name": "软件与未归因",
+        "simulatedLossHours": 5.843897185805562,
+        "analyticLossHours": 5.829062377122658,
+        "budgetHours": 0.5300279569717742,
+        "withinBudget": false
+      }
+    ],
+    "scales": [
+      {
+        "cards": 1000,
+        "target": 0.9932867754844277,
+        "analytic": 0.9953670458148969,
+        "mean": 0.9953777423127163,
+        "interval": [
+          0.9953472573645357,
+          0.9954082272608968
+        ],
+        "weeklyLossHours": 0.7765392914636697,
+        "passRatio": 0.957763671875,
+        "met": true,
+        "seed": 1755825346
+      },
+      {
+        "cards": 10000,
+        "target": 0.9924711486895899,
+        "analytic": 0.9925794914800086,
+        "mean": 0.9925854324319623,
+        "interval": [
+          0.9924785514355785,
+          0.9926923134283461
+        ],
+        "weeklyLossHours": 1.2456473514303354,
+        "passRatio": 0.634033203125,
+        "met": false,
+        "seed": 1129198037
+      },
+      {
+        "cards": 100000,
+        "target": 0.9843879524730588,
+        "analytic": 0.965539283287954,
+        "mean": 0.965572550620019,
+        "interval": [
+          0.96523185585929,
+          0.965913245380748
+        ],
+        "weeklyLossHours": 5.783811495836806,
+        "passRatio": 0.010009765625,
+        "met": false,
+        "seed": 502570728
+      },
+      {
+        "cards": 200000,
+        "target": 0.9755596631751898,
+        "analytic": 0.9371717601669128,
+        "mean": 0.9371632527766975,
+        "interval": [
+          0.9366653158275123,
+          0.9376611897258827
+        ],
+        "weeklyLossHours": 10.556573533514813,
+        "passRatio": 0.000244140625,
+        "met": false,
+        "seed": 4170910715
+      },
+      {
+        "cards": 500000,
+        "target": 0.95,
+        "analytic": 0.8612603308596583,
+        "mean": 0.8617622504450031,
+        "interval": [
+          0.8610991181505231,
+          0.8624253827394831
+        ],
+        "weeklyLossHours": 23.22394192523948,
+        "passRatio": 0,
+        "met": false,
+        "seed": 2987370713
+      }
+    ],
+    "domains": [
+      {
+        "id": "network",
+        "name": "网络域",
+        "cards": 1000,
+        "target": 0.9999591853393739,
+        "mean": 0.9998456510666407,
+        "interval": [
+          0.9998205371820242,
+          0.9998707649512572
+        ],
+        "met": false,
+        "seed": 115293811
+      },
+      {
+        "id": "power",
+        "name": "供电与冷却整项",
+        "cards": 1000,
+        "target": 0.9999999799998005,
+        "mean": 0.9999999909490582,
+        "interval": [
+          0.9999999891400595,
+          0.999999992758057
+        ],
+        "met": true,
+        "seed": 2769729572
+      },
+      {
+        "id": "network",
+        "name": "网络域",
+        "cards": 10000,
+        "target": 0.9995920032639739,
+        "mean": 0.9983640390501749,
+        "interval": [
+          0.9982788569984923,
+          0.9984492211018575
+        ],
+        "met": false,
+        "seed": 3783633798
+      },
+      {
+        "id": "power",
+        "name": "供电与冷却整项",
+        "cards": 10000,
+        "target": 0.9999997999980399,
+        "mean": 0.9999999062987543,
+        "interval": [
+          0.99999990029151,
+          0.9999999123059987
+        ],
+        "met": true,
+        "seed": 2143102263
+      },
+      {
+        "id": "network",
+        "name": "网络域",
+        "cards": 100000,
+        "target": 0.9959349593495934,
+        "mean": 0.9838434859095028,
+        "interval": [
+          0.9835855797910537,
+          0.9841013920279519
+        ],
+        "met": false,
+        "seed": 3157006489
+      },
+      {
+        "id": "power",
+        "name": "供电与冷却整项",
+        "cards": 100000,
+        "target": 0.9999979999839997,
+        "mean": 0.9999990439630154,
+        "interval": [
+          0.9999990246053357,
+          0.9999990633206951
+        ],
+        "met": true,
+        "seed": 1516474954
+      },
+      {
+        "id": "network",
+        "name": "网络域",
+        "cards": 200000,
+        "target": 0.9919028340080971,
+        "mean": 0.9684378986845897,
+        "interval": [
+          0.9680826113456488,
+          0.9687931860235307
+        ],
+        "met": false,
+        "seed": 2530379180
+      },
+      {
+        "id": "power",
+        "name": "供电与冷却整项",
+        "cards": 200000,
+        "target": 0.9999959999759999,
+        "mean": 0.9999980954479953,
+        "interval": [
+          0.9999980678239317,
+          0.9999981230720589
+        ],
+        "met": true,
+        "seed": 889847645
+      },
+      {
+        "id": "network",
+        "name": "网络域",
+        "cards": 500000,
+        "target": 0.98,
+        "mean": 0.9240083137961488,
+        "interval": [
+          0.9234836757189048,
+          0.9245329518733928
+        ],
+        "met": false,
+        "seed": 3544283406
+      },
+      {
+        "id": "power",
+        "name": "供电与冷却整项",
+        "cards": 500000,
+        "target": 0.99999,
+        "mean": 0.9999952184982035,
+        "interval": [
+          0.9999951747078445,
+          0.9999952622885625
+        ],
+        "met": true,
+        "seed": 1903751871
+      }
+    ],
+    "checks": [
+      {
+        "id": "mean",
+        "title": "平均可用度达到目标",
+        "state": "fail",
+        "detail": "仿真均值 86.18%，95% 置信区间 86.11%–86.24%，目标 95.00%。均值低于目标。"
+      },
+      {
+        "id": "windows",
+        "title": "单个窗口的达标比例",
+        "state": "fail",
+        "detail": "4096 个仿真窗口中 0.0% 达到目标，要求不低于 90%。第 5 百分位窗口为 82.88%。"
+      },
+      {
+        "id": "consistency",
+        "title": "仿真与解析评估一致",
+        "state": "pass",
+        "detail": "解析值 86.13%，仿真均值 86.18%，偏差 0.05 个百分点（容差 0.50）。两种独立方法相互印证。"
+      },
+      {
+        "id": "modules",
+        "title": "各模块不超出分配预算",
+        "state": "fail",
+        "detail": "超出预算的模块：光模块（5.70 / 2.73 h）、L2 / Leaf / Spine 与网卡（5.98 / 0.28 h）、存储系统（1.89 / 0.17 h）、管理面（1.83 / 0.17 h）、软件与未归因（5.84 / 0.53 h）。"
+      },
+      {
+        "id": "evidence",
+        "title": "所选措施有工程证据",
+        "state": "warn",
+        "detail": "14 项措施的参数尚未实测：HBM 纠错增强、AICore 静默故障压测筛查、光模块可靠性提升、静默故障在线检测增强、中断快速检测、亚健康快速检测、算子 ABFT 实时矩阵校验、漏检静默故障定期校验、静默故障干净 step 恢复、DP副本级局部恢复、故障诊断与自动恢复编排、更频繁的检查点、异步检查点保存、供电冷却保供与局部隔离。仿真检验给定参数下的目标达成情况，不证明产品已具备这些能力。"
+      },
+      {
+        "id": "scales",
+        "title": "五规模系统目标",
+        "state": "fail",
+        "detail": "10,000卡、100,000卡、200,000卡、500,000卡的区间下限或窗口达标比例未满足要求。"
+      },
+      {
+        "id": "domains",
+        "title": "固定域目标独立验证",
+        "state": "fail",
+        "detail": "1,000卡网络域未达到99.99592%；10,000卡网络域未达到99.95920%；100,000卡网络域未达到99.59350%；200,000卡网络域未达到99.19028%；500,000卡网络域未达到98.00000%"
+      }
+    ],
+    "verdict": "fail",
+    "sequence": 1,
+    "modelRevision": 2,
+    "modelSnapshot": {
+      "schemaVersion": "remap-core.v1",
+      "name": "恢复阶段收益修正 · 原14项组合未达95%",
+      "scenario": {
+        "cards": 500000,
+        "hours": 168,
+        "target": 0.95,
+        "overhead": 0.006622516556291391,
+        "passRatio": 0.9
+      },
+      "groups": [
+        {
+          "id": "compute",
+          "name": "计算"
+        },
+        {
+          "id": "network",
+          "name": "网络"
+        },
+        {
+          "id": "storage",
+          "name": "存储"
+        },
+        {
+          "id": "facility",
+          "name": "供电、冷却与管理"
+        },
+        {
+          "id": "software",
+          "name": "软件与调度"
+        }
+      ],
+      "modules": [
+        {
+          "id": "aicore",
+          "groupId": "compute",
+          "name": "AICore",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "aicore",
+          "note": "NPU 内的计算核；只承载静默分支"
+        },
+        {
+          "id": "npu",
+          "groupId": "compute",
+          "name": "NPU 其余部分",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "npu",
+          "note": "SRAM、逻辑、封装等除 AICore 静默以外的 NPU 故障"
+        },
+        {
+          "id": "hbm",
+          "groupId": "compute",
+          "name": "HBM",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "hbm",
+          "note": "按每卡等效 FIT 计，不再乘 HBM 颗数"
+        },
+        {
+          "id": "node",
+          "groupId": "compute",
+          "name": "节点与板级",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "node",
+          "note": "CPU、DDR、SSD、模组与板级连接"
+        },
+        {
+          "id": "iod-l1",
+          "groupId": "network",
+          "name": "IO Die 与 L1 互联",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "l1",
+          "note": "片内 IO Die、D2D 通路"
+        },
+        {
+          "id": "optical",
+          "groupId": "network",
+          "name": "光模块",
+          "unitsPerCard": 3.9666666666666663,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "optical",
+          "note": "每卡3.9667只为按35%故障份额与500 FIT折算的等效数量，非实测BOM。"
+        },
+        {
+          "id": "l2-fabric",
+          "groupId": "network",
+          "name": "L2 / Leaf / Spine 与网卡",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "l2",
+          "note": "UB 网卡、IO 转换板、L1/L2 互联设备"
+        },
+        {
+          "id": "storage",
+          "groupId": "storage",
+          "name": "存储系统",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "storage",
+          "note": "共享检查点与存储服务"
+        },
+        {
+          "id": "power",
+          "groupId": "facility",
+          "name": "供电与冷却",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "power",
+          "note": "柜级供电、液冷与风扇"
+        },
+        {
+          "id": "management",
+          "groupId": "facility",
+          "name": "管理面",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "management",
+          "note": "管理刀片、BMC"
+        },
+        {
+          "id": "software",
+          "groupId": "software",
+          "name": "软件与未归因",
+          "unitsPerCard": 1,
+          "importance": 1,
+          "complexity": null,
+          "anchor": "software",
+          "note": "调度、框架及未归因故障"
+        }
+      ],
+      "modes": [
+        {
+          "id": "aicore-sdc",
+          "moduleId": "aicore",
+          "name": "静默数据错误",
+          "kind": "sdc",
+          "fit": 67.43333333333334,
+          "coverage": 0.9,
+          "detectHours": 0.0002777777777777778,
+          "recoverHours": 0.07,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 48,
+          "impact": 1,
+          "evidence": "2026-11-12 周度用户场景：静默占全部故障 1.4%，AICore 占其中 85%；检出率 90%，漏检恢复 48 小时"
+        },
+        {
+          "id": "npu-fault",
+          "moduleId": "npu",
+          "name": "运行中断",
+          "kind": "hard",
+          "fit": 782.5666666666666,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.20825461227529787,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.3082546122752978,
+          "impact": 1,
+          "evidence": "2026-11-12 周度用户场景：NPU 占 15%，扣除 AICore 静默分支"
+        },
+        {
+          "id": "hbm-uce",
+          "moduleId": "hbm",
+          "name": "不可纠正错误",
+          "kind": "hard",
+          "fit": 850,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.20825461227529787,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.3082546122752978,
+          "impact": 1,
+          "evidence": "2026-11-12 周度用户场景：HBM 占 15%"
+        },
+        {
+          "id": "node-fault",
+          "moduleId": "node",
+          "name": "节点与板级中断",
+          "kind": "hard",
+          "fit": 660.9721606667183,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.20825461227529787,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.3082546122752978,
+          "impact": 1,
+          "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+        },
+        {
+          "id": "node-slow",
+          "moduleId": "node",
+          "name": "节点亚健康降速",
+          "kind": "slow",
+          "fit": 12.324300285262165,
+          "coverage": 0.95,
+          "detectHours": 0.004166666666666667,
+          "recoverHours": 0.05,
+          "reworkHours": 0,
+          "missedLossHours": 1.2000000000000002,
+          "impact": 1,
+          "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准；降速 5%，检测等待与漏检损失已按降速比例折算为等效停机时间"
+        },
+        {
+          "id": "iod-fault",
+          "moduleId": "iod-l1",
+          "name": "IO Die 通路失效",
+          "kind": "hard",
+          "fit": 193.0474771889264,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.40624572234060274,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.5062457223406027,
+          "impact": 1,
+          "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+        },
+        {
+          "id": "optical-fault",
+          "moduleId": "optical",
+          "name": "光模块失效",
+          "kind": "hard",
+          "fit": 500,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.40624572234060274,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.5062457223406027,
+          "impact": 1,
+          "evidence": "沿用现有库500 FIT与按35%故障份额折算的等效数量，未作为厂商实测。"
+        },
+        {
+          "id": "fabric-fault",
+          "moduleId": "l2-fabric",
+          "name": "互联设备与网卡中断",
+          "kind": "hard",
+          "fit": 205.93362057542845,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.40624572234060274,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.5062457223406027,
+          "impact": 1,
+          "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+        },
+        {
+          "id": "storage-fault",
+          "moduleId": "storage",
+          "name": "存储服务故障",
+          "kind": "hard",
+          "fit": 129.3235951257179,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.20825461227529787,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.3082546122752978,
+          "impact": 1,
+          "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+        },
+        {
+          "id": "power-fault",
+          "moduleId": "power",
+          "name": "掉电与过热保护",
+          "kind": "hard",
+          "fit": 250.60014712399993,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.20825461227529787,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.3082546122752978,
+          "impact": 1,
+          "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+        },
+        {
+          "id": "power-slow",
+          "moduleId": "power",
+          "name": "散热异常降频",
+          "kind": "slow",
+          "fit": 10.049741923790984,
+          "coverage": 0.95,
+          "detectHours": 0.004166666666666667,
+          "recoverHours": 0.05,
+          "reworkHours": 0,
+          "missedLossHours": 1.2000000000000002,
+          "impact": 1,
+          "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准；降速 5%，检测等待与漏检损失已按降速比例折算为等效停机时间"
+        },
+        {
+          "id": "management-fault",
+          "moduleId": "management",
+          "name": "管理面异常影响作业",
+          "kind": "hard",
+          "fit": 125.9072265907592,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.20825461227529787,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.3082546122752978,
+          "impact": 1,
+          "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准"
+        },
+        {
+          "id": "software-fault",
+          "moduleId": "software",
+          "name": "软件与未归因中断",
+          "kind": "hard",
+          "fit": 383.2750638527297,
+          "coverage": 0.95,
+          "detectHours": 0.002777777777777778,
+          "recoverHours": 0.20825461227529787,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 0.3082546122752978,
+          "impact": 1,
+          "evidence": "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准；已扣除非 AICore 静默分支"
+        },
+        {
+          "id": "other-sdc",
+          "moduleId": "software",
+          "name": "其余静默数据错误",
+          "kind": "sdc",
+          "fit": 11.9,
+          "coverage": 0.9,
+          "detectHours": 0.0002777777777777778,
+          "recoverHours": 0.07,
+          "reworkHours": 0.08333333333333333,
+          "missedLossHours": 48,
+          "impact": 1,
+          "evidence": "2026-11-12 周度用户场景：静默故障中非 AICore 的 15%，部件归属待补"
+        }
+      ],
+      "measures": [
+        {
+          "id": "hbm-ecc",
+          "name": "HBM 纠错增强",
+          "direction": "mtbf",
+          "modeIds": [
+            "hbm-uce"
+          ],
+          "effects": [
+            {
+              "param": "fit",
+              "op": "reduce",
+              "value": 0.6
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "planned",
+          "rationale": "更强的 ECC 与行列修复把一部分不可纠正错误变为可纠正；可覆盖的错误模式需工程核验。",
+          "source": "用户方案"
+        },
+        {
+          "id": "aicore-screening",
+          "name": "AICore 静默故障压测筛查",
+          "direction": "mtbf",
+          "modeIds": [
+            "aicore-sdc"
+          ],
+          "effects": [
+            {
+              "param": "fit",
+              "op": "reduce",
+              "value": 0.6
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "planned",
+          "rationale": "上线前与在网周期压测筛除易产生静默错误的核；只降低 AICore 静默分支的发生率。",
+          "source": "用户方案"
+        },
+        {
+          "id": "optical-reliability",
+          "name": "光模块可靠性提升",
+          "direction": "mtbf",
+          "modeIds": [
+            "optical-fault"
+          ],
+          "effects": [
+            {
+              "param": "fit",
+              "op": "set",
+              "value": 50
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "planned",
+          "rationale": "器件筛选与链路保护把单只光模块失效率从 500 FIT 降到 50 FIT。",
+          "source": "用户方案"
+        },
+        {
+          "id": "sdc-online-screen",
+          "name": "在线压测与异常资源筛除",
+          "direction": "mtbf",
+          "modeIds": [
+            "aicore-sdc",
+            "other-sdc"
+          ],
+          "effects": [
+            {
+              "param": "fit",
+              "op": "reduce",
+              "value": 0.25
+            }
+          ],
+          "applicability": 1,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "运行中周期压测并筛除异常资源，目标是静默故障发生率下降 25%。只对验证过的资源子集成立；压测占用的时间未计入。",
+          "source": "扩展机制库 H-SDC-SCREEN"
+        },
+        {
+          "id": "memory-predict",
+          "name": "内存故障预测与主动隔离",
+          "direction": "mtbf",
+          "modeIds": [
+            "hbm-uce"
+          ],
+          "effects": [
+            {
+              "param": "fit",
+              "op": "reduce",
+              "value": 0.3
+            }
+          ],
+          "applicability": 1,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "根据可纠正错误的增长趋势提前隔离即将失效的存储单元，把一部分突发故障变成计划内处置。降低 30% 为示例取值，没有现成来源。",
+          "source": "示例措施"
+        },
+        {
+          "id": "power-redundancy",
+          "name": "供电冗余与器件降额",
+          "direction": "mtbf",
+          "modeIds": [
+            "power-fault"
+          ],
+          "effects": [
+            {
+              "param": "fit",
+              "op": "reduce",
+              "value": 0.5
+            }
+          ],
+          "applicability": 1,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "增加电源冗余并对关键器件降额使用，减少保护后仍然掉电的情况。降低 50% 为示例取值，没有现成来源。",
+          "source": "示例措施"
+        },
+        {
+          "id": "sdc-detection",
+          "name": "静默故障在线检测增强",
+          "direction": "mttr",
+          "modeIds": [
+            "aicore-sdc",
+            "other-sdc"
+          ],
+          "effects": [
+            {
+              "param": "coverage",
+              "op": "set",
+              "value": 0.98
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "在线检出率由现状90%提高到98%；与AICore ABFT覆盖剩余漏检90%的条件相配合，AICore组合检出率99.8%。需验证两层检测覆盖、误报与开销，不默认产品已实现。",
+          "source": "本轮模型建议；原用户方案95%，提高至98%待验证"
+        },
+        {
+          "id": "fast-detect",
+          "name": "中断快速检测",
+          "direction": "mttr",
+          "modeIds": [
+            "npu-fault",
+            "hbm-uce",
+            "node-fault",
+            "iod-fault",
+            "optical-fault",
+            "fabric-fault",
+            "storage-fault",
+            "power-fault",
+            "management-fault",
+            "software-fault"
+          ],
+          "effects": [
+            {
+              "param": "coverage",
+              "op": "set",
+              "value": 0.999
+            },
+            {
+              "param": "detectHours",
+              "op": "set",
+              "value": 0.0002777777777777778
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "心跳与错误日志联合判定：99.9% 在 1 秒内发现，其余仍由 60 秒超时兜底。未计误报和检测资源开销。",
+          "source": "基础机制 D-HARD"
+        },
+        {
+          "id": "slow-detect",
+          "name": "亚健康快速检测",
+          "direction": "mttr",
+          "modeIds": [
+            "node-slow",
+            "power-slow"
+          ],
+          "effects": [
+            {
+              "param": "coverage",
+              "op": "set",
+              "value": 0.99
+            },
+            {
+              "param": "detectHours",
+              "op": "set",
+              "value": 0.0004166666666666667
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "95% 在 5 分钟发现提到 99% 在 30 秒发现；按降速 5% 折算，等效检测等待为 1.5 秒。需要区分真实亚健康与负载变化。",
+          "source": "基础机制 D-SLOW"
+        },
+        {
+          "id": "sdc-abft",
+          "name": "算子 ABFT 实时矩阵校验",
+          "direction": "mttr",
+          "modeIds": [
+            "aicore-sdc"
+          ],
+          "effects": [
+            {
+              "param": "coverage",
+              "op": "reduce",
+              "value": 0.9
+            },
+            {
+              "param": "overhead",
+              "op": "add",
+              "value": 0.001
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "在算子内做校验，捕获前一道检测剩余漏检中的 90%；代价是正常运行时约 0.1% 的吞吐损失。",
+          "source": "扩展机制库 D-ABFT"
+        },
+        {
+          "id": "sdc-precision",
+          "name": "FP8 / FP4 计算路径静默检测",
+          "direction": "mttr",
+          "modeIds": [
+            "aicore-sdc"
+          ],
+          "effects": [
+            {
+              "param": "coverage",
+              "op": "reduce",
+              "value": 0.95
+            }
+          ],
+          "applicability": 0,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "为尚未验证的 FP8、FP4 计算路径单独增加检测，目标检出 95%。这两条路径占 AICore 静默风险的份额没有给出，适用比例暂取 0，填入份额后才计收益。",
+          "source": "扩展机制库 D-SDC-FP8、D-SDC-FP4"
+        },
+        {
+          "id": "net-sdc",
+          "name": "网络端到端静默检测",
+          "direction": "mttr",
+          "modeIds": [
+            "other-sdc"
+          ],
+          "effects": [
+            {
+              "param": "coverage",
+              "op": "reduce",
+              "value": 0.95
+            }
+          ],
+          "applicability": 0.44,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "对网络传输做端到端校验，目标检出 95% 的网络静默错误。基线故障库中网络占非 AICore 静默故障约 44%，适用比例据此取值。",
+          "source": "扩展机制库 D-NET-SDC"
+        },
+        {
+          "id": "sdc-audit",
+          "name": "漏检静默故障定期校验",
+          "direction": "mttr",
+          "modeIds": [
+            "aicore-sdc",
+            "other-sdc"
+          ],
+          "effects": [
+            {
+              "param": "missedLossHours",
+              "op": "set",
+              "value": 12
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "定期一致性校验与金标复算把漏检故障的发现时间从 48 小时压到 12 小时。12 小时为设计假设。",
+          "source": "本工作台补充"
+        },
+        {
+          "id": "sdc-step-recover",
+          "name": "静默故障干净 step 恢复",
+          "direction": "mttr",
+          "modeIds": [
+            "aicore-sdc",
+            "other-sdc"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "set",
+              "value": 0.0002777777777777778
+            },
+            {
+              "param": "reworkHours",
+              "op": "set",
+              "value": 0.0002777777777777778
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "已检出的静默故障从保存在内存里的上一个干净 step 恢复：1 秒恢复，最多重做 1 秒计算。不缩短漏检分支。",
+          "source": "基础机制 R-SDC"
+        },
+        {
+          "id": "replay",
+          "name": "通信与算子重执行",
+          "direction": "mttr",
+          "modeIds": [
+            "npu-fault",
+            "hbm-uce",
+            "iod-fault",
+            "optical-fault"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "set",
+              "value": 0.001388888888888889
+            },
+            {
+              "param": "reworkHours",
+              "op": "set",
+              "value": 0
+            }
+          ],
+          "applicability": 0.8,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "瞬态中断先原地重执行：成功时 5 秒恢复且不回滚。基线成功率 90%，再按各模块瞬态故障的占比折减（HBM 约 70% 为可重放的瞬态错误），适用比例综合取 80%。",
+          "source": "基础机制 R-REPLAY"
+        },
+        {
+          "id": "fast-recover",
+          "name": "进程级快速恢复",
+          "direction": "mttr",
+          "modeIds": [
+            "npu-fault",
+            "hbm-uce",
+            "node-fault",
+            "iod-fault"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "set",
+              "value": 0.018421052631578946
+            }
+          ],
+          "applicability": 0.95,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "只重建受影响的进程：95% 在 60 秒内恢复；失败时多花 120 秒后退回整任务重启，这部分已摊入目标值。仍需回滚到检查点。",
+          "source": "基础机制 R-PROCESS"
+        },
+        {
+          "id": "elastic-recover",
+          "name": "DP副本级局部恢复",
+          "direction": "mttr",
+          "modeIds": [
+            "npu-fault",
+            "hbm-uce",
+            "node-fault",
+            "iod-fault"
+          ],
+          "effects": [
+            {
+              "param": "impact",
+              "op": "set",
+              "value": 0.02
+            }
+          ],
+          "applicability": 0.98,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "候选：50个训练DP副本，98%的适用事件仅一个副本暂停，健康副本继续；其余退回全局恢复。DP副本不是机柜或超节点，须验证TP/PP边界、框架成员变化、备用资源及可信状态。当前只用影响系数近似，50与98%未获工程确认。",
+          "source": "基础机制 R-ELASTIC"
+        },
+        {
+          "id": "contain",
+          "name": "故障隔离与传播抑制",
+          "direction": "mttr",
+          "modeIds": [
+            "iod-fault",
+            "fabric-fault"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "set",
+              "value": 0.021277777777777777
+            }
+          ],
+          "applicability": 0.5,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "把互联故障限制在一个域内：180 秒全局停止变为 1 秒全局协调加 1/50 的域局部恢复，等效 4.6 秒（人工兜底的 72 秒期望值不变）。是域级弹性恢复的前提。适用并成功的比例尚无实测，暂取 50%，请按故障注入结果修改。",
+          "source": "扩展机制库 I-CONTAIN"
+        },
+        {
+          "id": "link-local",
+          "name": "链路透明恢复",
+          "direction": "mttr",
+          "modeIds": [
+            "iod-fault",
+            "optical-fault",
+            "fabric-fault"
+          ],
+          "effects": [
+            {
+              "param": "detectHours",
+              "op": "set",
+              "value": 0
+            },
+            {
+              "param": "recoverHours",
+              "op": "set",
+              "value": 0.0005555555555555556
+            },
+            {
+              "param": "reworkHours",
+              "op": "set",
+              "value": 0
+            }
+          ],
+          "applicability": 0.5,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "瞬态链路异常在链路层纠错、重传或重训练，成功后训练继续，总停顿约 2 秒且不回滚。不能覆盖永久损坏。适用并成功的比例尚无实测，暂取 50%，请按故障注入结果修改。",
+          "source": "扩展机制库 R-LINK-LOCAL"
+        },
+        {
+          "id": "fabric-degrade",
+          "name": "网络绕行与降级运行",
+          "direction": "mttr",
+          "modeIds": [
+            "optical-fault",
+            "fabric-fault"
+          ],
+          "effects": [
+            {
+              "param": "detectHours",
+              "op": "set",
+              "value": 0
+            },
+            {
+              "param": "recoverHours",
+              "op": "set",
+              "value": 0.046
+            },
+            {
+              "param": "reworkHours",
+              "op": "set",
+              "value": 0
+            }
+          ],
+          "applicability": 0.5,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "2 秒切换到备用路径后降速运行 30 分钟再恢复，整个降级期等效损失约 165.6 秒，代替 342.5 秒的全局重启。适用并成功的比例尚无实测，暂取 50%，请按故障注入结果修改。",
+          "source": "扩展机制库 R-FABRIC-DEGRADE"
+        },
+        {
+          "id": "control-continuity",
+          "name": "控制面异常下业务连续运行",
+          "direction": "mttr",
+          "modeIds": [
+            "management-fault"
+          ],
+          "effects": [
+            {
+              "param": "detectHours",
+              "op": "set",
+              "value": 0
+            },
+            {
+              "param": "recoverHours",
+              "op": "set",
+              "value": 0.0002777777777777778
+            },
+            {
+              "param": "reworkHours",
+              "op": "set",
+              "value": 0
+            }
+          ],
+          "applicability": 0.5,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "管理面故障不再升级成训练中断：数据面保持运行，训练停顿预算 0–1 秒。适用并成功的比例尚无实测，暂取 50%，请按故障注入结果修改。",
+          "source": "扩展机制库 H-CONTROL-CONTINUITY"
+        },
+        {
+          "id": "recovery-classify",
+          "name": "故障诊断与自动恢复编排",
+          "direction": "mttr",
+          "modeIds": [
+            "aicore-sdc",
+            "other-sdc",
+            "npu-fault",
+            "hbm-uce",
+            "node-fault",
+            "iod-fault",
+            "optical-fault",
+            "fabric-fault",
+            "storage-fault",
+            "power-fault",
+            "management-fault",
+            "software-fault"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "subtract",
+              "value": 0.018
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "候选：诊断后选择重试、进程重启、隔离换卡等动作，将额外2小时人工升级概率从1%降到0.1%，仅减少期望人工耗时64.8秒；保留其余恢复段和校准残差。适用事件、误判与额外尝试开销待验证；这些概率不是厂商实测指标。",
+          "source": "扩展机制库 D-RECOVERY-CLASSIFY；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+        },
+        {
+          "id": "runtime-snapshot",
+          "name": "运行时初始化快照",
+          "direction": "mttr",
+          "modeIds": [
+            "npu-fault",
+            "hbm-uce",
+            "node-fault",
+            "iod-fault",
+            "fabric-fault",
+            "software-fault"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "subtract",
+              "value": 0.0125
+            }
+          ],
+          "applicability": 1,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "用初始化镜像恢复运行时，启动阶段从 60 秒缩到 15 秒，恢复总时长减少 45 秒。",
+          "source": "扩展机制库 R-RUNTIME-SNAPSHOT；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+        },
+        {
+          "id": "warm-process",
+          "name": "预热进程与可信状态接替",
+          "direction": "mttr",
+          "modeIds": [
+            "software-fault"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "subtract",
+              "value": 0.011111111111111112
+            }
+          ],
+          "applicability": 1,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "保持预热的备用进程，启动阶段从 60 秒缩到 20 秒，恢复总时长减少 40 秒。",
+          "source": "扩展机制库 R-WARM-PROCESS；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+        },
+        {
+          "id": "hccl-elastic",
+          "name": "HCCL 通信域弹性重建",
+          "direction": "mttr",
+          "modeIds": [
+            "npu-fault",
+            "iod-fault",
+            "fabric-fault",
+            "software-fault"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "subtract",
+              "value": 0.0125
+            }
+          ],
+          "applicability": 1,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "通信重建阶段从 60 秒压到 15 秒，恢复总时长减少 45 秒。",
+          "source": "扩展机制库 R-HCCL-ELASTIC；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+        },
+        {
+          "id": "cann-graph",
+          "name": "CANN 图准备与启动缓存",
+          "direction": "mttr",
+          "modeIds": [
+            "npu-fault",
+            "node-fault",
+            "fabric-fault",
+            "software-fault"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "subtract",
+              "value": 0.00625
+            }
+          ],
+          "applicability": 1,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "缓存图编译与准备结果，图准备阶段从 30 秒降到 7.5 秒，恢复总时长减少 22.5 秒。",
+          "source": "扩展机制库 R-CANN-GRAPH；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+        },
+        {
+          "id": "lossless-checkpoint",
+          "name": "无损检查点压缩",
+          "direction": "mttr",
+          "modeIds": [
+            "aicore-sdc",
+            "other-sdc",
+            "npu-fault",
+            "hbm-uce",
+            "node-fault",
+            "iod-fault",
+            "optical-fault",
+            "fabric-fault",
+            "storage-fault",
+            "power-fault",
+            "management-fault",
+            "software-fault"
+          ],
+          "effects": [
+            {
+              "param": "recoverHours",
+              "op": "subtract",
+              "value": 0.005555555555555556
+            }
+          ],
+          "applicability": 1,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "检查点压缩后读取 30 秒、解压 10 秒，读取阶段从 60 秒降到 40 秒，恢复总时长减少 20 秒。不改变保存周期。",
+          "source": "扩展机制库 C-LOSSLESS；2026-11-19审计：仅扣阶段节省，保留校准恢复残差"
+        },
+        {
+          "id": "fast-checkpoint",
+          "name": "更频繁的检查点",
+          "direction": "mttr",
+          "modeIds": [
+            "aicore-sdc",
+            "other-sdc",
+            "npu-fault",
+            "hbm-uce",
+            "node-fault",
+            "iod-fault",
+            "optical-fault",
+            "fabric-fault",
+            "storage-fault",
+            "power-fault",
+            "management-fault",
+            "software-fault"
+          ],
+          "effects": [
+            {
+              "param": "reworkHours",
+              "op": "set",
+              "value": 0.008333333333333333
+            },
+            {
+              "param": "overhead",
+              "op": "set",
+              "value": 0.01639344262295082
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "检查点周期从 300 秒缩到 60 秒、每次保存 1 秒：平均回滚重算降到 30 秒，保存开销由 1.32% 升到 1.64%。",
+          "source": "基础机制 C-FAST"
+        },
+        {
+          "id": "async-checkpoint",
+          "name": "异步检查点保存",
+          "direction": "mttr",
+          "modeIds": [
+            "aicore-sdc",
+            "other-sdc",
+            "npu-fault",
+            "hbm-uce",
+            "node-fault",
+            "iod-fault",
+            "optical-fault",
+            "fabric-fault",
+            "storage-fault",
+            "power-fault",
+            "management-fault",
+            "software-fault"
+          ],
+          "effects": [
+            {
+              "param": "overhead",
+              "op": "set",
+              "value": 0.0033222591362126247
+            },
+            {
+              "param": "reworkHours",
+              "op": "add",
+              "value": 0.002777777777777778
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "每次保存对训练的阻塞从 4 秒降到 1 秒，保存开销由 1.32% 降到 0.33%；数据落盘滞后 10 秒，回滚时多重算 10 秒。",
+          "source": "扩展机制库 C-ASYNC"
+        },
+        {
+          "id": "power-continuity-budget",
+          "name": "供电冷却保供与局部隔离",
+          "direction": "mttr",
+          "modeIds": [
+            "power-fault",
+            "power-slow"
+          ],
+          "effects": [
+            {
+              "param": "impact",
+              "op": "reduce",
+              "value": 0.9998134862704432
+            }
+          ],
+          "applicability": 1,
+          "enabled": true,
+          "evidence": "assumed",
+          "rationale": "将供电与冷却事件的等效影响缩至现状的0.01865%，预留30%损失负荷余量。源故障率不变；要求独立供电、冷却隔离与备用容量共同成立，未验证共因失效。",
+          "source": "按供电与冷却99.999%目标反求的候选"
+        },
+        {
+          "id": "network-recovery-budget",
+          "name": "网络分级检测与快速切换",
+          "direction": "mttr",
+          "modeIds": [
+            "iod-fault",
+            "optical-fault",
+            "fabric-fault"
+          ],
+          "effects": [
+            {
+              "param": "coverage",
+              "op": "set",
+              "value": 0.999
+            },
+            {
+              "param": "detectHours",
+              "op": "set",
+              "value": 0.0002777777777777778
+            },
+            {
+              "param": "recoverHours",
+              "op": "set",
+              "value": 0.05665230967183717
+            },
+            {
+              "param": "reworkHours",
+              "op": "set",
+              "value": 0.0002777777777777778
+            },
+            {
+              "param": "missedLossHours",
+              "op": "set",
+              "value": 0.016666666666666666
+            }
+          ],
+          "applicability": 0.99,
+          "enabled": false,
+          "evidence": "assumed",
+          "rationale": "以已启用FIT改进为前提，反求恢复段≤203.9s；检出99.9%/1s、回滚1s、漏检60s、适用并成功99%。网络损失负荷留10%余量；需验证路径冗余、带宽和失败升级条件。",
+          "source": "按网络98%目标反求的候选"
+        }
+      ],
+      "allocation": {
+        "method": "agree",
+        "complexityBasis": "fit",
+        "customWeights": {}
+      },
+      "requirements": {
+        "referenceCards": 500000,
+        "systemTarget": 0.95,
+        "overheadBudget": 0.006622516556291391,
+        "scaling": "linear-loss-load",
+        "domains": [
+          {
+            "id": "network",
+            "name": "网络域",
+            "moduleIds": [
+              "iod-l1",
+              "optical",
+              "l2-fabric"
+            ],
+            "baselineAvailability": 0.63,
+            "targetAvailability": 0.98,
+            "source": "用户2026-11-19给定：50万卡网络单独评估现状约63%，改进目标约98%。"
+          },
+          {
+            "id": "remaining",
+            "name": "计算等非网络域合计",
+            "moduleIds": [
+              "aicore",
+              "npu",
+              "hbm",
+              "node",
+              "storage",
+              "power",
+              "management",
+              "software"
+            ],
+            "baselineAvailability": 0.6,
+            "targetAvailability": null,
+            "source": "用户2026-11-19确认：除网络以外各域合并后的单独可用度约60%。"
+          },
+          {
+            "id": "power",
+            "name": "供电与冷却整项",
+            "moduleIds": [
+              "power"
+            ],
+            "baselineAvailability": null,
+            "targetAvailability": 0.99999,
+            "source": "用户2026-11-19固定目标99.999%；对应架构图供电与冷却整项，管理面另列。"
+          }
+        ],
+        "calibration": [
+          {
+            "modeId": "iod-fault",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.40624572234060274,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.5062457223406027,
+            "source": "网络域单独现状63%约束；按原恢复段比例反求，未作为实测。"
+          },
+          {
+            "modeId": "optical-fault",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.40624572234060274,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.5062457223406027,
+            "source": "网络域单独现状63%约束；按原恢复段比例反求，未作为实测。"
+          },
+          {
+            "modeId": "fabric-fault",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.40624572234060274,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.5062457223406027,
+            "source": "网络域单独现状63%约束；按原恢复段比例反求，未作为实测。"
+          },
+          {
+            "modeId": "npu-fault",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.20825461227529787,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.3082546122752978,
+            "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+          },
+          {
+            "modeId": "hbm-uce",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.20825461227529787,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.3082546122752978,
+            "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+          },
+          {
+            "modeId": "node-fault",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.20825461227529787,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.3082546122752978,
+            "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+          },
+          {
+            "modeId": "storage-fault",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.20825461227529787,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.3082546122752978,
+            "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+          },
+          {
+            "modeId": "power-fault",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.20825461227529787,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.3082546122752978,
+            "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+          },
+          {
+            "modeId": "management-fault",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.20825461227529787,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.3082546122752978,
+            "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+          },
+          {
+            "modeId": "software-fault",
+            "beforeRecoveryHours": 0.07,
+            "afterRecoveryHours": 0.20825461227529787,
+            "beforeMissedHours": 0.16999999999999998,
+            "afterMissedHours": 0.3082546122752978,
+            "source": "计算等非网络域合计单独现状60%约束；按原恢复段比例反求，未作为实测。"
+          }
+        ]
+      },
+      "source": "2026-11-19约束场景；网络63%、非网络合计60%为校准参考，系统目标95%，网络98%，供电与冷却99.999%。固定FIT及AICore检出90%/漏检48h，未观测的中断恢复段按比例反求；非实测硬件参数。 第一版解析刚达95%，开发仿真窗口达标不足90%；增加ABFT和干净step恢复、在线检出98%后冻结，使用不同种子独立复核。 2026-11-19收益审计：六项阶段节省改为从冻结现状减少绝对时长，保留校准残差；三项降FIT措施按现状恢复链独立评价。原95.93%结论撤回，旧快照仅供审计。"
+    },
+    "id": "core-verification-1"
+  },
+  "summary": {
+    "taskId": "c245cdcf-04ee-42b7-bc85-db6f417fa194",
+    "baseline": 0.4407238130771383,
+    "analytic": 0.8612603308596583,
+    "mean": 0.8617622504450031,
+    "interval": [
+      0.8610991181505231,
+      0.8624253827394831
+    ],
+    "weeklyLoss": 23.22394192523948,
+    "passRatio": 0,
+    "verdict": "fail",
+    "mtbfOnly": {
+      "ids": [
+        "hbm-ecc",
+        "aicore-screening",
+        "optical-reliability"
+      ],
+      "cards": 500000,
+      "baseline": 0.4407238130771383,
+      "availability": 0.6061693342977234,
+      "savedHours": 27.794847565058287,
+      "gainPp": 16.544552122058505,
+      "exact": true
+    },
+    "recommendation": {
+      "kind": "short",
+      "add": [
+        "network-recovery-budget",
+        "fast-recover",
+        "control-continuity",
+        "net-sdc",
+        "sdc-online-screen",
+        "memory-predict",
+        "power-redundancy"
+      ],
+      "availability": 0.9264077463115101,
+      "ceiling": 0.9264077463115101,
+      "shortfall": 0.023592253688489828,
+      "furtherReduction": 0.3569599310376431,
+      "removable": [],
+      "minimal": false
+    },
+    "domainResults": [
+      {
+        "id": "network",
+        "name": "网络域",
+        "cards": 500000,
+        "target": 0.98,
+        "mean": 0.9240083137961488,
+        "interval": [
+          0.9234836757189048,
+          0.9245329518733928
+        ],
+        "met": false,
+        "seed": 3544283406
+      },
+      {
+        "id": "power",
+        "name": "供电与冷却整项",
+        "cards": 500000,
+        "target": 0.99999,
+        "mean": 0.9999952184982035,
+        "interval": [
+          0.9999951747078445,
+          0.9999952622885625
+        ],
+        "met": true,
+        "seed": 1903751871
+      }
+    ],
+    "checks": [
+      {
+        "id": "mean",
+        "title": "平均可用度达到目标",
+        "state": "fail",
+        "detail": "仿真均值 86.18%，95% 置信区间 86.11%–86.24%，目标 95.00%。均值低于目标。"
+      },
+      {
+        "id": "windows",
+        "title": "单个窗口的达标比例",
+        "state": "fail",
+        "detail": "4096 个仿真窗口中 0.0% 达到目标，要求不低于 90%。第 5 百分位窗口为 82.88%。"
+      },
+      {
+        "id": "consistency",
+        "title": "仿真与解析评估一致",
+        "state": "pass",
+        "detail": "解析值 86.13%，仿真均值 86.18%，偏差 0.05 个百分点（容差 0.50）。两种独立方法相互印证。"
+      },
+      {
+        "id": "modules",
+        "title": "各模块不超出分配预算",
+        "state": "fail",
+        "detail": "超出预算的模块：光模块（5.70 / 2.73 h）、L2 / Leaf / Spine 与网卡（5.98 / 0.28 h）、存储系统（1.89 / 0.17 h）、管理面（1.83 / 0.17 h）、软件与未归因（5.84 / 0.53 h）。"
+      },
+      {
+        "id": "evidence",
+        "title": "所选措施有工程证据",
+        "state": "warn",
+        "detail": "14 项措施的参数尚未实测：HBM 纠错增强、AICore 静默故障压测筛查、光模块可靠性提升、静默故障在线检测增强、中断快速检测、亚健康快速检测、算子 ABFT 实时矩阵校验、漏检静默故障定期校验、静默故障干净 step 恢复、DP副本级局部恢复、故障诊断与自动恢复编排、更频繁的检查点、异步检查点保存、供电冷却保供与局部隔离。仿真检验给定参数下的目标达成情况，不证明产品已具备这些能力。"
+      },
+      {
+        "id": "scales",
+        "title": "五规模系统目标",
+        "state": "fail",
+        "detail": "10,000卡、100,000卡、200,000卡、500,000卡的区间下限或窗口达标比例未满足要求。"
+      },
+      {
+        "id": "domains",
+        "title": "固定域目标独立验证",
+        "state": "fail",
+        "detail": "1,000卡网络域未达到99.99592%；10,000卡网络域未达到99.95920%；100,000卡网络域未达到99.59350%；200,000卡网络域未达到99.19028%；500,000卡网络域未达到98.00000%"
+      }
+    ]
+  }
+}

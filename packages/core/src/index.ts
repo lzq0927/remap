@@ -14,6 +14,7 @@ export * from "./verify";
 export * from "./requirements";
 export * from "./reference-scenario";
 export * from "./scales";
+export * from "./measure-audit";
 
 /** 一次算出四步工作台需要的全部解析结果。 */
 export function analyze(model: CoreModel) {

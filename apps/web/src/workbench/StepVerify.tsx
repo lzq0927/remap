@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Play, RefreshCw } from "lucide-react";
-import type { SimulationSummary } from "../../../../packages/core/src/index";
+import {
+  auditLibraryMeasures,
+  type SimulationSummary,
+} from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
 import { count, duration, hours, percent, points, scale } from "./format";
 import { Disclosure, NumberField, Status, useTooltip, type Tone } from "./ui";
@@ -25,7 +28,7 @@ export default function StepVerify() {
       analysis,
       update,
       verification,
-      stale,
+      stale: parametersChanged,
       verifying,
       runVerification,
       goto,
@@ -35,9 +38,18 @@ export default function StepVerify() {
     [seed, setSeed] = useState(verification?.seed ?? 20261117);
   const target = model.scenario.target,
     result = verification;
+  const invalidRecovery = auditLibraryMeasures(model).some(
+    (issue) => model.measures.find((m) => m.id === issue.id)?.enabled,
+  );
+  const stale = parametersChanged || invalidRecovery;
 
   return (
     <div className="rw-stack">
+      {invalidRecovery && (
+        <p className="rw-alert is-warn" role="status">
+          恢复阶段节省被旧库误写为整段恢复时长，以下旧验证不再作为达标证据。请在机制设计页修正口径后重新验证；历史记录保留。
+        </p>
+      )}
       <section className="rw-card rw-verify-run" aria-label="运行验证">
         <div>
           <h2>独立仿真</h2>
@@ -134,7 +146,11 @@ export default function StepVerify() {
             aria-label="验证结论"
           >
             <Status tone={stale ? "idle" : tones[result.verdict]}>
-              {stale ? "结果已过期" : verdictText[result.verdict][0]}
+              {invalidRecovery
+                ? "旧结论已撤回"
+                : stale
+                  ? "结果已过期"
+                  : verdictText[result.verdict][0]}
             </Status>
             <p>
               {stale

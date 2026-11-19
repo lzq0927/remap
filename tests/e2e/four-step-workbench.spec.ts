@@ -121,7 +121,7 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   await expect(advice).toContainText("当前设计已达标");
   await expect(summary).toContainText("95.24%");
   await expect(
-    page.getByRole("switch", { name: "停用 域级弹性恢复" }),
+    page.getByRole("switch", { name: "停用 DP副本级局部恢复" }),
   ).toHaveAttribute("aria-checked", "true");
   await expect(
     page

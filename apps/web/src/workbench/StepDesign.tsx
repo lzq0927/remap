@@ -9,6 +9,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import {
+  auditLibraryMeasures,
+  correctLibraryMeasures,
   evidenceStateNames,
   measureParamNames,
   solveEffect,
@@ -74,6 +76,7 @@ export default function StepDesign() {
     nameOf = (id: string) =>
       model.measures.find((m) => m.id === id)?.name ?? id,
     editingMeasure = model.measures.find((m) => m.id === editing);
+  const legacyIssues = auditLibraryMeasures(model);
   const enable = (ids: string[]) =>
     update((d) => {
       for (const measure of d.measures)
@@ -87,6 +90,28 @@ export default function StepDesign() {
 
   return (
     <div className="rw-stack">
+      {legacyIssues.length > 0 && (
+        <section className="rw-advice is-warn" aria-label="恢复参数口径待修正">
+          <div>
+            <strong>
+              旧版措施库有 {legacyIssues.length} 项把阶段节省误写成恢复总时长。
+            </strong>
+            <p>
+              在已校准现状下会高估收益。修正后仅减少相应阶段耗时，保留其余恢复段；旧验证需重新运行，历史快照保留。手动改过的参数不自动替换。
+            </p>
+          </div>
+          <button
+            className="rw-button"
+            onClick={() =>
+              update((d) => {
+                d.measures = correctLibraryMeasures(d).measures;
+              })
+            }
+          >
+            修正阶段节省口径
+          </button>
+        </section>
+      )}
       <section
         className={
           "rw-advice is-" +
@@ -524,9 +549,11 @@ function MeasureCard({
                   <span className="rw-effect-op">
                     {effect.op === "add"
                       ? "增加"
-                      : effect.param === "coverage"
-                        ? "漏检率降低"
-                        : "降低"}
+                      : effect.op === "subtract"
+                        ? "从现状减少"
+                        : effect.param === "coverage"
+                          ? "漏检率降低"
+                          : "降低"}
                   </span>
                 )}
                 {effect.op === "reduce" || isRatio(effect.param) ? (
@@ -670,7 +697,9 @@ function Solver({ measure, met }: { measure: Measure; met: boolean }) {
         const shown =
           effect.op === "reduce"
             ? "降低 " + percent(result.value)
-            : formatParam(effect.param, result.value);
+            : effect.op === "subtract"
+              ? "从现状减少 " + formatParam(effect.param, result.value)
+              : formatParam(effect.param, result.value);
         return (
           <p key={index}>
             {measureParamNames[effect.param]}：

@@ -1,5 +1,6 @@
 import {
   allocationMethodInfo,
+  auditLibraryMeasures,
   evidenceStateNames,
   faultKindNames,
   lossPerEvent,
@@ -45,6 +46,10 @@ export function buildReport(
   analysis: Analysis,
   verification: VerificationResult | null,
 ) {
+  const invalidRecovery = auditLibraryMeasures(model).some(
+    (issue) => model.measures.find((m) => m.id === issue.id)?.enabled,
+  );
+  if (invalidRecovery) verification = null;
   const { scenario } = model,
     {
       baseline,
@@ -60,15 +65,18 @@ export function buildReport(
     study = measureScaleStudy(model);
   const usage = (value: number) =>
     value <= 1 ? "占用 " + percent(value, 0) : "超预算 " + times(value);
-  const verdict = !verification
-    ? "尚未对当前参数运行独立验证。"
-    : verification.verdict === "pass"
-      ? "独立仿真验证通过。"
-      : verification.verdict === "warn"
-        ? "独立仿真数值达标，仍有待确认项。"
-        : "独立仿真验证未通过。";
-  const advice =
-    recommendation.kind === "met"
+  const verdict = invalidRecovery
+    ? "旧验证结论已撤回：恢复阶段节省误写为整段恢复时长，需显式修正并重新验证。"
+    : !verification
+      ? "尚未对当前参数运行独立验证。"
+      : verification.verdict === "pass"
+        ? "独立仿真验证通过。"
+        : verification.verdict === "warn"
+          ? "独立仿真数值达标，仍有待确认项。"
+          : "独立仿真验证未通过。";
+  const advice = invalidRecovery
+    ? "以下数值仅作旧参数审计，不作为目标达成证据。"
+    : recommendation.kind === "met"
       ? "当前设计已达标。"
       : recommendation.kind === "add"
         ? `建议再启用：${recommendation.add
@@ -244,6 +252,7 @@ ${table(
   }),
 )}
 <h3>五规模与逐措施收益</h3><p>${escape(study.basis)} 曲线按50万卡单项提升排序；不以Shapley代替单项曲线。组合Shapley的基准是未启用候选改进的冻结现状。</p>
+<p>仅启用已选${study.mtbfOnly.ids.length}项降FIT措施、全部MTTR候选关闭：50万卡可用度${percent(study.mtbfOnly.baseline)} → ${percent(study.mtbfOnly.availability)}，整系统净减损${hours(study.mtbfOnly.savedHours)}/周。</p>
 ${table(
   ["规模", "目标", "周损失预算", "现状", "组合", "组合周损失"],
   study.rows.map((r) => [
@@ -258,7 +267,7 @@ ${table(
 ${study.measures
   .map(
     (m, i) =>
-      `<article><h3>${i + 1}. ${escape(m.name)} · ${m.direction === "mtbf" ? "提升MTBF" : "降低MTTR"}</h3><p>50万卡单项增益 ${points(m.points.at(-1)!.gainPp / 100)}，周减损 ${hours(m.points.at(-1)!.savedHours)}。</p><div class="curves">${measureCurveSvg(m)}</div><details><summary>准确数值</summary>${table(
+      `<article><h3>${i + 1}. ${escape(m.name)} · ${m.direction === "mtbf" ? "提升MTBF" : "降低MTTR"}</h3><p>50万卡单项增益 ${points(m.points.at(-1)!.gainPp / 100)}，整系统净减损 ${hours(m.points.at(-1)!.savedHours)}。${m.points.at(-1)!.fixedExposureSavedHours !== null ? `按现状恢复链及运行暴露避免的部件损失${hours(m.points.at(-1)!.fixedExposureSavedHours!)}/周。` : ""}${m.mtbfOnlyShapleyPp !== null ? `MTBF组Shapley ${m.mtbfOnlyShapleyPp.toFixed(4)}pp（所有MTTR候选关闭）。` : ""}</p><div class="curves">${measureCurveSvg(m)}</div><details><summary>准确数值</summary>${table(
         ["规模", "目标", "现状", "仅优化该项", "增益pp", "周损失", "周减损"],
         m.points.map((p) => [
           scale(p.cards),

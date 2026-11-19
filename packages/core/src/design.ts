@@ -299,8 +299,21 @@ export function solveEffect(
       new Set(trial.measures.filter((m) => m.enabled).map((m) => m.id)),
     );
   };
-  // “降低比例”和检出率越大越好，其余参数越小越好。
-  const best = effect.op === "reduce" || effect.param === "coverage" ? 1 : 0;
+  // 比例降低、绝对节省和检出率越大越好，其余目标值越小越好。
+  const best =
+    effect.op === "subtract"
+      ? Math.max(
+          0,
+          ...model.modes
+            .filter((m) => measure.modeIds.includes(m.id))
+            .map(
+              (m) =>
+                m[effect.param as Exclude<typeof effect.param, "overhead">],
+            ),
+        )
+      : effect.op === "reduce" || effect.param === "coverage"
+        ? 1
+        : 0;
   if (evaluate(best) < target) return { value: best, reachable: false };
   if (evaluate(effect.value) >= target)
     return { value: effect.value, reachable: true };

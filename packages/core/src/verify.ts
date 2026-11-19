@@ -6,6 +6,7 @@ import {
   type ResolvedParameters,
 } from "./assess";
 import { allocate, type AllocationResult } from "./allocate";
+import { auditLibraryMeasures } from "./measure-audit";
 import {
   domainModel,
   domainTargetAtScale,
@@ -210,6 +211,7 @@ export function simulate(
 export type CheckState = "pass" | "warn" | "fail";
 export interface VerificationCheck {
   id:
+    | "recovery-semantics"
     | "mean"
     | "windows"
     | "consistency"
@@ -419,6 +421,16 @@ export function verify(
     }
   }
   const checks: VerificationCheck[] = [];
+  const legacy = auditLibraryMeasures(model).filter(
+    (issue) => model.measures.find((m) => m.id === issue.id)?.enabled,
+  );
+  if (legacy.length)
+    checks.push({
+      id: "recovery-semantics",
+      title: "恢复链阶段节省口径",
+      state: "fail",
+      detail: `${legacy.map((i) => i.name).join("、")}仍使用旧版恢复总时长。阶段节省不能替换校准后的全部恢复链，请在机制设计页显式修正并重新验证。`,
+    });
   checks.push({
     id: "mean",
     title: "平均可用度达到目标",
@@ -479,7 +491,7 @@ export function verify(
     title: "所选措施有工程证据",
     state: pending.length ? "warn" : "pass",
     detail: pending.length
-      ? `${pending.length} 项措施的参数尚未实测：${pending.map((m) => m.name).join("、")}。仿真只证明“参数成立时可以达标”，不证明产品已具备这些能力。`
+      ? `${pending.length} 项措施的参数尚未实测：${pending.map((m) => m.name).join("、")}。仿真检验给定参数下的目标达成情况，不证明产品已具备这些能力。`
       : "所选措施均已标记为有实测证据。",
   });
   if (model.requirements) {

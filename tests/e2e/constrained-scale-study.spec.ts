@@ -52,11 +52,13 @@ test("固定域工作流：载入、分配、部件周损失、三线收益、�
   ).toHaveCount(4);
   await expect(curves.getByRole("img").first()).toContainText("仅优化该项");
   const hbmCurve = curves.locator('[data-scale-measure="hbm-ecc"]');
-  const before = await hbmCurve.locator("p").innerText();
+  await expect(hbmCurve).toContainText("避免的部件损失");
+  await expect(hbmCurve).toContainText("MTBF组Shapley");
+  const before = await hbmCurve.locator("p").first().innerText();
   const ratio = page.getByLabel("HBM 纠错增强 · 故障率 FIT");
   await ratio.fill("70");
   await ratio.press("Enter");
-  await expect(hbmCurve.locator("p")).not.toHaveText(before);
+  await expect(hbmCurve.locator("p").first()).not.toHaveText(before);
   await page
     .getByText("部件与故障模式：恢复链参数、频次和周损失前后对照", {
       exact: true,

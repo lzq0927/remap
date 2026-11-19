@@ -121,12 +121,21 @@ export const measureParamNames: Record<MeasureParam, string> = {
 export const effectSchema = z
   .object({
     param: z.enum(measureParams),
-    /** reduce：在现值上按比例降低；set：直接设为新值；add：在现值上增加（代价类效果）。 */
-    op: z.enum(["reduce", "set", "add"]),
+    /** subtract：相对冻结现状减少绝对量，与set按替代方案取最好值，不重复叠加。 */
+    op: z.enum(["reduce", "set", "add", "subtract"]),
     value: z.number().finite().min(0).max(1e7),
   })
   .strict()
   .superRefine((effect, ctx) => {
+    if (
+      effect.op === "subtract" &&
+      ["coverage", "impact", "overhead"].includes(effect.param)
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["op"],
+        message: "绝对减少只用于故障率或时长参数",
+      });
     const bounded =
       effect.op === "reduce" ||
       effect.param === "coverage" ||
