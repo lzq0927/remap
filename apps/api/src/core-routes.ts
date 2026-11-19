@@ -9,6 +9,7 @@ import {
   defaultCoreModel,
   expectedSimulationEvents,
   modelHash,
+  targetAtScale,
   upgradeCoreModel,
   verificationLimits,
   verify,
@@ -41,7 +42,10 @@ function parseModel(input: unknown): CoreModel {
         .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
         .join("；"),
     );
-  return parsed.data;
+  const model = parsed.data;
+  if (model.requirements)
+    model.scenario.target = targetAtScale(model, model.scenario.cards);
+  return model;
 }
 
 /** 四步工作台：一份模型、解析结果和独立验证记录。 */
@@ -82,6 +86,11 @@ export function registerCoreRoutes(app: FastifyInstance, tasks: TaskServices) {
       revision = load(store).revision + 1,
       savedAt = new Date().toISOString();
     store.putDocument(modelKind, { model, revision, savedAt }, modelId);
+    store.putDocument(
+      "core-model-revision",
+      { model, revision, savedAt },
+      `${modelId}-r${revision}`,
+    );
     return { revision, savedAt, hash: modelHash(model) };
   };
   app.put("/api/tasks/:taskId/core", save);
@@ -94,6 +103,11 @@ export function registerCoreRoutes(app: FastifyInstance, tasks: TaskServices) {
       savedAt = new Date().toISOString();
     store.putDocument(modelKind, { model, revision, savedAt }, modelId);
     store.audit("core.reset", modelId, { revision });
+    store.putDocument(
+      "core-model-revision",
+      { model, revision, savedAt },
+      `${modelId}-r${revision}`,
+    );
     return { model, revision, savedAt, hash: modelHash(model) };
   });
   // 供 Agent 与脚本读取：与界面使用同一套解析结果。
@@ -121,7 +135,7 @@ export function registerCoreRoutes(app: FastifyInstance, tasks: TaskServices) {
       sequence = history(store).length + 1;
     const saved = store.putDocument(
       verificationKind,
-      { ...result, sequence, modelRevision: revision },
+      { ...result, sequence, modelRevision: revision, modelSnapshot: model },
       `${verificationKind}-${sequence}`,
     );
     store.audit("core.verified", saved.id, {

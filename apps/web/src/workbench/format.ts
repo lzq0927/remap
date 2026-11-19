@@ -2,13 +2,24 @@
 export const percent = (value: number, digits?: number) => {
   if (!Number.isFinite(value)) return "—";
   const auto = value >= 0.9995 && value < 1 ? 3 : 2;
-  return (value * 100).toFixed(digits ?? auto) + "%";
+  let precision = digits ?? auto;
+  // Preserve a nonzero loss instead of rounding a five-nines target to 100%.
+  while (
+    value < 1 &&
+    value >= 0 &&
+    Number((value * 100).toFixed(precision)) === 100 &&
+    precision < 12
+  )
+    precision++;
+  return (value * 100).toFixed(precision) + "%";
 };
 /** 百分点差值，带正负号。 */
 export const points = (value: number, digits = 2) =>
   (value >= 0 ? "+" : "−") + Math.abs(value * 100).toFixed(digits) + " pp";
 export const hours = (value: number) => {
   if (!Number.isFinite(value)) return "—";
+  if (Math.abs(value) > 0 && Math.abs(value) < 0.01)
+    return Number(value.toPrecision(3)) + " h";
   const digits = Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2;
   return value.toFixed(digits) + " h";
 };

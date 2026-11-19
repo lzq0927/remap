@@ -1,5 +1,6 @@
 import type { AllocationMethod, CoreModel } from "./model";
 import { applyMeasures, assess, type Assessment } from "./assess";
+import { domainTargetAtScale, targetAtScale } from "./requirements";
 
 export interface MethodInfo {
   id: AllocationMethod;
@@ -17,12 +18,12 @@ export const allocationMethodInfo: Record<AllocationMethod, MethodInfo> = {
   agree: {
     id: "agree",
     name: "AGREE",
-    summary: "越复杂的模块给越多损失预算，越关键的模块给越少。",
+    summary: "AGREE工程适配：按复杂度与重要度分配固定窗口损失负荷。",
     formula: "wᵢ = (nᵢ / ωᵢ) / Σⱼ (nⱼ / ωⱼ)",
     reasoning: [
       "复杂度 nᵢ：模块越复杂，固有故障越多，达到同样可用度的代价越高，所以预算与 nᵢ 成正比。",
       "重要度 ωᵢ：模块失效导致任务受损的条件概率。ωᵢ 越大，同样的故障对任务伤害越大，所以预算与 ωᵢ 成反比。",
-      "权重归一化后合计为 1，保证各模块预算合成后恰好等于系统目标。",
+      "这是将AGREE复杂度/重要度思想用于可修复系统损失负荷的工程适配，不直接套用不可修复系统可靠度公式。先冻结域级约束，再在各自可分配范围内归一化。",
     ],
     fit: "适合有架构和器件清单、需要给出设计目标的阶段。它不依赖现状的恢复能力，因此会暴露“故障不多但单次损失很大”的模块。",
   },
@@ -52,7 +53,7 @@ export const allocationMethodInfo: Record<AllocationMethod, MethodInfo> = {
     formula: "ρᵢ* = min(ρᵢ, ρ₀)，ρ₀ 由 Σᵢ min(ρᵢ, ρ₀) = ρ* 解出",
     reasoning: [
       "把损失最大的模块统一压到同一水位 ρ₀，低于水位的模块不要求改进。",
-      "在“改进量与损失降幅成正比”的假设下，这是达到目标所需改进总量最小的方案。",
+      "这是统一水位的改进分配启发式。没有各模块的成本曲线时，不能据此声称总工程成本最小。",
     ],
     fit: "适合资源有限、希望把改进集中在少数主要矛盾上的场景。",
   },
@@ -99,6 +100,15 @@ export interface AllocationResult {
   overheadLossHours: number;
   /** 最小改进量方法的统一水位 ρ₀。 */
   waterline: number | null;
+  constraints: Array<{
+    id: string;
+    name: string;
+    target: number;
+    load: number;
+    moduleIds: string[];
+  }>;
+  conflict: string | null;
+  unallocatedLossHours: number;
   modules: ModuleAllocation[];
   groups: Array<{
     id: string;
@@ -136,9 +146,11 @@ export function allocate(
   method: AllocationMethod = model.allocation.method,
   baseline: Assessment = assess(model, applyMeasures(model, new Set())),
 ): AllocationResult {
-  const { hours, target, overhead, cards } = model.scenario,
+  const { hours, cards } = model.scenario,
+    target = targetAtScale(model, cards),
+    overhead = model.requirements?.overheadBudget ?? model.scenario.overhead,
     load = Math.max(0, (1 - overhead) / target - 1),
-    feasible = (1 - overhead) / target - 1 > 0,
+    overheadFeasible = (1 - overhead) / target - 1 >= 0,
     uptime = hours / (1 + load);
   const current = new Map(baseline.modules.map((m) => [m.id, m]));
   const complexity = model.modules.map(
@@ -164,8 +176,57 @@ export function allocate(
   const sum = raw.reduce((total, v) => total + v, 0);
   // 权重全为 0 时无法体现差异，退回等分配，避免预算凭空消失。
   const weights = raw.map((v) => (sum > 0 ? v / sum : 1 / raw.length));
+  const constraints = (model.requirements?.domains ?? [])
+    .filter((d) => d.targetAvailability !== null)
+    .map((d) => {
+      const domainTarget = domainTargetAtScale(model, d.targetAvailability!);
+      return {
+        id: d.id,
+        name: d.name,
+        target: domainTarget,
+        load: 1 / domainTarget - 1,
+        moduleIds: d.moduleIds,
+      };
+    });
+  const fixedLoad = constraints.reduce((s, d) => s + d.load, 0);
+  const feasible = overheadFeasible && fixedLoad <= load + 1e-12;
+  const shares = weights.map((w) => w * load);
+  let unallocated = 0;
+  if (constraints.length) {
+    shares.fill(0);
+    const pinned = new Set(constraints.flatMap((d) => d.moduleIds));
+    const distribute = (indices: number[], budget: number) => {
+      if (!indices.length) {
+        unallocated += budget;
+        return;
+      }
+      const local =
+        method === "min-effort"
+          ? minEffort(
+              indices.map((i) => currentLoads[i]),
+              budget,
+            ).loads
+          : indices.map((i) => raw[i]);
+      const total = local.reduce((s, v) => s + v, 0);
+      indices.forEach((i, j) => {
+        shares[i] =
+          budget * (total > 0 ? local[j] / total : 1 / indices.length);
+      });
+    };
+    for (const d of constraints)
+      distribute(
+        model.modules.flatMap((m, i) =>
+          d.moduleIds.includes(m.id) ? [i] : [],
+        ),
+        d.load,
+      );
+    distribute(
+      model.modules.flatMap((m, i) => (pinned.has(m.id) ? [] : [i])),
+      Math.max(0, load - fixedLoad),
+    );
+  }
   const modules: ModuleAllocation[] = model.modules.map((module, i) => {
-    const share = weights[i] * load,
+    const share = shares[i],
       now = current.get(module.id);
     const hasRate = !!now && now.rate > 0,
       hasLoss = !!now && now.mttrHours > 0;
@@ -175,7 +236,7 @@ export function allocate(
       name: module.name,
       complexity: complexity[i],
       importance: module.importance,
-      weight: weights[i],
+      weight: load > 0 ? share / load : 0,
       load: share,
       availability: 1 / (1 + share),
       lossHours: share * uptime,
@@ -187,6 +248,13 @@ export function allocate(
   return {
     method,
     feasible,
+    constraints,
+    conflict: !overheadFeasible
+      ? "固定公共开销超过系统允许损失"
+      : fixedLoad > load + 1e-12
+        ? "固定域目标的预算之和超过系统预算；请检查约束，系统不会自动放宽目标。"
+        : null,
+    unallocatedLossHours: unallocated * uptime,
     target,
     load,
     lossHours: hours * (1 - target),

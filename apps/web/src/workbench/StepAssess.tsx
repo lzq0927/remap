@@ -87,10 +87,72 @@ export default function StepAssess() {
         ))}
       </section>
 
+      <section className="rw-card" aria-label="硬件损失差距排序">
+        <h2>硬件损失差距排序 · 按超出分配预算的周小时排序</h2>
+        <p>
+          频次按连续168小时暴露计算；损失按系统运行/恢复过程分摊。部件排名来自当前参数与分配结果，父层不重复累计。
+        </p>
+        <div className="rw-table-wrap">
+          <table className="rw-table">
+            <thead>
+              <tr>
+                <th>排名 / 部件</th>
+                <th>故障模式</th>
+                <th>周故障频次</th>
+                <th>现状周损失</th>
+                <th>周损失预算</th>
+                <th>超预算</th>
+                <th>当前组合周损失</th>
+                <th>对应可靠性措施</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...baselineGaps]
+                .sort(
+                  (a, b) =>
+                    b.lossHours - b.budgetHours - (a.lossHours - a.budgetHours),
+                )
+                .map((gap, i) => {
+                  const part = baseline.modules.find((m) => m.id === gap.id)!,
+                    after = analysis.design.modules.find(
+                      (m) => m.id === gap.id,
+                    )!,
+                    k = 168 / model.scenario.hours;
+                  const ids = new Set(part.modes.map((m) => m.id));
+                  return (
+                    <tr key={gap.id} data-gap-module={gap.id}>
+                      <th>
+                        {i + 1}. {gap.name}
+                      </th>
+                      <td>{part.modes.map((m) => m.name).join("、")}</td>
+                      <td>{count(part.rate * 168, 3)}次</td>
+                      <td>{hours(gap.lossHours * k)}</td>
+                      <td>{hours(gap.budgetHours * k)}</td>
+                      <td>
+                        {hours(
+                          Math.max(0, gap.lossHours - gap.budgetHours) * k,
+                        )}
+                      </td>
+                      <td>{hours(after.lossHours * k)}</td>
+                      <td>
+                        {model.measures
+                          .filter((m) => m.modeIds.some((id) => ids.has(id)))
+                          .slice(0, 5)
+                          .map((m) => m.name)
+                          .join("；")}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <ArchitectureDiagram
         views={["baseline", "design"]}
         title="系统架构图"
-        hint="按超节点的硬件拓扑绘制，每个模块的可用度与目标、每卡 FIT、损失时间与预算标在对应硬件上。点击硬件可查看并修改它的故障模式和恢复参数。"
+        hint="按超节点的硬件拓扑绘制，可用度与目标、周损失和周故障频次标在对应部件上。浅蓝表示损失少，损失越多越红。点击硬件可查看并修改故障模式和恢复参数。"
         onSelect={setSelected}
         actions={
           <button

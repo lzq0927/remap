@@ -54,7 +54,7 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
     "可用度评估",
   );
   const architecture = page.getByRole("region", { name: "系统架构图" });
-  // 架构图按硬件拓扑绘制，指标标在对应硬件上：现状与目标可用度、FIT、损失与预算
+  // 架构图按硬件拓扑绘制：现状与目标可用度、周损失、连续暴露故障频次
   await expect(
     architecture.getByRole("img", { name: "系统架构图（现状）" }),
   ).toBeVisible();
@@ -66,8 +66,8 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   const hbm = architecture.getByRole("button", { name: /^HBM，/ });
   await expect(hbm).toContainText("95.33%");
   await expect(hbm).toContainText("99.63%");
-  await expect(hbm).toContainText("850 FIT");
-  await expect(hbm).toContainText("5.42 h / 0.59 h");
+  await expect(hbm).toContainText("周损失 5.42 h");
+  await expect(hbm).toContainText("71.4次/周");
   await architecture.getByRole("tab", { name: "设计后" }).click();
   await expect(hbm).toContainText("98.08%");
   await architecture.getByRole("tab", { name: "现状" }).click();
@@ -127,7 +127,7 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
     page
       .getByRole("region", { name: "架构上的设计结果" })
       .getByRole("group", { name: /^光模块，设计后可用度/ }),
-  ).toContainText("200 FIT");
+  ).toContainText("16.8次/周");
 
   // 第 4 步：独立仿真，结果按任务保存
   await page.getByRole("button", { name: "下一步：机制验证" }).click();

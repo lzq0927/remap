@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Play, RefreshCw } from "lucide-react";
 import type { SimulationSummary } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
-import { count, duration, hours, percent, points } from "./format";
+import { count, duration, hours, percent, points, scale } from "./format";
 import { Disclosure, NumberField, Status, useTooltip, type Tone } from "./ui";
 
 const tones: Record<"pass" | "warn" | "fail", Tone> = {
@@ -182,6 +182,72 @@ export default function StepVerify() {
           </section>
 
           <div className="rw-grid is-half">
+            {result.scales && (
+              <section className="rw-card" aria-label="五规模独立验证">
+                <h2>五规模独立验证</h2>
+                <table className="rw-table">
+                  <thead>
+                    <tr>
+                      <th>规模</th>
+                      <th>目标</th>
+                      <th>均值 / 95%区间</th>
+                      <th>周损失</th>
+                      <th>窗口达标比例</th>
+                      <th>判断</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.scales.map((s) => (
+                      <tr key={s.cards}>
+                        <th>{scale(s.cards)}</th>
+                        <td>{percent(s.target, 4)}</td>
+                        <td>
+                          {percent(s.mean, 4)}
+                          <br />
+                          {percent(s.interval[0], 4)}–
+                          {percent(s.interval[1], 4)}
+                        </td>
+                        <td>{hours(s.weeklyLossHours)}</td>
+                        <td>{percent(s.passRatio, 2)}</td>
+                        <td>{s.met ? "通过" : "未通过"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+            {result.domains && (
+              <section className="rw-card" aria-label="固定域独立验证">
+                <h2>固定域独立验证</h2>
+                <p>
+                  每个域独立仿真，不使用其他域停机造成的暴露减少抵扣本域要求。
+                </p>
+                <table className="rw-table">
+                  <thead>
+                    <tr>
+                      <th>规模 / 域</th>
+                      <th>目标</th>
+                      <th>均值</th>
+                      <th>95%区间下限</th>
+                      <th>判断</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.domains.map((d) => (
+                      <tr key={d.id + d.cards}>
+                        <th>
+                          {scale(d.cards)} / {d.name}
+                        </th>
+                        <td>{percent(d.target, 5)}</td>
+                        <td>{percent(d.mean, 5)}</td>
+                        <td>{percent(d.interval[0], 5)}</td>
+                        <td>{d.met ? "通过" : "未通过"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
             <section className="rw-card" aria-label="窗口可用度分布">
               <h2>各窗口可用度的分布</h2>
               <Histogram summary={result.design} target={result.target} />
@@ -291,6 +357,7 @@ export default function StepVerify() {
               <p>
                 <strong>仿真怎么做。</strong>
                 故障按各模式的事件率随机到达（指数间隔）；每次故障按检出率随机决定是否检出；恢复时间取指数分布，回滚重算取均匀分布，漏检损失取指数分布；窗口结束时截断尚未完成的恢复。现状和设计后使用不同的随机数流，每次验证默认更换随机种子。
+                每个窗口从健康状态开始，长达48小时的漏检分支会有截尾效应，现状窗口均值可高于稳态解析值。解析与仿真共用故障假设；当前是等效损失更新过程，未显式模拟停机期间的并发故障、备用耗尽和共因。
               </p>
             </li>
             <li>
@@ -300,6 +367,7 @@ export default function StepVerify() {
                 仿真与解析结果的偏差在容差内（3 倍标准误与 0.5
                 个百分点中较大者）；④ 各模块的仿真损失不超过第 1 步的分配预算；⑤
                 所选措施都有实测证据。前四项是数值判定，第五项提醒：仿真只能证明“参数成立时可以达标”。
+                设有固定域约束时，还分别检查五规模系统目标和各固定域独立目标。系统总体达标但部件超预算时，保留待确认项，不能据此称全部分配要求均通过。
               </p>
             </li>
             <li>

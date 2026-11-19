@@ -23,6 +23,7 @@ import { api } from "../api";
 import {
   allocationMethodInfo,
   analyze,
+  targetAtScale,
   type Analysis,
   type CoreModel,
   type VerificationResult,
@@ -378,7 +379,10 @@ export default function Workbench({
                 suffix="卡"
                 width={132}
                 onCommit={(v) =>
-                  update((d) => void (d.scenario.cards = Math.round(v)))
+                  update((d) => {
+                    d.scenario.cards = Math.round(v);
+                    d.scenario.target = targetAtScale(d, d.scenario.cards);
+                  })
                 }
               />
             </label>
@@ -406,7 +410,22 @@ export default function Workbench({
                 digits={3}
                 suffix="%"
                 width={104}
-                onCommit={(v) => update((d) => void (d.scenario.target = v))}
+                onCommit={(v) =>
+                  update((d) => {
+                    d.scenario.target = v;
+                    if (d.requirements) {
+                      const r = d.requirements;
+                      r.systemTarget =
+                        v > 1 - r.overheadBudget
+                          ? v
+                          : (1 - r.overheadBudget) /
+                            (1 +
+                              (((1 - r.overheadBudget) / v - 1) *
+                                r.referenceCards) /
+                                d.scenario.cards);
+                    }
+                  })
+                }
               />
             </label>
           </div>

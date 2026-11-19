@@ -4,9 +4,11 @@ import {
   allocate,
   allocationMethodInfo,
   allocationMethods,
+  targetAtScale,
   type AllocationMethod,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
+import ReferenceRequirements from "./ReferenceRequirements";
 import ArchitectureDiagram from "./ArchitectureDiagram";
 import { duration, fit, hours, percent } from "./format";
 import { Disclosure, Formula, NumberField } from "./ui";
@@ -16,7 +18,9 @@ export default function StepAllocate() {
     { allocation, baseline } = analysis,
     method = model.allocation.method,
     info = allocationMethodInfo[method],
-    { hours: window, target, overhead } = model.scenario;
+    { hours: window, target } = model.scenario;
+  const overhead =
+    model.requirements?.overheadBudget ?? model.scenario.overhead;
   const comparison = useMemo(
     () =>
       (["agree", "arinc", "equal", "min-effort"] as const).map((id) => ({
@@ -27,11 +31,13 @@ export default function StepAllocate() {
   );
   const closure =
     allocation.modules.reduce((sum, m) => sum + m.lossHours, 0) +
-    allocation.overheadLossHours;
+    allocation.overheadLossHours +
+    allocation.unallocatedLossHours;
   const maxWeight = Math.max(...allocation.modules.map((m) => m.weight), 1e-9);
 
   return (
     <div className="rw-stack">
+      <ReferenceRequirements />
       <div className="rw-grid is-side">
         <section className="rw-card" aria-label="分配方法">
           <h2>损失预算</h2>
@@ -61,7 +67,15 @@ export default function StepAllocate() {
                     suffix="%"
                     width={92}
                     onCommit={(v) =>
-                      update((d) => void (d.scenario.overhead = v))
+                      update((d) => {
+                        if (d.requirements) {
+                          d.requirements.overheadBudget = v;
+                          d.scenario.target = targetAtScale(
+                            d,
+                            d.scenario.cards,
+                          );
+                        } else d.scenario.overhead = v;
+                      })
                     }
                   />
                 </dt>
@@ -73,7 +87,8 @@ export default function StepAllocate() {
             </p>
             {!allocation.feasible && (
               <p className="rw-alert is-bad" role="alert">
-                公共开销已经超过允许的总损失，这个目标无法达到。请降低开销或下调目标。
+                {allocation.conflict ??
+                  "分配约束不相容，请检查固定目标与开销预算。"}
               </p>
             )}
           </div>
@@ -138,7 +153,10 @@ export default function StepAllocate() {
               <h2>各模块的目标</h2>
               <span className="rw-closure">
                 <CheckCircle2 size={15} aria-hidden />
-                各模块预算 + 公共开销 = {hours(closure)}，与总预算一致
+                各模块预算 + 公共开销 + 未分配余量 = {hours(closure)}，
+                {Math.abs(closure - allocation.lossHours) < 1e-7
+                  ? "与总预算一致"
+                  : "约束冲突，需调整分配"}
               </span>
             </div>
             <div className="rw-table-wrap">

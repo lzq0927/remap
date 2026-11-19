@@ -1,5 +1,6 @@
 import type { CoreModel, EvidenceState, Measure } from "./model";
 import { applyMeasures, assess, createEvaluator } from "./assess";
+import { goalEvaluator, targetAtScale } from "./requirements";
 
 const enabledIds = (model: CoreModel) =>
   model.measures.filter((m) => m.enabled).map((m) => m.id);
@@ -143,25 +144,26 @@ export interface Recommendation {
  * 数量相同时优先证据更充分的组合，其次优先可用度更高的组合。
  */
 export function recommend(model: CoreModel): Recommendation {
-  const target = model.scenario.target,
+  const target = targetAtScale(model, model.scenario.cards),
     availabilityOf = createEvaluator(model),
+    score = goalEvaluator(model),
     active = new Set(enabledIds(model)),
     current = availabilityOf(active),
     all = new Set(model.measures.map((m) => m.id)),
     ceiling = availabilityOf(all),
     candidates = model.measures.filter((m) => !m.enabled);
   const removable =
-    current >= target
+    score(active) >= 1
       ? model.measures
           .filter((m) => {
             if (!m.enabled) return false;
             const rest = new Set(active);
             rest.delete(m.id);
-            return availabilityOf(rest) >= target;
+            return score(rest) >= 1;
           })
           .map((m) => m.id)
       : [];
-  if (current >= target)
+  if (score(active) >= 1)
     return {
       kind: "met",
       add: [],
@@ -174,6 +176,8 @@ export function recommend(model: CoreModel): Recommendation {
     };
   const withAdded = (picked: Measure[]) =>
     availabilityOf(new Set([...active, ...picked.map((m) => m.id)]));
+  const scoreAdded = (picked: Measure[]) =>
+    score(new Set([...active, ...picked.map((m) => m.id)]));
   let best: { ids: string[]; rank: number; availability: number } | null = null;
   // 先按数量从少到多穷举，找到即为“最少补充”；组合数超出预算时改用逐步加入。
   let budget = searchBudget;
@@ -187,7 +191,7 @@ export function recommend(model: CoreModel): Recommendation {
     for (;;) {
       const picked = index.map((i) => candidates[i]),
         value = withAdded(picked);
-      if (value >= target) {
+      if (scoreAdded(picked) >= 1) {
         const rank = picked.reduce(
           (sum, m) => sum + evidenceRank[m.evidence],
           0,
@@ -210,24 +214,24 @@ export function recommend(model: CoreModel): Recommendation {
   let reach: Measure[] = [];
   if (!best) {
     // 逐步加入边际收益最大的措施；有些措施带代价，所以只在确有提升时加入。
-    let value = current;
+    let value = score(active);
     for (;;) {
       let pick: { measure: Measure; value: number } | null = null;
       for (const measure of candidates) {
         if (reach.includes(measure)) continue;
-        const next = withAdded([...reach, measure]);
+        const next = scoreAdded([...reach, measure]);
         if (!pick || next > pick.value) pick = { measure, value: next };
       }
       if (!pick || pick.value <= value + 1e-12) break;
       reach.push(pick.measure);
       value = pick.value;
-      if (value >= target) break;
+      if (value >= 1) break;
     }
-    if (value >= target) {
+    if (value >= 1) {
       // 达标后剔除去掉也不影响达标的项。
       for (const measure of [...reach].reverse()) {
         const fewer = reach.filter((m) => m !== measure);
-        if (withAdded(fewer) >= target) reach = fewer;
+        if (scoreAdded(fewer) >= 1) reach = fewer;
       }
       best = {
         ids: reach.map((m) => m.id),
@@ -255,7 +259,7 @@ export function recommend(model: CoreModel): Recommendation {
     add: reach.map((m) => m.id),
     availability: full.availability,
     ceiling: full.availability,
-    shortfall: target - full.availability,
+    shortfall: Math.max(0, target - full.availability),
     furtherReduction:
       full.load > 0 ? Math.min(1, Math.max(0, 1 - allowed / full.load)) : 0,
     removable: [],
@@ -275,7 +279,7 @@ export function solveEffect(
   const measure = model.measures.find((m) => m.id === measureId),
     effect = measure?.effects[effectIndex];
   if (!measure || !effect) return null;
-  const target = model.scenario.target;
+  const target = 1;
   const evaluate = (value: number) => {
     const trial: CoreModel = {
       ...model,
@@ -291,7 +295,7 @@ export function solveEffect(
           : m,
       ),
     };
-    return createEvaluator(trial)(
+    return goalEvaluator(trial)(
       new Set(trial.measures.filter((m) => m.enabled).map((m) => m.id)),
     );
   };

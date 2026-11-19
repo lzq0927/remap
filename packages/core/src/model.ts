@@ -187,6 +187,44 @@ export const allocationSchema = z
   })
   .strict();
 
+export const requirementsSchema = z
+  .object({
+    referenceCards: z.number().int().positive().max(10000000),
+    systemTarget: z.number().finite().gt(0).lt(1),
+    overheadBudget: z.number().finite().min(0).max(0.5),
+    scaling: z.literal("linear-loss-load"),
+    domains: z
+      .array(
+        z
+          .object({
+            id,
+            name: label,
+            moduleIds: z.array(id).min(1).max(64),
+            baselineAvailability: z.number().finite().gt(0).lte(1).nullable(),
+            targetAvailability: z.number().finite().gt(0).lte(1).nullable(),
+            source: note,
+          })
+          .strict(),
+      )
+      .max(24),
+    calibration: z
+      .array(
+        z
+          .object({
+            modeId: id,
+            beforeRecoveryHours: hoursValue,
+            afterRecoveryHours: hoursValue,
+            beforeMissedHours: hoursValue,
+            afterMissedHours: hoursValue,
+            source: note,
+          })
+          .strict(),
+      )
+      .max(256)
+      .default([]),
+  })
+  .strict();
+
 export const coreModelSchema = z
   .object({
     schemaVersion: z.literal(coreModelVersion),
@@ -207,6 +245,7 @@ export const coreModelSchema = z
     modes: z.array(faultModeSchema).min(1).max(256),
     measures: z.array(measureSchema).max(64),
     allocation: allocationSchema,
+    requirements: requirementsSchema.optional(),
     source: note,
   })
   .strict()
@@ -263,6 +302,40 @@ export const coreModelSchema = z
           message: "措施至少作用于一个故障模式",
         });
     });
+    const constrained = new Set<string>();
+    const domainIds = new Set<string>();
+    for (const [i, domain] of (model.requirements?.domains ?? []).entries()) {
+      if (domainIds.has(domain.id))
+        ctx.addIssue({
+          code: "custom",
+          path: ["requirements", "domains", i, "id"],
+          message: "约束标识重复：" + domain.id,
+        });
+      domainIds.add(domain.id);
+      if (new Set(domain.moduleIds).size !== domain.moduleIds.length)
+        ctx.addIssue({
+          code: "custom",
+          path: ["requirements", "domains", i, "moduleIds"],
+          message: "域内模块不能重复",
+        });
+      for (const moduleId of domain.moduleIds) {
+        if (!modules.has(moduleId))
+          ctx.addIssue({
+            code: "custom",
+            path: ["requirements", "domains", i],
+            message: "约束引用了不存在的模块：" + moduleId,
+          });
+        if (domain.targetAvailability !== null) {
+          if (constrained.has(moduleId))
+            ctx.addIssue({
+              code: "custom",
+              path: ["requirements", "domains", i],
+              message: "固定目标的责任范围不能重叠：" + moduleId,
+            });
+          constrained.add(moduleId);
+        }
+      }
+    }
   });
 
 export type CoreModel = z.infer<typeof coreModelSchema>;

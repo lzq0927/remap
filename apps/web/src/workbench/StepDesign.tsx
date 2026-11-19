@@ -20,6 +20,8 @@ import { useWorkbench } from "./Workbench";
 import { usageText } from "./StepAssess";
 import ArchitectureDiagram from "./ArchitectureDiagram";
 import MeasureDialog from "./MeasureDialog";
+import MeasureScaleCharts from "./MeasureScaleCharts";
+import FaultChainComparison from "./FaultChainComparison";
 import {
   applyEffect,
   baseValue,
@@ -116,7 +118,10 @@ export default function StepDesign() {
             <div>
               <strong>
                 当前设计 {percent(design.system.availability)}，距目标还差{" "}
-                {((target - design.system.availability) * 100).toFixed(2)} pp。
+                {(
+                  Math.max(0, target - design.system.availability) * 100
+                ).toFixed(2)}{" "}
+                pp。
               </strong>
               <p>
                 在已启用措施的基础上，
@@ -140,12 +145,11 @@ export default function StepDesign() {
           <>
             <div>
               <strong>
-                把措施库里有提升的措施都启用，也只能到{" "}
-                {percent(recommendation.ceiling)}，距目标还差{" "}
+                当前搜索到的组合为 {percent(recommendation.ceiling)}，距目标还差{" "}
                 {(recommendation.shortfall * 100).toFixed(2)} pp。
               </strong>
               <p>
-                要补齐差距，还需要把所有故障率或所有单次损失再降低{" "}
+                仅按系统均值估算，还需把所有故障率或所有单次损失再降低{" "}
                 <b>{percent(recommendation.furtherReduction, 0)}</b>
                 。可以加大现有措施的参数，或新增措施。
               </p>
@@ -161,6 +165,19 @@ export default function StepDesign() {
           </>
         )}
       </section>
+
+      {model.requirements && (
+        <p className="rw-alert is-info">
+          推荐同时检查整系统{percent(target)}及固定域目标。
+          {analysis.requirements
+            .filter((d) => !d.met)
+            .map((d) => `${d.name}尚未达到${percent(d.target!, 5)}`)
+            .join("；") || "固定域目标当前均满足。"}{" "}
+          推荐依据解析均值；窗口波动、局部预算及工程条件需在第四步核验。
+        </p>
+      )}
+      <MeasureScaleCharts />
+      <FaultChainComparison />
 
       <div className="rw-grid is-design">
         <div className="rw-stack">
@@ -360,7 +377,7 @@ export default function StepDesign() {
               <p>
                 <strong>贡献为什么用 Shapley 值。</strong>
                 措施之间有重叠：故障率降低后，再缩短恢复时间能省下的损失也变少。逐个“去掉看看”得到的收益加起来不等于总提升。Shapley
-                值对所有启用顺序求平均边际收益，是唯一同时满足“相加等于总提升”“作用相同的措施贡献相同”“没有作用的措施贡献为零”的分摊方式。
+                值对所有启用顺序求平均边际收益，满足“相加等于总提升”“作用相同的措施贡献相同”“没有作用的措施贡献为零”和可加性这四项公理。
               </p>
               <Formula>
                 φᵢ = Σ_S |S|!·(n−|S|−1)! / n! · [ A(S ∪ {"{i}"}) − A(S) ]

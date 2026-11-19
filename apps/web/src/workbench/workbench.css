@@ -2178,3 +2178,45 @@ h2.rw-direction {
     display: none;
   }
 }
+.rw-scale-measure {
+  padding: 20px 0;
+  border-top: 1px solid #cbd7e3;
+}
+.rw-scale-measure h3 {
+  color: #173c5e;
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+.rw-scale-measure h3 span {
+  font-size: 12px;
+  margin-left: 12px;
+  padding: 4px 8px;
+  background: #eaf2fb;
+  border-radius: 4px;
+}
+.rw-scale-curve {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.rw-measure-curve {
+  width: 100%;
+  height: auto;
+  min-height: 230px;
+  background: #fff;
+}
+.rw-domain-strip {
+  display: flex;
+  gap: 12px;
+  margin: 14px 0;
+}
+.rw-domain-strip > div {
+  flex: 1;
+  display: grid;
+  gap: 5px;
+  background: #f0f5fa;
+  border: 1px solid #c8d6e4;
+  padding: 12px;
+  border-radius: 6px;
+  color: #173c5e;
+  font-size: 13px;
+}
