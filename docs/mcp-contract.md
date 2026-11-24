@@ -31,10 +31,9 @@ input_mapping `{id}` 对应 GET /api/tasks/:taskId/inputs/:id/mapping；只接�
 
 - `audit_plan_scales` → POST `/audit/plan-scales`，body `{sourceRunId,scales?,options?}`。按需求规模独立生成AGREE计划集合，参考点排除，规划不是评估。采用其中一项时，`audit_evaluate`同时提供集合`planRunId`及对应`planCards`。MCP0.3.1、Skill0.3.3支持。
 
-0.4.0扩展：options.planning支持工程责任方法、复杂度/可改进性/有来源成本、相对工作量、参数bounds及责任budgetBounds、有限组合上限和可配置conservative压力情景。结果decisionStudy保留设置、证据、备选和固定配置跨规模试算；未知参数路径/冲突约束在规划前拒绝。audit_evaluate新增planAlternativeId，服务校验属于本任务、原第一轮及所选规划规模，并保存planningAlternativeId；同时提交该备选完整configuration。无计划或未知备选不能建立关联。
+  0.4.0扩展：options.planning支持工程责任方法、复杂度/可改进性/有来源成本、相对工作量、参数bounds及责任budgetBounds、有限组合上限和可配置conservative压力情景。结果decisionStudy保留设置、证据、备选和固定配置跨规模试算；未知参数路径/冲突约束在规划前拒绝。audit_evaluate新增planAlternativeId，服务校验属于本任务、原第一轮及所选规划规模，并保存planningAlternativeId；同时提交该备选完整configuration。无计划或未知备选不能建立关联。
 
-0.5.0扩展：architecture新增可选view、propagations；nodes新增hardwareLevel、inventory={totals,unitsPerParent?,source}和rateModel={referenceCards,referenceCount,source}；dependencies新增kind=dependency/connection/shared-domain。保留version='1'兼容旧输入。新默认值使用可编辑硬件模板，历史结果不自动迁移。传播记录必须从唯一归属叶节点开始，仅记录证据；数量外推必须显式启用、具备全部所用规模数量。原events是参考目录，实际各规模事件FIT见rows[].scaleEvents及architectureDiagnosis.scales[].scaleEvents。诊断增加quantity、dataStatus、missingObjects、types[].lossHours、折算业务目标/现状、机制作用和传播记录。完整用法及边界见[硬件分层与故障传播](2026-10-20-硬件分层与故障传播.md)。
-
+  0.5.0扩展：architecture新增可选view、propagations；nodes新增hardwareLevel、inventory={totals,unitsPerParent?,source}和rateModel={referenceCards,referenceCount,source}；dependencies新增kind=dependency/connection/shared-domain。保留version='1'兼容旧输入。新默认值使用可编辑硬件模板，历史结果不自动迁移。传播记录必须从唯一归属叶节点开始，仅记录证据；数量外推必须显式启用、具备全部所用规模数量。原events是参考目录，实际各规模事件FIT见rows[].scaleEvents及architectureDiagnosis.scales[].scaleEvents。诊断增加quantity、dataStatus、missingObjects、types[].lossHours、折算业务目标/现状、机制作用和传播记录。完整用法及边界见[硬件分层与故障传播](2026-10-20-硬件分层与故障传播.md)。
 
 ### 架构全景关联
 
@@ -45,7 +44,7 @@ input_mapping `{id}` 对应 GET /api/tasks/:taskId/inputs/:id/mapping；只接�
 四步工作台的四个步骤共用一份任务内模型（文档类型 `core-model`），工具与界面读写同一份数据。
 
 - `core_model_get` → GET `/core`，返回 `{model,revision,savedAt,hash,verification,verificationCount}`；未保存过时返回默认场景，`revision` 为 0。
-- `core_analysis` → GET `/core/analysis`，返回 `{hash,baseline,design,allocation,baselineGaps,designGaps,contributions,recommendation}`。`baseline` 是未加措施的现状，`design` 是启用措施后的结果。
+- `core_analysis` → GET `/core/analysis`，返回 `{hash,baseline,design,allocation,baselineGaps,designGaps,contributions,recommendation,consequences}`。`baseline` 是未加措施的现状，`design` 是启用措施后的结果；各模块带 `eventsPerWeek`、`lossHoursPerWeek` 和逐环节的 `stages`；`allocation.modules[].pinned` 表示该模块的目标是单独指定的；`consequences` 列出单次故障就占窗口预算 1/3 以上的模块及建议目标。
 - `core_model_save` → POST `/core`，body `{model}`。整份替换并使 `revision` 加 1；结构不合法返回 SCHEMA_INVALID，原模型不变。界面使用等价的 PUT。
 - `core_verify` → POST `/core/verify`，body `{trials?,seed?}`（100–20000 个窗口，种子为 32 位无符号整数，省略时随机）。同步返回验证记录并追加保存为 `core-verification-<序号>`；记录带 `modelHash`，与当前模型的 `hash` 不一致即表示参数已变、结果过期。
 

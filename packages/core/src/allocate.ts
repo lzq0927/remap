@@ -1,5 +1,12 @@
 import type { AllocationMethod, CoreModel } from "./model";
-import { applyMeasures, assess, type Assessment } from "./assess";
+import {
+  applyMeasures,
+  assess,
+  eventPaths,
+  unitCount,
+  type Assessment,
+  type ResolvedParameters,
+} from "./assess";
 
 export interface MethodInfo {
   id: AllocationMethod;
@@ -85,6 +92,12 @@ export interface ModuleAllocation {
   minMtbfHours: number | null;
   /** 保持现状故障率时允许的最大等效 MTTR，小时（降低 MTTR 方向）。 */
   maxMttrHours: number | null;
+  /** 保持现状单次损失时允许的故障频次，次 / 周。 */
+  maxEventsPerWeek: number | null;
+  /** 每周的损失预算，小时。 */
+  lossHoursPerWeek: number;
+  /** 目标是直接指定的，不参与按权重分配。 */
+  pinned: boolean;
 }
 export interface AllocationResult {
   method: AllocationMethod;
@@ -99,6 +112,9 @@ export interface AllocationResult {
   overheadLossHours: number;
   /** 最小改进量方法的统一水位 ρ₀。 */
   waterline: number | null;
+  /** 直接指定目标的模块合计占用的损失负荷，以及留给其余模块分配的部分。 */
+  pinnedLoad: number;
+  freeLoad: number;
   modules: ModuleAllocation[];
   groups: Array<{
     id: string;
@@ -130,7 +146,10 @@ function minEffort(loads: number[], budget: number) {
   return { waterline: null, loads };
 }
 
-/** 把系统可用度目标分配到各模块。分配只依据未加措施的现状。 */
+/**
+ * 把系统可用度目标分配到各模块。分配只依据未加措施的现状。
+ * 直接指定了目标的模块先从总预算里扣除，剩下的再按所选方法分给其余模块。
+ */
 export function allocate(
   model: CoreModel,
   method: AllocationMethod = model.allocation.method,
@@ -138,9 +157,16 @@ export function allocate(
 ): AllocationResult {
   const { hours, target, overhead, cards } = model.scenario,
     load = Math.max(0, (1 - overhead) / target - 1),
-    feasible = (1 - overhead) / target - 1 > 0,
-    uptime = hours / (1 + load);
+    uptime = hours / (1 + load),
+    week = 168 / hours;
   const current = new Map(baseline.modules.map((m) => [m.id, m]));
+  const pinnedLoads = model.modules.map((module) =>
+      module.fixedTarget === null ? null : 1 / module.fixedTarget - 1,
+    ),
+    pinnedLoad = pinnedLoads.reduce<number>((sum, v) => sum + (v ?? 0), 0),
+    freeLoad = Math.max(0, load - pinnedLoad),
+    feasible = (1 - overhead) / target - 1 > 0 && pinnedLoad <= load,
+    free = model.modules.map((_, i) => pinnedLoads[i] === null);
   const complexity = model.modules.map(
     (module) =>
       module.complexity ??
@@ -157,15 +183,25 @@ export function allocate(
   else if (method === "custom")
     raw = model.modules.map((m) => model.allocation.customWeights[m.id] ?? 0);
   else if (method === "min-effort") {
-    const solved = minEffort(currentLoads, load);
-    raw = solved.loads;
+    const index = model.modules.map((_, i) => i).filter((i) => free[i]),
+      solved = minEffort(
+        index.map((i) => currentLoads[i]),
+        freeLoad,
+      );
+    raw = model.modules.map(() => 0);
+    index.forEach((i, at) => (raw[i] = solved.loads[at]));
     waterline = solved.waterline;
   } else raw = model.modules.map(() => 1);
-  const sum = raw.reduce((total, v) => total + v, 0);
+  const sum = raw.reduce((total, v, i) => total + (free[i] ? v : 0), 0),
+    freeCount = free.filter(Boolean).length;
   // 权重全为 0 时无法体现差异，退回等分配，避免预算凭空消失。
-  const weights = raw.map((v) => (sum > 0 ? v / sum : 1 / raw.length));
+  const shares = raw.map((v, i) =>
+    !free[i]
+      ? pinnedLoads[i]!
+      : (sum > 0 ? v / sum : 1 / Math.max(1, freeCount)) * freeLoad,
+  );
   const modules: ModuleAllocation[] = model.modules.map((module, i) => {
-    const share = weights[i] * load,
+    const share = shares[i],
       now = current.get(module.id);
     const hasRate = !!now && now.rate > 0,
       hasLoss = !!now && now.mttrHours > 0;
@@ -175,13 +211,18 @@ export function allocate(
       name: module.name,
       complexity: complexity[i],
       importance: module.importance,
-      weight: weights[i],
+      weight: load > 0 ? share / load : 0,
       load: share,
       availability: 1 / (1 + share),
       lossHours: share * uptime,
       maxFitPerCard: hasLoss ? ((share / now.mttrHours) * 1e9) / cards : null,
       minMtbfHours: hasLoss && share > 0 ? now.mttrHours / share : null,
       maxMttrHours: hasRate ? share / now.rate : null,
+      maxEventsPerWeek: hasLoss
+        ? (share / now.mttrHours) * uptime * week
+        : null,
+      lossHoursPerWeek: share * uptime * week,
+      pinned: !free[i],
     };
   });
   return {
@@ -193,6 +234,8 @@ export function allocate(
     failureLossHours: load * uptime,
     overheadLossHours: feasible ? overhead * uptime : hours * (1 - target),
     waterline,
+    pinnedLoad,
+    freeLoad,
     modules,
     groups: model.groups.map((group) => {
       const parts = modules.filter((m) => m.groupId === group.id),
@@ -207,6 +250,111 @@ export function allocate(
       };
     }),
   };
+}
+
+/** 规模–目标对照中的一个点。 */
+export interface TargetPoint {
+  cards: number;
+  target: number;
+}
+/**
+ * 规模与目标的关系。串联系统的故障次数与规模成正比，所以损失负荷 r = 1/A − 1 也与规模成正比：
+ * A(N) = 1 / (1 + k·N)，k 是“每张卡带来的损失负荷”，代表一个可靠性水平。
+ * 给定若干（规模，目标）点，先换算成各点的 k，再对规模的对数线性插值；范围之外沿用端点的 k。
+ */
+export function targetFromCurve(curve: TargetPoint[], cards: number) {
+  const points = [...curve]
+    .filter((p) => p.cards > 0 && p.target > 0 && p.target < 1)
+    .sort((a, b) => a.cards - b.cards);
+  if (!points.length) return null;
+  const perCard = (p: TargetPoint) => (1 / p.target - 1) / p.cards;
+  let k: number;
+  if (cards <= points[0].cards) k = perCard(points[0]);
+  else if (cards >= points[points.length - 1].cards)
+    k = perCard(points[points.length - 1]);
+  else {
+    const hi = points.findIndex((p) => p.cards >= cards),
+      a = points[hi - 1],
+      b = points[hi],
+      t = Math.log(cards / a.cards) / Math.log(b.cards / a.cards);
+    k = perCard(a) + t * (perCard(b) - perCard(a));
+  }
+  return 1 / (1 + k * cards);
+}
+/** 每万卡的损失负荷（‰）：把不同规模的目标换算到同一把尺子上。 */
+export const loadPerTenThousand = (point: TargetPoint) =>
+  ((1 / point.target - 1) / point.cards) * 10000;
+
+/** 单次事件损失达到窗口总预算的这个比例，就算高后果事件。 */
+export const consequenceThreshold = 1 / 3;
+export interface ModuleConsequence {
+  id: string;
+  name: string;
+  /** 该模块最严重的一类事件单次损失多少小时。 */
+  worstLossHours: number;
+  /** 最严重事件的单次损失占窗口总损失预算的比例。 */
+  budgetShare: number;
+  /** 每个窗口内高后果事件的期望次数。 */
+  eventsPerWindow: number;
+  /** 一个窗口内至少发生一次高后果事件的概率。 */
+  windowRisk: number;
+  /** 高后果事件平均多少年一次。 */
+  yearsBetween: number;
+  /** 按窗口风险预算推出的建议目标可用度。 */
+  suggestedTarget: number;
+}
+/**
+ * 找出“单次故障后果很大”的模块。
+ * 多数故障每周发生很多次、每次损失很小，窗口损失接近其平均值，按平均损失分配预算即可。
+ * 少数事件一次就吃掉窗口预算的一大块：平均损失很小，但只要发生，这个窗口就不达标。
+ * 这类模块要约束的是“窗口内发生的概率”，所以应单独定目标。
+ * 建议值：允许不达标的窗口比例（1 − 达标比例要求）拿出一半，平均分给这些模块。
+ */
+export function consequences(
+  model: CoreModel,
+  parameters: ResolvedParameters = applyMeasures(model, new Set()),
+): ModuleConsequence[] {
+  const { hours, target, cards, passRatio } = model.scenario,
+    budget = hours * (1 - target),
+    limit = consequenceThreshold * budget,
+    modules = new Map(model.modules.map((m) => [m.id, m]));
+  const rows = model.modules
+    .map((module) => {
+      let worst = 0,
+        heavyRate = 0,
+        heavyLoad = 0;
+      for (const mode of parameters.modes) {
+        if (mode.moduleId !== module.id) continue;
+        const rate =
+          (mode.fit * unitCount(modules.get(module.id), cards)) / 1e9;
+        for (const path of eventPaths(mode)) {
+          if (path.probability <= 0 || rate <= 0) continue;
+          if (path.lossHours < limit) continue;
+          worst = Math.max(worst, path.lossHours);
+          heavyRate += rate * path.probability;
+          heavyLoad += rate * path.probability * path.lossHours;
+        }
+      }
+      return { module, worst, heavyRate, heavyLoad };
+    })
+    .filter((row) => row.heavyRate > 0);
+  const riskEach =
+    rows.length > 0 ? Math.max(0, (1 - passRatio) / 2) / rows.length : 0;
+  return rows.map(({ module, worst, heavyRate, heavyLoad }) => {
+    const eventsPerWindow = heavyRate * hours,
+      allowedRate = -Math.log(1 - Math.min(0.999999, riskEach)) / hours,
+      meanLoss = heavyLoad / heavyRate;
+    return {
+      id: module.id,
+      name: module.name,
+      worstLossHours: worst,
+      budgetShare: budget > 0 ? worst / budget : Infinity,
+      eventsPerWindow,
+      windowRisk: 1 - Math.exp(-eventsPerWindow),
+      yearsBetween: 1 / (heavyRate * 8760),
+      suggestedTarget: 1 / (1 + allowedRate * meanLoss),
+    };
+  });
 }
 
 export type GapStatus = "met" | "near" | "over";

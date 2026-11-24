@@ -1,6 +1,6 @@
 import type { CoreModel } from "./model";
 import { applyMeasures, assess } from "./assess";
-import { allocate, gaps } from "./allocate";
+import { allocate, consequences, gaps } from "./allocate";
 import { contributions, recommend } from "./design";
 import { modelHash } from "./verify";
 
@@ -13,7 +13,8 @@ export * from "./verify";
 
 /** 一次算出四步工作台需要的全部解析结果。 */
 export function analyze(model: CoreModel) {
-  const baseline = assess(model, applyMeasures(model, new Set())),
+  const baselineParameters = applyMeasures(model, new Set()),
+    baseline = assess(model, baselineParameters),
     design = assess(model, applyMeasures(model)),
     allocation = allocate(model, model.allocation.method, baseline);
   return {
@@ -25,6 +26,8 @@ export function analyze(model: CoreModel) {
     designGaps: gaps(design, allocation),
     contributions: contributions(model),
     recommendation: recommend(model),
+    /** 单次故障后果很大的模块（按现状计）。 */
+    consequences: consequences(model, baselineParameters),
   };
 }
 export type Analysis = ReturnType<typeof analyze>;

@@ -1,4 +1,16 @@
-import type { CoreModel, FaultMode, MeasureParam } from "./model";
+import {
+  higherIsBetter,
+  isRatioParam,
+  measureParams,
+  readParam,
+  recoveryLevels,
+  type CoreModel,
+  type CoreModule,
+  type FaultMode,
+  type LevelField,
+  type MeasureParam,
+  type RecoveryLevel,
+} from "./model";
 
 /** 措施生效后的参数集：故障模式与公共开销。 */
 export interface ResolvedParameters {
@@ -6,12 +18,8 @@ export interface ResolvedParameters {
   overhead: number;
 }
 
-const higherIsBetter = (param: MeasureParam) => param === "coverage";
-
 const bounded = (param: MeasureParam, value: number) =>
-  param === "coverage" || param === "impact" || param === "overhead"
-    ? Math.min(1, Math.max(0, value))
-    : Math.max(0, value);
+  isRatioParam(param) ? Math.min(1, Math.max(0, value)) : Math.max(0, value);
 
 type Change = {
   id: string;
@@ -19,15 +27,29 @@ type Change = {
   value: number;
   share: number;
 };
-const modeParams = [
-  "fit",
-  "coverage",
-  "detectHours",
-  "recoverHours",
-  "reworkHours",
-  "missedLossHours",
-  "impact",
-] as const;
+/** 属于故障模式的可变参数（公共开销单独处理）。 */
+const modeParams = measureParams.filter(
+  (param): param is Exclude<MeasureParam, "overhead"> => param !== "overhead",
+);
+const writeParam = (mode: FaultMode, param: MeasureParam, value: number) => {
+  const [level, field] = param.split(".") as [RecoveryLevel, LevelField];
+  if (field) mode.ladder[level][field] = value;
+  else mode[param as "fit"] = value;
+};
+const cloneMode = (mode: FaultMode): FaultMode => ({
+  ...mode,
+  ladder: Object.fromEntries(
+    recoveryLevels.map((level) => [level, { ...mode.ladder[level] }]),
+  ) as FaultMode["ladder"],
+});
+
+/** 模块的部件总数：按卡计的随规模增长，固定数量的不随规模变化。 */
+export const unitCount = (module: CoreModule | undefined, cards: number) =>
+  !module
+    ? cards
+    : module.scaling === "fixed"
+      ? module.unitsPerCard
+      : module.unitsPerCard * cards;
 
 /** 预先整理“哪些措施改哪个故障模式的哪个参数”，供反复求值时使用。 */
 function indexChanges(model: CoreModel) {
@@ -44,7 +66,9 @@ function indexChanges(model: CoreModel) {
       };
       if (effect.param === "overhead") overhead.push(change);
       else {
-        const column = modeParams.indexOf(effect.param);
+        const column = modeParams.indexOf(
+          effect.param as (typeof modeParams)[number],
+        );
         for (const modeId of measure.modeIds) {
           const row = position.get(modeId);
           if (row !== undefined) perMode[row][column].push(change);
@@ -116,14 +140,19 @@ export function applyMeasures(
       model.scenario.overhead,
     ),
     modes: model.modes.map((mode, row) => {
-      const next = { ...mode };
+      const next = cloneMode(mode);
       modeParams.forEach((param, column) => {
-        next[param] = resolveParam(
-          perMode[row][column],
-          enabled,
-          param,
-          mode[param],
-        );
+        if (perMode[row][column].length)
+          writeParam(
+            next,
+            param,
+            resolveParam(
+              perMode[row][column],
+              enabled,
+              param,
+              readParam(mode, param),
+            ),
+          );
       });
       return next;
     }),
@@ -136,29 +165,35 @@ export function applyMeasures(
  */
 export function createEvaluator(model: CoreModel) {
   const { perMode, overhead } = indexChanges(model),
-    units = new Map(model.modules.map((m) => [m.id, m.unitsPerCard])),
+    modules = new Map(model.modules.map((m) => [m.id, m])),
     scale = model.modes.map(
-      (mode) => ((units.get(mode.moduleId) ?? 1) * model.scenario.cards) / 1e9,
-    );
+      (mode) =>
+        unitCount(modules.get(mode.moduleId), model.scenario.cards) / 1e9,
+    ),
+    // 只有被措施改动的参数才需要重算，其余直接用基线值。
+    touched = perMode.map((lists) =>
+      modeParams
+        .map((param, column) => ({ param, list: lists[column] }))
+        .filter((entry) => entry.list.length > 0),
+    ),
+    baseLoss = model.modes.map((mode) => lossPerEvent(mode)),
+    scratch = model.modes.map(cloneMode);
   return (enabled: ReadonlySet<string>) => {
     let load = 0;
     for (let row = 0; row < model.modes.length; row++) {
-      const mode = model.modes[row],
-        lists = perMode[row],
-        value = (column: number) =>
-          resolveParam(
-            lists[column],
-            enabled,
-            modeParams[column],
-            mode[modeParams[column]],
-          );
-      const coverage = value(1);
-      load +=
-        value(0) *
-        scale[row] *
-        value(6) *
-        (coverage * (value(2) + value(3) + value(4)) +
-          (1 - coverage) * value(5));
+      const mode = model.modes[row];
+      if (!touched[row].length) {
+        load += mode.fit * scale[row] * baseLoss[row];
+        continue;
+      }
+      const resolved = scratch[row];
+      for (const { param, list } of touched[row])
+        writeParam(
+          resolved,
+          param,
+          resolveParam(list, enabled, param, readParam(mode, param)),
+        );
+      load += resolved.fit * scale[row] * lossPerEvent(resolved);
     }
     return (
       (1 -
@@ -168,12 +203,143 @@ export function createEvaluator(model: CoreModel) {
   };
 }
 
-/** 单次事件的等效损失时间：检出与漏检两个分支按检出率加权。 */
-export function lossPerEvent(mode: FaultMode) {
-  const detected = mode.detectHours + mode.recoverHours + mode.reworkHours;
+type ChainParameters = Pick<
+  FaultMode,
+  | "coverage"
+  | "detectHours"
+  | "lateDetectHours"
+  | "reworkHours"
+  | "impact"
+  | "ladder"
+>;
+/** 恢复阶梯中一个级别在一次事件里的期望表现。 */
+export interface LevelOutcome {
+  level: RecoveryLevel;
+  /** 事件走到这一级的概率。 */
+  reach: number;
+  /** 这一级的成功率（最后一级视为必定成功）。 */
+  success: number;
+  /** 在这一级结束的概率 = 到达概率 × 成功率。 */
+  resolved: number;
+  /** 这一级贡献的期望损失（小时，不含回滚重算）。 */
+  lossHours: number;
+  /** 在这一级成功后回滚重算贡献的期望损失（小时）。 */
+  reworkHours: number;
+}
+/**
+ * 沿恢复阶梯逐级计算：到达概率 × [成功率 × 成功耗时 + (1 − 成功率) × 失败耗时]，
+ * 耗时乘以该级的影响范围；需要回滚的级别成功后再加一次回滚重算。
+ * 成功率为 0 的级别不使用；最后一个使用的级别视为必定成功。
+ */
+export function ladderOutcomes(mode: ChainParameters): LevelOutcome[] {
+  const used = recoveryLevels.filter((level) => mode.ladder[level].success > 0),
+    result: LevelOutcome[] = [];
+  let reach = 1;
+  used.forEach((level, index) => {
+    const step = mode.ladder[level],
+      success = index === used.length - 1 ? 1 : step.success;
+    result.push({
+      level,
+      reach,
+      success,
+      resolved: reach * success,
+      lossHours:
+        reach *
+        step.impact *
+        (success * step.hours + (1 - success) * step.failHours),
+      reworkHours: step.rollback ? reach * success * mode.reworkHours : 0,
+    });
+    reach *= 1 - success;
+  });
+  return result;
+}
+/** 恢复链各段对单次等效损失的期望贡献（小时，已乘影响系数）。 */
+export interface StageLoss {
+  /** 检出时的检测等待：c · t检测。 */
+  detect: number;
+  /** 漏检时的发现等待：(1 − c) · t发现。 */
+  late: number;
+  /** 各恢复级别的期望耗时。 */
+  levels: Record<RecoveryLevel, number>;
+  /** 回滚重算。 */
+  rework: number;
+}
+export function stageLoss(mode: ChainParameters): StageLoss {
+  const k = mode.impact,
+    outcomes = ladderOutcomes(mode),
+    levels = Object.fromEntries(
+      recoveryLevels.map((level) => [level, 0]),
+    ) as Record<RecoveryLevel, number>;
+  for (const outcome of outcomes) levels[outcome.level] = k * outcome.lossHours;
+  return {
+    detect: k * mode.coverage * mode.detectHours,
+    late: k * (1 - mode.coverage) * mode.lateDetectHours,
+    levels,
+    rework: k * outcomes.reduce((sum, o) => sum + o.reworkHours, 0),
+  };
+}
+/** 单次事件的等效损失时间（等效 MTTR）：检测与恢复阶梯各段期望之和。 */
+export function lossPerEvent(mode: ChainParameters) {
+  let reach = 1,
+    recovery = 0,
+    last = -1;
+  for (let i = recoveryLevels.length - 1; i >= 0; i--)
+    if (mode.ladder[recoveryLevels[i]].success > 0) {
+      last = i;
+      break;
+    }
+  for (let i = 0; i <= last; i++) {
+    const step = mode.ladder[recoveryLevels[i]];
+    if (step.success <= 0) continue;
+    const success = i === last ? 1 : step.success;
+    recovery +=
+      reach *
+      (step.impact * (success * step.hours + (1 - success) * step.failHours) +
+        (step.rollback ? success * mode.reworkHours : 0));
+    reach *= 1 - success;
+  }
   return (
     mode.impact *
-    (mode.coverage * detected + (1 - mode.coverage) * mode.missedLossHours)
+    (mode.coverage * mode.detectHours +
+      (1 - mode.coverage) * mode.lateDetectHours +
+      recovery)
+  );
+}
+/** 一次事件可能走的路径：是否检出 × 在哪一级恢复成功。 */
+export function eventPaths(mode: ChainParameters) {
+  const used = recoveryLevels.filter((level) => mode.ladder[level].success > 0),
+    ends: {
+      level: RecoveryLevel | null;
+      probability: number;
+      hours: number;
+    }[] = [];
+  let reach = 1,
+    spent = 0;
+  used.forEach((level, index) => {
+    const step = mode.ladder[level],
+      success = index === used.length - 1 ? 1 : step.success;
+    ends.push({
+      level,
+      probability: reach * success,
+      hours:
+        spent +
+        step.impact * step.hours +
+        (step.rollback ? mode.reworkHours : 0),
+    });
+    spent += step.impact * step.failHours;
+    reach *= 1 - success;
+  });
+  if (!ends.length) ends.push({ level: null, probability: 1, hours: 0 });
+  return [
+    { detected: true, share: mode.coverage, wait: mode.detectHours },
+    { detected: false, share: 1 - mode.coverage, wait: mode.lateDetectHours },
+  ].flatMap((branch) =>
+    ends.map((end) => ({
+      detected: branch.detected,
+      level: end.level,
+      probability: branch.share * end.probability,
+      lossHours: mode.impact * (branch.wait + end.hours),
+    })),
   );
 }
 
@@ -184,6 +350,8 @@ export interface ModeResult {
   kind: FaultMode["kind"];
   /** 单个部件 FIT。 */
   fit: number;
+  /** 恢复链各段的期望损失。 */
+  stages: StageLoss;
   /** 折算到每张卡的 FIT（单件 FIT × 每卡数量）。 */
   fitPerCard: number;
   /** 全系统事件率，次 / 运行小时。 */
@@ -196,11 +364,14 @@ export interface ModeResult {
   /** 窗口内期望事件数。 */
   events: number;
   lossHours: number;
+  /** 折算到每周（168 小时）的故障次数与损失小时。 */
+  eventsPerWeek: number;
+  lossHoursPerWeek: number;
   /** 占故障损失的比例。 */
   share: number;
 }
 export interface ModuleResult
-  extends Omit<ModeResult, "moduleId" | "kind" | "fit"> {
+  extends Omit<ModeResult, "moduleId" | "kind" | "fit" | "stages"> {
   groupId: string;
   /** 只有该模块失效时的系统可用度 1/(1+ρ)。 */
   availability: number;
@@ -219,6 +390,9 @@ export interface Assessment {
     mtbfHours: number;
     mttrHours: number;
     events: number;
+    eventsPerWeek: number;
+    lossHoursPerWeek: number;
+    failureLossHoursPerWeek: number;
   };
   modules: ModuleResult[];
   groups: Array<
@@ -231,6 +405,8 @@ export interface Assessment {
       | "load"
       | "events"
       | "lossHours"
+      | "eventsPerWeek"
+      | "lossHoursPerWeek"
       | "availability"
       | "share"
     >
@@ -248,10 +424,13 @@ export function assess(
 ): Assessment {
   const { cards, hours } = model.scenario,
     overhead = parameters.overhead;
-  const units = new Map(model.modules.map((m) => [m.id, m.unitsPerCard]));
+  const modulesById = new Map(model.modules.map((m) => [m.id, m])),
+    week = 168 / hours;
   const raw = parameters.modes.map((mode) => {
-    const fitPerCard = mode.fit * (units.get(mode.moduleId) ?? 1),
-      rate = (fitPerCard * cards) / 1e9,
+    const rate =
+        (mode.fit * unitCount(modulesById.get(mode.moduleId), cards)) / 1e9,
+      // 固定数量的部件也折算成“每卡等效 FIT”，便于和其它模块放在一起比较。
+      fitPerCard = (rate * 1e9) / cards,
       mttrHours = lossPerEvent(mode);
     return { mode, fitPerCard, rate, mttrHours, load: rate * mttrHours };
   });
@@ -271,7 +450,10 @@ export function assess(
     load: r.load,
     events: r.rate * uptime,
     lossHours: r.load * uptime,
+    eventsPerWeek: r.rate * uptime * week,
+    lossHoursPerWeek: r.load * uptime * week,
     share: load > 0 ? r.load / load : 0,
+    stages: stageLoss(r.mode),
   }));
   const combine = (parts: ModeResult[]) => {
     const partRate = parts.reduce((sum, p) => sum + p.rate, 0),
@@ -284,6 +466,8 @@ export function assess(
       load: partLoad,
       events: partRate * uptime,
       lossHours: partLoad * uptime,
+      eventsPerWeek: partRate * uptime * week,
+      lossHoursPerWeek: partLoad * uptime * week,
       availability: 1 / (1 + partLoad),
       share: load > 0 ? partLoad / load : 0,
     };
@@ -323,6 +507,9 @@ export function assess(
       mtbfHours: rate > 0 ? 1 / rate : Infinity,
       mttrHours: rate > 0 ? load / rate : 0,
       events: rate * uptime,
+      eventsPerWeek: rate * uptime * week,
+      lossHoursPerWeek: hours * (1 - availability) * week,
+      failureLossHoursPerWeek: load * uptime * week,
     },
     modules,
     groups,

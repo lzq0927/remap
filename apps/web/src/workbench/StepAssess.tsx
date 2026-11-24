@@ -12,8 +12,10 @@ import {
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
 import ArchitectureDiagram from "./ArchitectureDiagram";
+import { RiskMap } from "./Charts";
+import RecoveryChain, { ComputationTrace, LadderEditor } from "./RecoveryChain";
 import { blankMode, blankModule, dropModes, dropModule } from "./helpers";
-import { count, duration, fit, hours, percent, times } from "./format";
+import { duration, fit, frequency, hours, percent, times } from "./format";
 import {
   Disclosure,
   Drawer,
@@ -32,36 +34,79 @@ export const usageText = (gap: ModuleGap) =>
   gap.usage <= 1
     ? "占用预算 " + percent(gap.usage, 0)
     : "超预算 " + times(gap.usage);
+
+/** 排名条：同一色的横条，按数值从大到小。 */
+function RankBars({
+  title,
+  hint,
+  rows,
+}: {
+  title: string;
+  hint: string;
+  rows: {
+    id: string;
+    name: string;
+    value: number;
+    text: string;
+    share: number;
+  }[];
+}) {
+  const max = Math.max(...rows.map((r) => r.value), 1e-12);
+  return (
+    <section className="rw-card" aria-label={title}>
+      <h2>{title}</h2>
+      <ul className="rw-rank">
+        {rows.map((row) => (
+          <li key={row.id}>
+            <span>{row.name}</span>
+            <span className="rw-rank-track">
+              <span
+                style={{ width: Math.max(1, (row.value / max) * 100) + "%" }}
+              />
+            </span>
+            <em>
+              {row.text}
+              <small>{percent(row.share, 0)}</small>
+            </em>
+          </li>
+        ))}
+      </ul>
+      <p className="rw-hint">{hint}</p>
+    </section>
+  );
+}
+
 export default function StepAssess() {
   const { model, analysis, update } = useWorkbench(),
-    { baseline, allocation, baselineGaps } = analysis,
+    { baseline, design, allocation, baselineGaps, consequences } = analysis,
     [selected, setSelected] = useState<string>(),
     tooltip = useTooltip();
   const system = baseline.system,
     ranked = [...baseline.modules].sort((a, b) => b.lossHours - a.lossHours),
+    byFit = [...baseline.modules].sort((a, b) => b.fitPerCard - a.fitPerCard),
     scaleMax = Math.max(
-      ...baseline.modules.map((m) => m.lossHours),
-      ...allocation.modules.map((m) => m.lossHours),
+      ...baseline.modules.map((m) => m.lossHoursPerWeek),
+      ...allocation.modules.map((m) => m.lossHoursPerWeek),
       1e-9,
     ),
     gapOf = (id: string) => baselineGaps.find((g) => g.id === id)!,
     budgetOf = (id: string) => allocation.modules.find((m) => m.id === id)!;
   const selectedModule = model.modules.find((m) => m.id === selected),
     selectedResult = baseline.modules.find((m) => m.id === selected);
+  const labelled = new Set([
+    ...ranked.slice(0, 4).map((m) => m.id),
+    ...byFit.slice(0, 3).map((m) => m.id),
+    ...consequences.map((c) => c.id),
+  ]);
 
   return (
     <div className="rw-stack">
       <section className="rw-stats" aria-label="系统现状">
         {[
           [
-            "每卡故障率",
-            fit(system.fitPerCard) + " FIT",
-            "各故障模式折算到每张卡后相加",
-          ],
-          [
-            "系统 MTBF",
-            duration(system.mtbfHours),
-            "全系统平均多久发生一次故障",
+            "每周故障次数",
+            frequency(system.eventsPerWeek),
+            `系统 MTBF ${duration(system.mtbfHours)}`,
           ],
           [
             "单次等效损失",
@@ -69,14 +114,19 @@ export default function StepAssess() {
             "平均每次故障损失的时间（等效 MTTR）",
           ],
           [
-            "窗口内故障",
-            count(system.events, 1) + " 次",
-            `每 ${model.scenario.hours} 小时的期望次数`,
+            "每周损失",
+            hours(system.lossHoursPerWeek),
+            `允许 ${hours(allocation.lossHours * (168 / model.scenario.hours))}`,
           ],
           [
-            "窗口内损失",
-            hours(system.lossHours),
-            `允许 ${hours(allocation.lossHours)}`,
+            "每卡故障率",
+            fit(system.fitPerCard) + " FIT",
+            "各故障模式折算到每张卡后相加",
+          ],
+          [
+            "现状可用度",
+            percent(system.availability),
+            `目标 ${percent(model.scenario.target)}`,
           ],
         ].map(([label, value, hint]) => (
           <div key={label} className="rw-stat">
@@ -90,7 +140,7 @@ export default function StepAssess() {
       <ArchitectureDiagram
         views={["baseline", "design"]}
         title="系统架构图"
-        hint="按超节点的硬件拓扑绘制，每个模块的可用度与目标、每卡 FIT、损失时间与预算标在对应硬件上。点击硬件可查看并修改它的故障模式和恢复参数。"
+        hint="按超节点的硬件拓扑绘制，每个模块的可用度与目标、每卡 FIT、损失时间与预算标在对应硬件上。点击硬件可查看并修改它的故障模式和恢复阶梯。"
         onSelect={setSelected}
         actions={
           <button
@@ -107,24 +157,61 @@ export default function StepAssess() {
         }
       />
 
+      <div className="rw-grid is-half">
+        <RankBars
+          title="失效率排名：谁坏得最多"
+          hint="每卡 FIT 及其占全部故障率的比例。排在前面的是降低故障频次（组件级高可用）的重点对象。"
+          rows={byFit.slice(0, 6).map((m) => ({
+            id: m.id,
+            name: m.name,
+            value: m.fitPerCard,
+            text: fit(m.fitPerCard) + " FIT",
+            share: system.fitPerCard > 0 ? m.fitPerCard / system.fitPerCard : 0,
+          }))}
+        />
+        <RankBars
+          title="损失排名：时间丢在哪里"
+          hint="每周损失小时及其占全部故障损失的比例。失效率不高却排在前面的模块，问题出在单次损失上。"
+          rows={ranked.slice(0, 6).map((m) => ({
+            id: m.id,
+            name: m.name,
+            value: m.lossHoursPerWeek,
+            text: hours(m.lossHoursPerWeek),
+            share: m.share,
+          }))}
+        />
+      </div>
+
       <section className="rw-card" aria-label="差距明细">
         <div className="rw-card-head">
-          <h2>差距明细</h2>
-          <span className="rw-muted">按损失时间从大到小排列</span>
+          <h2>各模块的目标与差距</h2>
+          <span className="rw-muted">按每周损失从大到小排列</span>
         </div>
         <div className="rw-table-wrap">
           <table className="rw-table">
             <thead>
               <tr>
-                <th>模块</th>
-                <th className="is-num">FIT / 卡</th>
-                <th className="is-num">MTBF</th>
-                <th className="is-num">单次等效损失</th>
-                <th className="is-num">可用度</th>
+                <th rowSpan={2}>模块</th>
+                <th colSpan={2} className="is-group">
+                  可用度
+                </th>
+                <th colSpan={2} className="is-group">
+                  故障频次（MTBF 角度）
+                </th>
+                <th colSpan={2} className="is-group">
+                  单次等效损失（MTTR 角度）
+                </th>
+                <th rowSpan={2}>每周损失与预算</th>
+                <th rowSpan={2}>差距</th>
+                <th rowSpan={2}>优先方向</th>
+              </tr>
+              <tr>
+                <th className="is-num">现状</th>
                 <th className="is-num">目标</th>
-                <th>损失时间与预算</th>
-                <th>差距</th>
-                <th>优先方向</th>
+                <th className="is-num">现状</th>
+                <th className="is-num">允许</th>
+                <th className="is-num">现状</th>
+                <th className="is-num">允许</th>
               </tr>
             </thead>
             <tbody>
@@ -142,23 +229,36 @@ export default function StepAssess() {
                         {module.name}
                       </button>
                     </td>
-                    <td className="is-num">{fit(module.fitPerCard)}</td>
-                    <td className="is-num">{duration(module.mtbfHours)}</td>
-                    <td className="is-num">{duration(module.mttrHours)}</td>
                     <td className="is-num is-strong">
                       {percent(module.availability)}
                     </td>
                     <td className="is-num">{percent(budget.availability)}</td>
+                    <td className="is-num is-strong">
+                      {frequency(module.eventsPerWeek)}
+                    </td>
+                    <td className="is-num">
+                      {budget.maxEventsPerWeek === null
+                        ? "—"
+                        : frequency(budget.maxEventsPerWeek)}
+                    </td>
+                    <td className="is-num is-strong">
+                      {duration(module.mttrHours)}
+                    </td>
+                    <td className="is-num">
+                      {budget.maxMttrHours === null
+                        ? "—"
+                        : duration(budget.maxMttrHours)}
+                    </td>
                     <td>
                       <span
                         className="rw-lossbar"
                         tabIndex={0}
                         {...tooltip.bind(
                           <>
-                            <strong>{hours(module.lossHours)}</strong>
-                            <span>{module.name} 现状损失</span>
-                            <strong>{hours(budget.lossHours)}</strong>
-                            <span>分配预算</span>
+                            <strong>{hours(module.lossHoursPerWeek)}</strong>
+                            <span>{module.name} 每周损失</span>
+                            <strong>{hours(budget.lossHoursPerWeek)}</strong>
+                            <span>每周损失预算</span>
                             <strong>{percent(module.share, 1)}</strong>
                             <span>占全部故障损失</span>
                           </>,
@@ -168,18 +268,22 @@ export default function StepAssess() {
                           <span
                             className="rw-lossbar-fill"
                             style={{
-                              width: (module.lossHours / scaleMax) * 100 + "%",
+                              width:
+                                (module.lossHoursPerWeek / scaleMax) * 100 +
+                                "%",
                             }}
                           />
                           <i
                             style={{
-                              left: (budget.lossHours / scaleMax) * 100 + "%",
+                              left:
+                                (budget.lossHoursPerWeek / scaleMax) * 100 +
+                                "%",
                             }}
                           />
                         </span>
                         <em>
-                          {hours(module.lossHours)}
-                          <small> / {hours(budget.lossHours)}</small>
+                          {hours(module.lossHoursPerWeek)}
+                          <small> / {hours(budget.lossHoursPerWeek)}</small>
                         </em>
                       </span>
                     </td>
@@ -192,12 +296,12 @@ export default function StepAssess() {
                       ) : gap.suggestion === "mtbf" ? (
                         <span className="rw-direction is-mtbf">
                           <TrendingUp size={14} aria-hidden />
-                          提升 MTBF
+                          降低频次
                         </span>
                       ) : (
                         <span className="rw-direction is-mttr">
                           <Timer size={14} aria-hidden />
-                          降低 MTTR
+                          缩短单次损失
                         </span>
                       )}
                     </td>
@@ -206,15 +310,24 @@ export default function StepAssess() {
               })}
               <tr className="rw-row-muted">
                 <td>公共开销</td>
-                <td colSpan={5} className="rw-muted">
+                <td colSpan={6} className="rw-muted">
                   与故障无关的固定损耗，占运行时间的 {percent(system.overhead)}
                 </td>
                 <td>
                   <span className="rw-lossbar">
                     <span className="rw-lossbar-track" />
                     <em>
-                      {hours(system.overheadLossHours)}
-                      <small> / {hours(allocation.overheadLossHours)}</small>
+                      {hours(
+                        system.overheadLossHours * (168 / model.scenario.hours),
+                      )}
+                      <small>
+                        {" "}
+                        /{" "}
+                        {hours(
+                          allocation.overheadLossHours *
+                            (168 / model.scenario.hours),
+                        )}
+                      </small>
                     </em>
                   </span>
                 </td>
@@ -224,32 +337,106 @@ export default function StepAssess() {
           </table>
         </div>
         <p className="rw-hint">
-          竖线是该模块的损失预算。“优先方向”的判断：单次等效损失高于系统平均的模块，先缩短检测与恢复（降低
-          MTTR）；否则故障次数是主因，先降低故障率（提升 MTBF）。
+          每周损失 = 故障频次 ×
+          单次等效损失。“允许”的两列是分别只走一条路时的要求：单次损失不变时频次要降到多少，或频次不变时单次损失要缩到多少。“优先方向”：单次损失高于系统平均的模块先缩短单次损失，否则先降低频次。竖线是损失预算。
         </p>
       </section>
+
+      <section className="rw-card" aria-label="频次与单次损失">
+        <div className="rw-card-head">
+          <h2>频次 × 单次损失：差距该从哪边补</h2>
+          <span className="rw-legend">
+            <span className="rw-key is-neutral" />
+            现状
+            <span className="rw-key is-after" />
+            设计后
+          </span>
+        </div>
+        <div className="rw-grid is-chart">
+          <RiskMap
+            label="各模块的故障频次与单次等效损失"
+            onSelect={setSelected}
+            points={baseline.modules.map((m) => {
+              const after = design.modules.find((d) => d.id === m.id)!,
+                budget = budgetOf(m.id);
+              return {
+                id: m.id,
+                name: m.name,
+                x: m.eventsPerWeek,
+                y: m.mttrHours,
+                toX: after.eventsPerWeek,
+                toY: after.mttrHours,
+                labelled: labelled.has(m.id),
+                tip: (
+                  <>
+                    <strong>{frequency(m.eventsPerWeek)}</strong>
+                    <span>{m.name} · 故障频次</span>
+                    <strong>{duration(m.mttrHours)}</strong>
+                    <span>单次等效损失</span>
+                    <strong>{hours(m.lossHoursPerWeek)}</strong>
+                    <span>
+                      每周损失（预算 {hours(budget.lossHoursPerWeek)}）
+                    </span>
+                    <strong>
+                      {frequency(after.eventsPerWeek)} ×{" "}
+                      {duration(after.mttrHours)}
+                    </strong>
+                    <span>设计后</span>
+                  </>
+                ),
+              };
+            })}
+          />
+          <div className="rw-explain is-inline">
+            <p>
+              <strong>怎么读这张图。</strong>
+              横轴是故障频次，纵轴是单次等效损失，两者相乘就是每周损失，所以斜虚线上的点损失相同，越往右上损失越大。
+            </p>
+            <p>
+              把一个点往<strong>左</strong>移是降低故障频次（提升
+              MTBF，组件级高可用）；往<strong>下</strong>
+              移是缩短单次损失（降低 MTTR，系统级可靠性机制）。
+            </p>
+            <p>
+              右侧一排频次高、单次损失只有几分钟的模块，靠降频次或普遍缩短恢复时间都有效；左上角频次低、单次损失以小时计的模块，只有缩短单次损失或单独定目标才管用。连线指向启用措施后的位置。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <RecoveryChain />
+      <ComputationTrace />
 
       <Disclosure title="评估方法与假设">
         <div className="rw-explain">
           <ol>
             <li>
               <p>
-                <strong>事件率。</strong>每个故障模式的全系统事件率由单件
-                FIT、每卡数量和卡数得到（1 FIT = 每 10⁹ 器件小时 1 次）。
+                <strong>故障频次。</strong>
+                每个故障模式的全系统事件率由单件 FIT 和部件总数得到（1 FIT = 每
+                10⁹ 器件小时 1
+                次）。按卡计的部件，总数随规模增长；固定数量的部件（如机房供配电）不随规模变化。
               </p>
               <Formula>
-                λᵢ = FITᵢ × 每卡数量 × 卡数 / 10⁹　（次 / 运行小时）
+                λᵢ = FITᵢ × 部件总数 / 10⁹　（次 / 运行小时）；每周次数 = λᵢ ×
+                每周运行小时
               </Formula>
             </li>
             <li>
               <p>
                 <strong>单次等效损失。</strong>
-                故障被检出时，损失为检测、恢复、回滚重算三段之和；漏检时按漏检分支的总损失计。两个分支按检出率
-                c 加权，再乘以影响系数 κ。
+                故障先被检出（概率
+                c），或漏检后被兜底手段发现；然后沿恢复阶梯从小到大逐级尝试——重执行、进程重调度、域级弹性恢复、检查点全局恢复、人工——成功就结束，失败则白费一段时间再升级。各环节的“概率
+                × 时间”相加：
               </p>
               <Formula>
-                MTTRᵢ = κ · [ c · (检测 + 恢复 + 回滚) + (1 − c) · 漏检损失 ]
+                MTTRᵢ = κ · [ c·t检出 + (1−c)·t发现 + Σₖ 到达ₖ·(pₖ·tₖ·κₖ +
+                (1−pₖ)·fₖ·κₖ) + Σ需回滚 到达ₖ·pₖ·t回滚 ]
               </Formula>
+              <p>
+                到达ₖ 是前面各级都失败的概率；pₖ、tₖ、fₖ、κₖ 是第 k
+                级的成功率、成功耗时、失败白费的时间和影响范围。
+              </p>
             </li>
             <li>
               <p>
@@ -276,7 +463,7 @@ export default function StepAssess() {
           </ol>
           <p className="rw-hint">
             <strong>假设与边界：</strong>
-            故障按恒定失效率到达；静默故障的漏检损失按等效停机时间计入；不考虑多个故障同时发生时共享一次恢复。第
+            故障按恒定失效率到达；静默故障漏检后到被发现之间的产出按作废计；亚健康按降速比例折算成等效停机；不考虑多个故障同时发生时共享一次恢复。第
             4 步的仿真会独立检验这些近似在有限窗口内的偏差。
           </p>
         </div>
@@ -334,11 +521,11 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
       <section className="rw-editor-metrics">
         {[
           ["FIT / 卡", fit(result.fitPerCard)],
-          ["MTBF", duration(result.mtbfHours)],
+          ["故障频次", frequency(result.eventsPerWeek)],
           ["单次等效损失", duration(result.mttrHours)],
           [
             "损失 / 预算",
-            `${hours(result.lossHours)} / ${hours(budget.lossHours)}`,
+            `${hours(result.lossHoursPerWeek)} / ${hours(budget.lossHoursPerWeek)}`,
           ],
         ].map(([label, value]) => (
           <div key={label}>
@@ -358,9 +545,9 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
           />
         </label>
         <label>
-          <span>每卡数量</span>
+          <span>{module.scaling === "fixed" ? "全系统数量" : "每卡数量"}</span>
           <NumberField
-            label="每卡数量"
+            label="部件数量"
             value={module.unitsPerCard}
             min={0.0001}
             max={100000}
@@ -368,6 +555,19 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
             suffix="件"
             onCommit={(v) => patchModule({ unitsPerCard: v })}
           />
+        </label>
+        <label>
+          <span>数量口径</span>
+          <select
+            aria-label="数量口径"
+            value={module.scaling}
+            onChange={(e) =>
+              patchModule({ scaling: e.target.value as "per-card" | "fixed" })
+            }
+          >
+            <option value="per-card">按卡计，随规模增长</option>
+            <option value="fixed">固定数量，不随规模变化</option>
+          </select>
         </label>
         <label>
           <span>所属分组</span>
@@ -451,7 +651,7 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
                 <Trash2 size={15} />
               </button>
             </header>
-            <div className="rw-form">
+            <div className="rw-form is-three">
               <label>
                 <span>单件故障率</span>
                 <NumberField
@@ -478,7 +678,7 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
                 />
               </label>
               <label>
-                <span>检测时间</span>
+                <span>检出时的检测时间</span>
                 <DurationField
                   label={mode.name + " 的检测时间"}
                   value={mode.detectHours}
@@ -486,11 +686,11 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
                 />
               </label>
               <label>
-                <span>恢复时间</span>
+                <span>漏检后多久被发现</span>
                 <DurationField
-                  label={mode.name + " 的恢复时间"}
-                  value={mode.recoverHours}
-                  onCommit={(v) => patchMode(mode.id, { recoverHours: v })}
+                  label={mode.name + " 的漏检后发现时间"}
+                  value={mode.lateDetectHours}
+                  onCommit={(v) => patchMode(mode.id, { lateDetectHours: v })}
                 />
               </label>
               <label>
@@ -499,14 +699,6 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
                   label={mode.name + " 的回滚重算时间"}
                   value={mode.reworkHours}
                   onCommit={(v) => patchMode(mode.id, { reworkHours: v })}
-                />
-              </label>
-              <label>
-                <span>漏检时单次损失</span>
-                <DurationField
-                  label={mode.name + " 的漏检单次损失"}
-                  value={mode.missedLossHours}
-                  onCommit={(v) => patchMode(mode.id, { missedLossHours: v })}
                 />
               </label>
               <label>
@@ -523,10 +715,21 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
                 />
               </label>
             </div>
+            <LadderEditor
+              mode={mode}
+              onChange={(level, change) =>
+                update((d) => {
+                  Object.assign(
+                    d.modes.find((m) => m.id === mode.id)!.ladder[level],
+                    change,
+                  );
+                })
+              }
+            />
             <p className="rw-mode-result">
-              单次等效损失 <b>{duration(lossPerEvent(mode))}</b> · 窗口内{" "}
-              <b>{count(modeResult.events, 1)} 次</b> · 损失{" "}
-              <b>{hours(modeResult.lossHours)}</b>
+              单次等效损失 <b>{duration(lossPerEvent(mode))}</b> ·{" "}
+              <b>{frequency(modeResult.eventsPerWeek)}</b> · 每周损失{" "}
+              <b>{hours(modeResult.lossHoursPerWeek)}</b>
             </p>
             <label className="rw-mode-evidence">
               <span>数据来源</span>

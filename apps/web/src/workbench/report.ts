@@ -2,16 +2,22 @@ import {
   allocationMethodInfo,
   evidenceStateNames,
   faultKindNames,
+  layerOf,
+  loadPerTenThousand,
   lossPerEvent,
+  measureCategoryNames,
+  measureLayerNames,
+  priorityPath,
   type Analysis,
   type CoreModel,
   type VerificationResult,
 } from "../../../../packages/core/src/index";
-import { effectText } from "./helpers";
+import { effectText, ladderText } from "./helpers";
 import {
   count,
   duration,
   fit,
+  frequency,
   hours,
   percent,
   points,
@@ -54,7 +60,14 @@ export function buildReport(
       recommendation,
     } = analysis,
     method = allocationMethodInfo[allocation.method],
-    enabled = model.measures.filter((m) => m.enabled);
+    enabled = model.measures.filter((m) => m.enabled),
+    pinned = allocation.modules.filter((m) => m.pinned),
+    path = priorityPath(model),
+    layerText = (category: (typeof model.measures)[number]["category"]) =>
+      layerOf(category) === "component"
+        ? measureLayerNames.component
+        : `${measureLayerNames.system} · ${measureCategoryNames[category]}`,
+    curve = [...scenario.targetCurve].sort((a, b) => a.cards - b.cards);
   const usage = (value: number) =>
     value <= 1 ? "占用 " + percent(value, 0) : "超预算 " + times(value);
   const verdict = !verification
@@ -95,54 +108,78 @@ th{color:#475467;font-weight:600;background:#f8f9fb}td:not(:first-child){font-va
 <p class="muted">${escape(model.source)}</p>
 
 <h2>1　目标分配（${escape(method.name)}）</h2>
-<p>窗口允许的总损失 ${hours(allocation.lossHours)}，其中公共开销 ${hours(allocation.overheadLossHours)}，可分给各模块 ${hours(allocation.failureLossHours)}。系统允许的损失负荷 ρ* = ${allocation.load.toFixed(4)}。</p>
-<div class="formula">A = (1 − 公共开销) / (1 + ρ)，ρ = Σ λᵢ·MTTRᵢ；ρᵢ* = wᵢ·ρ*，${escape(method.formula)}</div>
+<p><strong>系统目标随规模变化。</strong>规模越大故障越多，在器件与机制水平不变时 A(N) = 1 / (1 + k·N)，其中 k 是每万卡的损失负荷。给定的目标点：${escape(
+    curve
+      .map(
+        (point) =>
+          `${scale(point.cards)} ${percent(point.target)}（每万卡损失负荷 ${(loadPerTenThousand(point) * 1000).toFixed(2)}‰）`,
+      )
+      .join("；"),
+  )}。当前规模 ${escape(scale(scenario.cards))} 的目标为 ${percent(scenario.target)}。</p>
+<p><strong>两级分配。</strong>${
+    pinned.length
+      ? `单次故障影响大的模块先单独指定目标：${escape(pinned.map((m) => `${m.name} ${percent(m.availability)}`).join("、"))}；其余损失负荷按${escape(method.name)}分给其他模块。`
+      : `没有单独指定目标的模块，全部损失负荷按${escape(method.name)}分配。`
+  }窗口允许的总损失 ${hours(allocation.lossHours)}，其中公共开销 ${hours(allocation.overheadLossHours)}，可分给各模块 ${hours(allocation.failureLossHours)}。系统允许的损失负荷 ρ* = ${allocation.load.toFixed(4)}。</p>
+<div class="formula">A = (1 − 公共开销) / (1 + ρ)，ρ = Σ λᵢ·MTTRᵢ；ρᵢ* = wᵢ·(ρ* − 已指定)，${escape(method.formula)}</div>
 ${method.reasoning.map((line) => `<p>· ${escape(line)}</p>`).join("")}
 ${table(
   [
     "模块",
-    "权重",
+    "分配方式",
     "目标可用度",
-    "损失预算",
-    "提 MTBF：每卡 FIT ≤",
-    "降 MTTR：单次损失 ≤",
+    "每周损失预算",
+    "降频次：每周故障 ≤",
+    "缩短单次损失 ≤",
   ],
   allocation.modules.map((m) => [
     m.name,
-    percent(m.weight, 1),
+    m.pinned ? "单独指定" : "权重 " + percent(m.weight, 1),
     percent(m.availability),
-    hours(m.lossHours),
-    m.maxFitPerCard === null ? "—" : fit(m.maxFitPerCard),
+    hours(m.lossHoursPerWeek),
+    m.maxEventsPerWeek === null ? "—" : frequency(m.maxEventsPerWeek),
     m.maxMttrHours === null ? "—" : duration(m.maxMttrHours),
   ]),
 )}
 
 <h2>2　可用度评估（现状）</h2>
-<p>每卡故障率 ${fit(baseline.system.fitPerCard)} FIT，系统 MTBF ${duration(baseline.system.mtbfHours)}，单次等效损失 ${duration(baseline.system.mttrHours)}，窗口内约 ${count(baseline.system.events, 1)} 次故障，损失 ${hours(baseline.system.lossHours)}。</p>
+<p>每卡故障率 ${fit(baseline.system.fitPerCard)} FIT，系统故障频次 ${escape(frequency(baseline.system.eventsPerWeek))}（MTBF ${duration(baseline.system.mtbfHours)}），单次等效损失 ${duration(baseline.system.mttrHours)}，每周损失 ${hours(baseline.system.lossHoursPerWeek)}；窗口内约 ${count(baseline.system.events, 1)} 次故障，损失 ${hours(baseline.system.lossHours)}。</p>
+<div class="formula">每周损失 = 故障频次 × 单次等效损失；单次等效损失 = κ·[ c·t检出 + (1−c)·t发现 + Σₖ 到达ₖ·(pₖ·tₖ + (1−pₖ)·fₖ)·κₖ + 回滚重算 ]</div>
 ${table(
   [
     "模块",
     "FIT / 卡",
-    "MTBF",
+    "故障频次",
+    "允许频次",
     "单次等效损失",
+    "允许单次损失",
     "可用度",
-    "损失时间",
-    "预算",
+    "目标",
+    "每周损失",
+    "每周预算",
     "差距",
   ],
-  baseline.modules.map((m) => {
-    const gap = baselineGaps.find((g) => g.id === m.id)!;
-    return [
-      m.name,
-      fit(m.fitPerCard),
-      duration(m.mtbfHours),
-      duration(m.mttrHours),
-      percent(m.availability),
-      hours(m.lossHours),
-      hours(gap.budgetHours),
-      usage(gap.usage),
-    ];
-  }),
+  [...baseline.modules]
+    .sort((a, b) => b.lossHours - a.lossHours)
+    .map((m) => {
+      const gap = baselineGaps.find((g) => g.id === m.id)!,
+        budget = allocation.modules.find((b) => b.id === m.id)!;
+      return [
+        m.name,
+        fit(m.fitPerCard),
+        frequency(m.eventsPerWeek),
+        budget.maxEventsPerWeek === null
+          ? "—"
+          : frequency(budget.maxEventsPerWeek),
+        duration(m.mttrHours),
+        budget.maxMttrHours === null ? "—" : duration(budget.maxMttrHours),
+        percent(m.availability),
+        percent(budget.availability),
+        hours(m.lossHoursPerWeek),
+        hours(budget.lossHoursPerWeek),
+        usage(gap.usage),
+      ];
+    }),
 )}
 ${table(
   [
@@ -152,9 +189,9 @@ ${table(
     "单件 FIT",
     "检出率",
     "检测",
-    "恢复",
+    "漏检后发现",
+    "恢复阶梯（成功率）",
     "回滚重算",
-    "漏检损失",
     "单次等效损失",
     "数据来源",
   ],
@@ -165,9 +202,9 @@ ${table(
     fit(mode.fit),
     percent(mode.coverage),
     duration(mode.detectHours),
-    duration(mode.recoverHours),
+    duration(mode.lateDetectHours),
+    ladderText(mode),
     duration(mode.reworkHours),
-    duration(mode.missedLossHours),
     duration(lossPerEvent(mode)),
     mode.evidence,
   ]),
@@ -176,12 +213,12 @@ ${table(
 <h2>3　机制设计</h2>
 <p>已启用 ${enabled.length} 项措施，可用度由 ${percent(baseline.system.availability)} 提升到 ${percent(design.system.availability)}（${points(design.system.availability - baseline.system.availability)}）。贡献按 Shapley 值分摊，各项相加等于总提升。</p>
 ${table(
-  ["措施", "方向", "参数变化", "Shapley 贡献", "单独启用", "证据", "工程依据"],
+  ["措施", "层级", "参数变化", "Shapley 贡献", "单独启用", "证据", "工程依据"],
   enabled.map((m) => {
     const c = contributions.items.find((item) => item.id === m.id)!;
     return [
       m.name,
-      m.direction === "mtbf" ? "提升 MTBF" : "降低 MTTR",
+      layerText(m.category),
       m.effects.map(effectText).join("；") +
         (m.applicability < 1 ? `（适用 ${percent(m.applicability, 0)}）` : ""),
       points(c.shapley),
@@ -204,6 +241,24 @@ ${table(
       usage(gap.usage),
     ];
   }),
+)}
+<p><strong>组合收益路径。</strong>从现状出发，每一步加入在已选措施基础上提升最大的一项${
+    path.reachedAt === null
+      ? "；措施库用尽仍未达标。"
+      : `；做到第 ${path.reachedAt} 项即可达标。`
+  }</p>
+${table(
+  ["顺序", "措施", "层级", "这一步再提升", "累计可用度", "当前设计"],
+  path.steps
+    .slice(0, Math.min(path.steps.length, (path.reachedAt ?? 10) + 3))
+    .map((step, index) => [
+      index + 1,
+      step.name,
+      layerText(step.category),
+      points(step.gain),
+      percent(step.availability),
+      step.enabled ? "已启用" : "未启用",
+    ]),
 )}
 
 <h2>4　机制验证</h2>

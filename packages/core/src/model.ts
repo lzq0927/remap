@@ -25,6 +25,84 @@ export const faultKindNames: Record<FaultKind, string> = {
   sdc: "静默",
 };
 
+/**
+ * 恢复阶梯的级别，粒度从小到大。故障发生并被发现后依次尝试：
+ * 成功就结束；失败则白费这一级的失败耗时，升到下一级。成功率为 0 的级别表示不使用。
+ */
+export const recoveryLevels = [
+  "replay",
+  "process",
+  "elastic",
+  "restart",
+  "manual",
+] as const;
+export type RecoveryLevel = (typeof recoveryLevels)[number];
+export const recoveryLevelNames: Record<RecoveryLevel, string> = {
+  replay: "重执行",
+  process: "进程重调度",
+  elastic: "域级弹性恢复",
+  restart: "检查点全局恢复",
+  manual: "人工恢复",
+};
+export const recoveryLevelNotes: Record<RecoveryLevel, string> = {
+  replay: "原地重做出错的通信或算子，不回滚",
+  process: "只重建受影响的进程，再回滚到检查点",
+  elastic: "只让出故障的那个域停下，其余继续训练，不回滚",
+  restart: "整个任务重启，从检查点恢复后重算",
+  manual: "自动手段都失败后由人处理",
+};
+export const levelSchema = z
+  .object({
+    /** 这一级的成功率；0 表示不使用这一级。 */
+    success: probability,
+    /** 成功时的耗时（小时）。 */
+    hours: hoursValue,
+    /** 失败时白费的时间（小时），之后升到下一级。 */
+    failHours: hoursValue,
+    /** 这一级执行期间损失的任务产能比例。 */
+    impact: probability,
+    /** 成功后是否还要回滚到检查点重算。 */
+    rollback: z.boolean(),
+  })
+  .strict();
+export type LadderLevel = z.infer<typeof levelSchema>;
+export const ladderSchema = z
+  .object({
+    replay: levelSchema,
+    process: levelSchema,
+    elastic: levelSchema,
+    restart: levelSchema,
+    manual: levelSchema,
+  })
+  .strict();
+export type Ladder = z.infer<typeof ladderSchema>;
+/** 各级别“是否需要回滚”的默认值。 */
+const defaultRollback: Record<RecoveryLevel, boolean> = {
+  replay: false,
+  process: true,
+  elastic: false,
+  restart: true,
+  manual: true,
+};
+/** 一条恢复阶梯：未列出的级别不使用。 */
+export function makeLadder(
+  levels: Partial<Record<RecoveryLevel, Partial<LadderLevel>>> = {},
+): Ladder {
+  return Object.fromEntries(
+    recoveryLevels.map((level) => [
+      level,
+      {
+        success: 0,
+        hours: 0,
+        failHours: 0,
+        impact: 1,
+        rollback: defaultRollback[level],
+        ...levels[level],
+      },
+    ]),
+  ) as Ladder;
+}
+
 export const groupSchema = z.object({ id, name: label }).strict();
 /**
  * 架构图上的位置。架构图按 Atlas 950 超节点的硬件拓扑绘制，
@@ -40,6 +118,7 @@ export const diagramSlots = [
   "optical",
   "storage",
   "power",
+  "site-power",
   "management",
   "software",
 ] as const;
@@ -53,7 +132,8 @@ export const diagramSlotNames: Record<DiagramSlot, string> = {
   l2: "L2 / Leaf / Spine 与网卡",
   optical: "光模块",
   storage: "共享存储",
-  power: "供电与冷却",
+  power: "柜级供电与冷却",
+  "site-power": "机房供配电",
   management: "管理面",
   software: "软件栈",
 };
@@ -62,8 +142,14 @@ export const moduleSchema = z
     id,
     groupId: id,
     name: label,
-    /** 每张卡对应的部件数量；事件率 = FIT × 数量 × 卡数。 */
+    /**
+     * 部件数量。scaling 为 per-card 时是每张卡对应的数量，事件率 = FIT × 数量 × 卡数；
+     * 为 fixed 时是全系统的总数量（如一个机房一套供配电），事件率不随规模变化。
+     */
     unitsPerCard: z.number().finite().positive().max(100000),
+    scaling: z.enum(["per-card", "fixed"]).default("per-card"),
+    /** 直接指定的目标可用度；为空时由分配方法给出。用于单次故障后果很大的模块。 */
+    fixedTarget: z.number().finite().gt(0).lt(1).nullable().default(null),
     /** AGREE 重要度 ω：该模块失效导致任务受损的条件概率。 */
     importance: z.number().finite().gt(0).max(1),
     /** AGREE 复杂度 n 的人工取值；为空时按分配设置的口径自动取值。 */
@@ -81,42 +167,96 @@ export const faultModeSchema = z
     kind: z.enum(faultKinds),
     /** 单个部件的失效率，FIT = 次 / 10^9 器件小时。 */
     fit: z.number().finite().min(0).max(1e7),
-    /** 检出率 c：故障被在线检测发现的概率。 */
+    /** 检出率 c：故障被在线检测及时发现的概率。 */
     coverage: probability,
-    /** 检出分支：从故障发生到被发现的时间（小时）。 */
+    /** 检出时：从故障发生到被发现的时间（小时）。 */
     detectHours: hoursValue,
-    /** 检出分支：隔离、替换与重启恢复时间（小时）。 */
-    recoverHours: hoursValue,
-    /** 检出分支：回滚到检查点后重算的时间（小时）。 */
+    /** 漏检时：直到被兜底手段发现的时间（小时），期间的产出作废。 */
+    lateDetectHours: hoursValue,
+    /** 恢复后回滚到检查点重算的时间（小时）；只在需要回滚的恢复级别成功时计入。 */
     reworkHours: hoursValue,
-    /** 漏检分支：单次事件的总损失时间（小时）。 */
-    missedLossHours: hoursValue,
-    /** 影响系数 κ：事件期间损失的任务产能比例。 */
+    /** 恢复阶梯：从小到大逐级尝试，失败才升到下一级。 */
+    ladder: ladderSchema,
+    /** 影响系数 κ：整条恢复链的损失再乘以它（如只影响部分任务）。 */
     impact: probability,
     evidence: note,
   })
   .strict();
 
-export const measureParams = [
+const levelFields = ["success", "hours", "failHours", "impact"] as const;
+export type LevelField = (typeof levelFields)[number];
+const levelFieldNames: Record<LevelField, string> = {
+  success: "成功率",
+  hours: "耗时",
+  failHours: "失败耗时",
+  impact: "影响范围",
+};
+export type LevelParam = `${RecoveryLevel}.${LevelField}`;
+const baseParams = [
   "fit",
   "coverage",
   "detectHours",
-  "recoverHours",
+  "lateDetectHours",
   "reworkHours",
-  "missedLossHours",
   "impact",
   "overhead",
 ] as const;
-export type MeasureParam = (typeof measureParams)[number];
-export const measureParamNames: Record<MeasureParam, string> = {
+type BaseParam = (typeof baseParams)[number];
+/** 措施可以改变的参数：故障模式的基本参数、各恢复级别的参数，以及公共开销。 */
+export const measureParams = [
+  ...baseParams,
+  ...recoveryLevels.flatMap((level) =>
+    levelFields.map((field) => `${level}.${field}` as LevelParam),
+  ),
+] as [BaseParam | LevelParam, ...(BaseParam | LevelParam)[]];
+export type MeasureParam = BaseParam | LevelParam;
+const baseParamNames: Record<BaseParam, string> = {
   fit: "故障率 FIT",
   coverage: "检出率",
   detectHours: "检测时间",
-  recoverHours: "恢复时间",
+  lateDetectHours: "漏检后发现时间",
   reworkHours: "回滚重算",
-  missedLossHours: "漏检单次损失",
   impact: "影响系数",
   overhead: "公共开销",
+};
+export const measureParamNames = Object.fromEntries(
+  measureParams.map((param) => {
+    const [level, field] = param.split(".") as [RecoveryLevel, LevelField];
+    return [
+      param,
+      field
+        ? `${recoveryLevelNames[level]} · ${levelFieldNames[field]}`
+        : baseParamNames[param as BaseParam],
+    ];
+  }),
+) as Record<MeasureParam, string>;
+const fieldOf = (param: MeasureParam) =>
+  param.split(".")[1] as LevelField | undefined;
+/** 取值越大越好的参数；其余参数越小越好。 */
+export const higherIsBetter = (param: MeasureParam) =>
+  param === "coverage" || fieldOf(param) === "success";
+/** 以比例（0–1）表示的参数。 */
+export const isRatioParam = (param: MeasureParam) =>
+  param === "coverage" ||
+  param === "impact" ||
+  param === "overhead" ||
+  fieldOf(param) === "success" ||
+  fieldOf(param) === "impact";
+/** 读取故障模式的某个参数（overhead 不属于故障模式）。 */
+export function readParam(mode: FaultModeShape, param: MeasureParam): number {
+  const [level, field] = param.split(".") as [RecoveryLevel, LevelField];
+  return field
+    ? mode.ladder[level][field]
+    : (mode[param as Exclude<BaseParam, "overhead">] as number);
+}
+type FaultModeShape = {
+  fit: number;
+  coverage: number;
+  detectHours: number;
+  lateDetectHours: number;
+  reworkHours: number;
+  impact: number;
+  ladder: Ladder;
 };
 export const effectSchema = z
   .object({
@@ -127,11 +267,7 @@ export const effectSchema = z
   })
   .strict()
   .superRefine((effect, ctx) => {
-    const bounded =
-      effect.op === "reduce" ||
-      effect.param === "coverage" ||
-      effect.param === "impact" ||
-      effect.param === "overhead";
+    const bounded = effect.op === "reduce" || isRatioParam(effect.param);
     if (bounded && effect.value > 1)
       ctx.addIssue({
         code: "custom",
@@ -139,8 +275,47 @@ export const effectSchema = z
         message: "比例类参数须在 0 到 1 之间",
       });
   });
-export const measureDirections = ["mtbf", "mttr"] as const;
-export type MeasureDirection = (typeof measureDirections)[number];
+/**
+ * 措施分层。按措施改变“可用度公式里的哪一项”归类，一项措施只属于一类：
+ * - 组件级高可用（prevent）：让故障少发生，改故障率；
+ * - 系统级可靠性机制：故障发生后让损失更小，沿恢复链分为
+ *   检测（detect）、隔离与弹性（contain）、恢复（recover）、检查点（checkpoint）。
+ */
+export const measureCategories = [
+  "prevent",
+  "detect",
+  "contain",
+  "recover",
+  "checkpoint",
+] as const;
+export type MeasureCategory = (typeof measureCategories)[number];
+export const measureCategoryNames: Record<MeasureCategory, string> = {
+  prevent: "降低失效率",
+  detect: "检测",
+  contain: "隔离与弹性",
+  recover: "恢复",
+  checkpoint: "检查点",
+};
+export type MeasureLayer = "component" | "system";
+export const layerOf = (category: MeasureCategory): MeasureLayer =>
+  category === "prevent" ? "component" : "system";
+export const measureLayerNames: Record<MeasureLayer, string> = {
+  component: "组件级高可用",
+  system: "系统级可靠性机制",
+};
+/** 按措施改变的第一个参数推断它的类别。 */
+export function categoryOfParam(param: MeasureParam): MeasureCategory {
+  if (param === "fit") return "prevent";
+  if (
+    param === "coverage" ||
+    param === "detectHours" ||
+    param === "lateDetectHours"
+  )
+    return "detect";
+  if (param === "impact" || param.startsWith("elastic.")) return "contain";
+  if (param === "reworkHours" || param === "overhead") return "checkpoint";
+  return "recover";
+}
 export const evidenceStates = ["verified", "planned", "assumed"] as const;
 export type EvidenceState = (typeof evidenceStates)[number];
 export const evidenceStateNames: Record<EvidenceState, string> = {
@@ -152,7 +327,7 @@ export const measureSchema = z
   .object({
     id,
     name: label,
-    direction: z.enum(measureDirections),
+    category: z.enum(measureCategories),
     /** 措施作用的故障模式；仅含 overhead 效果时可为空。 */
     modeIds: z.array(id).max(64),
     effects: z.array(effectSchema).min(1).max(6),
@@ -196,6 +371,18 @@ export const coreModelSchema = z
         cards: z.number().int().min(1).max(10000000),
         hours: z.number().finite().positive().max(8760),
         target: z.number().finite().gt(0).lt(1),
+        /** 规模–目标对照：不同规模下的可用度目标，用于推算其它规模的目标。 */
+        targetCurve: z
+          .array(
+            z
+              .object({
+                cards: z.number().int().min(1).max(10000000),
+                target: z.number().finite().gt(0).lt(1),
+              })
+              .strict(),
+          )
+          .max(12)
+          .default([]),
         /** 与故障无关的固定开销占比（检查点保存、在线检测等）。 */
         overhead: z.number().finite().min(0).max(0.5),
         /** 窗口达标比例要求：仿真窗口中达到目标的最低比例。 */
@@ -290,12 +477,15 @@ const anchorById: Record<string, DiagramSlot> = {
 };
 
 /**
- * 把早期保存的模型整理成当前结构：去掉已废弃的字段，
- * 并给没有架构图位置的默认模块补上位置。不认识的内容原样保留，交给校验处理。
+ * 把早期保存的模型整理成当前结构，数值结果保持不变：
+ * - 去掉已废弃的画法字段，给默认模块补上架构图位置；
+ * - 故障模式的“漏检分支总损失”改写成“漏检后发现时间”（扣掉其后的恢复与回滚）；
+ * - 措施的“方向”改写成分层类别。
+ * 不认识的内容原样保留，交给校验处理。
  */
 export function upgradeCoreModel(input: unknown): unknown {
   if (!input || typeof input !== "object") return input;
-  const model = structuredClone(input) as Record<string, unknown>;
+  const model = structuredClone(input) as Record<string, any>;
   if (Array.isArray(model.groups))
     for (const group of model.groups)
       if (group && typeof group === "object") delete group.layout;
@@ -306,6 +496,46 @@ export function upgradeCoreModel(input: unknown): unknown {
         if (module.anchor === undefined)
           module.anchor = anchorById[module.id] ?? "";
       }
+  if (Array.isArray(model.modes))
+    for (const mode of model.modes)
+      if (mode && typeof mode === "object" && !mode.ladder) {
+        // 早期只有一个“恢复时间”：当作必定成功的检查点全局恢复。
+        const recover = Number(mode.recoverHours ?? 0),
+          rework = Number(mode.reworkHours ?? 0);
+        if (mode.lateDetectHours === undefined)
+          mode.lateDetectHours = Math.max(
+            0,
+            Number(mode.missedLossHours ?? 0) - recover - rework,
+          );
+        mode.ladder = makeLadder({ restart: { success: 1, hours: recover } });
+        delete mode.missedLossHours;
+        delete mode.recoverHours;
+      }
+  if (Array.isArray(model.measures))
+    for (const measure of model.measures)
+      if (measure && typeof measure === "object") {
+        if (Array.isArray(measure.effects))
+          for (const effect of measure.effects)
+            if (effect?.param === "missedLossHours")
+              effect.param = "lateDetectHours";
+            else if (effect?.param === "recoverHours")
+              effect.param = "restart.hours";
+        if (measure.category === undefined) {
+          const first = measure.effects?.[0]?.param;
+          measure.category =
+            measure.direction === "mtbf"
+              ? "prevent"
+              : (measureParams as readonly string[]).includes(first)
+                ? categoryOfParam(first)
+                : "recover";
+          if (measure.category === "prevent" && measure.direction === "mttr")
+            measure.category = "recover";
+        }
+        delete measure.direction;
+      }
+  const scenario = model.scenario;
+  if (scenario && typeof scenario === "object" && !scenario.targetCurve)
+    scenario.targetCurve = [{ cards: scenario.cards, target: scenario.target }];
   return model;
 }
 

@@ -388,19 +388,23 @@ export function useTooltip() {
     },
     onBlur: () => setTip(null),
   });
+  /** 直接指定位置显示（图表的十字准线用）。 */
+  const show = (x: number, y: number, content: ReactNode) =>
+      setTip({ x, y, content }),
+    hide = () => setTip(null);
   const node = tip && (
     <div
       className="rw-tooltip"
       role="tooltip"
       style={{
-        left: Math.min(tip.x + 14, window.innerWidth - 260),
+        left: Math.min(tip.x + 14, window.innerWidth - 300),
         top: Math.max(8, tip.y - 12),
       }}
     >
       {tip.content}
     </div>
   );
-  return { bind, node };
+  return { bind, show, hide, node };
 }
 
 export function Empty({ children }: { children: ReactNode }) {

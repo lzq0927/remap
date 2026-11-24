@@ -1,7 +1,8 @@
-import type { CoreModel } from "./model";
+import { recoveryLevels, type CoreModel } from "./model";
 import {
   applyMeasures,
   assess,
+  unitCount,
   type Assessment,
   type ResolvedParameters,
 } from "./assess";
@@ -64,9 +65,9 @@ export interface SimulationSummary {
 
 /**
  * 离散事件仿真。与解析评估相互独立：
- * 逐个抽取故障到达（指数间隔）、检出与否（伯努利）和各段时长，
- * 并在窗口末尾截断未完成的恢复。恢复时间取指数分布，回滚重算取均匀分布，
- * 漏检损失取指数分布，因此仿真还给出解析模型没有的窗口间波动。
+ * 逐个抽取故障到达（指数间隔）、检出与否和自动恢复成败（伯努利）以及各段时长，
+ * 并在窗口末尾截断未完成的恢复。检测时间取定值，漏检后的发现时间、自动恢复和人工恢复
+ * 取指数分布，回滚重算取均匀分布，因此仿真还给出解析模型没有的窗口间波动。
  * 只有“停机期间不产生新故障”这一条与解析模型相同，它是被建模系统的性质。
  */
 export function simulate(
@@ -77,12 +78,12 @@ export function simulate(
 ): SimulationSummary {
   const { cards, hours, target } = model.scenario,
     random = mulberry(seed),
-    units = new Map(model.modules.map((m) => [m.id, m.unitsPerCard]));
+    modulesById = new Map(model.modules.map((m) => [m.id, m]));
   const modes = parameters.modes
     .map((mode) => ({
       mode,
       module: model.modules.findIndex((m) => m.id === mode.moduleId),
-      rate: (mode.fit * (units.get(mode.moduleId) ?? 1) * cards) / 1e9,
+      rate: (mode.fit * unitCount(modulesById.get(mode.moduleId), cards)) / 1e9,
     }))
     .filter((entry) => entry.rate > 0);
   const totalRate = modes.reduce((sum, m) => sum + m.rate, 0),
@@ -91,6 +92,11 @@ export function simulate(
     cumulative.push(sum + m.rate);
     return sum + m.rate;
   }, 0);
+  const ladders = modes.map(({ mode }) =>
+    recoveryLevels
+      .map((level) => mode.ladder[level])
+      .filter((step) => step.success > 0),
+  );
   const exponential = (mean: number) =>
     mean > 0 ? -Math.log(1 - random()) * mean : 0;
   const samples = new Float64Array(trials),
@@ -114,15 +120,24 @@ export function simulate(
       let index = 0;
       while (index < cumulative.length - 1 && cumulative[index] < pick) index++;
       const { mode, module } = modes[index];
-      const duration =
+      // 检出，或漏检后被兜底发现；然后沿恢复阶梯逐级尝试，失败才升级。
+      // 各段时间已乘该段的影响范围，合计为等效停机时间。
+      let stopped =
         random() < mode.coverage
-          ? mode.detectHours +
-            exponential(mode.recoverHours) +
-            random() * 2 * mode.reworkHours
-          : exponential(mode.missedLossHours);
-      // 影响系数小于 1 时按等效停机时间计：受影响的部分停下，其余部分照常运行并可能再出故障。
-      const stopped = duration * mode.impact,
-        counted = Math.min(stopped, hours - clock);
+          ? mode.detectHours
+          : exponential(mode.lateDetectHours);
+      const used = ladders[index];
+      for (let k = 0; k < used.length; k++) {
+        const step = used[k];
+        if (k === used.length - 1 || random() < step.success) {
+          stopped += exponential(step.hours) * step.impact;
+          if (step.rollback) stopped += random() * 2 * mode.reworkHours;
+          break;
+        }
+        stopped += step.failHours * step.impact;
+      }
+      stopped *= mode.impact;
+      const counted = Math.min(stopped, hours - clock);
       loss += counted;
       moduleLoss[module] += counted;
       clock += stopped;
@@ -240,7 +255,7 @@ export function modelHash(model: CoreModel) {
             .join(",") +
           "}"
         : JSON.stringify(value);
-  // 名称、说明、出处和架构图画法不影响数值结果，不计入指纹。
+  // 名称、说明、出处、分层类别和架构图位置不影响数值结果，不计入指纹。
   const numeric = {
     scenario: model.scenario,
     modules: model.modules.map(
@@ -250,8 +265,13 @@ export function modelHash(model: CoreModel) {
       ({ evidence: _evidence, name: _name, ...rest }) => rest,
     ),
     measures: model.measures.map(
-      ({ rationale: _rationale, name: _name, source: _source, ...rest }) =>
-        rest,
+      ({
+        rationale: _rationale,
+        name: _name,
+        source: _source,
+        category: _category,
+        ...rest
+      }) => rest,
     ),
     allocation: model.allocation,
   };

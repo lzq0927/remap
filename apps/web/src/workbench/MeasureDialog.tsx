@@ -4,11 +4,17 @@ import {
   evidenceStateNames,
   evidenceStates,
   faultKindNames,
+  layerOf,
+  measureCategories,
+  measureCategoryNames,
+  measureLayerNames,
   measureParamNames,
   measureParams,
+  recoveryLevelNames,
+  recoveryLevels,
   type EvidenceState,
   type Measure,
-  type MeasureDirection,
+  type MeasureCategory,
   type MeasureEffect,
   type MeasureParam,
 } from "../../../../packages/core/src/index";
@@ -29,42 +35,53 @@ const defaultValue = (param: MeasureParam, op: MeasureEffect["op"]) =>
         ? 100
         : param === "coverage"
           ? 0.99
-          : param === "impact"
-            ? 0.1
-            : param === "overhead"
-              ? 0.01
-              : 60 / 3600;
-const blank = (direction: MeasureDirection): Measure => ({
+          : param.endsWith(".success")
+            ? 0.95
+            : param === "impact" || param.endsWith(".impact")
+              ? 0.1
+              : param === "overhead"
+                ? 0.01
+                : 60 / 3600;
+/** 各类措施新建时的默认参数变化。 */
+const starter: Record<MeasureCategory, MeasureEffect[]> = {
+  prevent: [{ param: "fit", op: "reduce", value: 0.5 }],
+  detect: [{ param: "coverage", op: "set", value: 0.99 }],
+  recover: [{ param: "restart.hours", op: "set", value: 60 / 3600 }],
+  contain: [
+    { param: "elastic.success", op: "set", value: 0.95 },
+    { param: "elastic.hours", op: "set", value: 180 / 3600 },
+    { param: "elastic.impact", op: "set", value: 0.02 },
+  ],
+  checkpoint: [{ param: "reworkHours", op: "set", value: 30 / 3600 }],
+};
+const blank = (category: MeasureCategory): Measure => ({
   id: newId("measure"),
   name: "",
-  direction,
+  category,
   modeIds: [],
-  effects: [
-    direction === "mtbf"
-      ? { param: "fit", op: "reduce", value: 0.5 }
-      : { param: "recoverHours", op: "set", value: 60 / 3600 },
-  ],
+  effects: structuredClone(starter[category]),
   applicability: 1,
   enabled: true,
   evidence: "assumed",
   rationale: "",
   source: "",
 });
+const baseParams = measureParams.filter((param) => !param.includes("."));
 
 /** 新增或编辑一项措施：作用范围、参数变化、适用比例与依据。 */
 export default function MeasureDialog({
   measure,
-  direction = "mttr",
+  category = "recover",
   onClose,
 }: {
   /** 传入则编辑该措施，否则新增。 */
   measure?: Measure;
-  direction?: MeasureDirection;
+  category?: MeasureCategory;
   onClose: () => void;
 }) {
   const { model, update } = useWorkbench(),
     [draft, setDraft] = useState<Measure>(() =>
-      measure ? structuredClone(measure) : blank(direction),
+      measure ? structuredClone(measure) : blank(category),
     );
   const patch = (change: Partial<Measure>) =>
       setDraft((current) => ({ ...current, ...change })),
@@ -129,16 +146,25 @@ export default function MeasureDialog({
           />
         </label>
         <label>
-          <span>改进方向</span>
+          <span>措施类别</span>
           <select
-            aria-label="改进方向"
-            value={draft.direction}
+            aria-label="措施类别"
+            value={draft.category}
             onChange={(e) =>
-              patch({ direction: e.target.value as MeasureDirection })
+              patch({ category: e.target.value as MeasureCategory })
             }
           >
-            <option value="mtbf">提升 MTBF（减少故障）</option>
-            <option value="mttr">降低 MTTR（减少单次损失）</option>
+            {(["component", "system"] as const).map((layer) => (
+              <optgroup key={layer} label={measureLayerNames[layer]}>
+                {measureCategories
+                  .filter((c) => layerOf(c) === layer)
+                  .map((c) => (
+                    <option key={c} value={c}>
+                      {measureCategoryNames[c]}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
           </select>
         </label>
         <label>
@@ -156,7 +182,7 @@ export default function MeasureDialog({
         </label>
       </div>
       <p className="rw-hint rw-dialog-hint">
-        适用比例：所作用的故障中，这项措施实际适用并成功的比例。参数按此比例在现值与目标值之间折算。
+        类别决定措施归在哪一层：降低失效率属于组件级高可用，检测、恢复、隔离与弹性、检查点属于系统级可靠性机制。适用比例：所作用的故障中，这项措施实际适用并成功的比例，参数按此比例在现值与目标值之间折算。
       </p>
 
       <h3 className="rw-dialog-title">参数变化</h3>
@@ -174,10 +200,26 @@ export default function MeasureDialog({
                 });
               }}
             >
-              {measureParams.map((param) => (
-                <option key={param} value={param}>
-                  {measureParamNames[param]}
-                </option>
+              <optgroup label="故障与检测">
+                {baseParams.map((param) => (
+                  <option key={param} value={param}>
+                    {measureParamNames[param]}
+                  </option>
+                ))}
+              </optgroup>
+              {recoveryLevels.map((level) => (
+                <optgroup
+                  key={level}
+                  label={"恢复阶梯 · " + recoveryLevelNames[level]}
+                >
+                  {measureParams
+                    .filter((param) => param.startsWith(level + "."))
+                    .map((param) => (
+                      <option key={param} value={param}>
+                        {measureParamNames[param]}
+                      </option>
+                    ))}
+                </optgroup>
               ))}
             </select>
             <select

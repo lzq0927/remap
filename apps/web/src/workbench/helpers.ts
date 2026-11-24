@@ -1,6 +1,12 @@
 import {
+  isRatioParam,
+  makeLadder,
   measureParamNames,
+  readParam,
+  recoveryLevelNames,
+  recoveryLevels,
   type CoreModel,
+  type FaultMode,
   type Measure,
   type MeasureEffect,
   type MeasureParam,
@@ -41,8 +47,7 @@ export function dropModule(draft: CoreModel, moduleId: string) {
   return true;
 }
 
-export const isRatio = (param: MeasureParam) =>
-  param === "coverage" || param === "impact" || param === "overhead";
+export const isRatio = isRatioParam;
 export const formatParam = (param: MeasureParam, value: number) =>
   param === "fit"
     ? fit(value) + " FIT"
@@ -69,7 +74,7 @@ export function baseValue(
   if (param === "overhead") return model.scenario.overhead;
   const values = model.modes
     .filter((mode) => measure.modeIds.includes(mode.id))
-    .map((mode) => mode[param]);
+    .map((mode) => readParam(mode, param));
   return values.length && values.every((v) => Math.abs(v - values[0]) < 1e-12)
     ? values[0]
     : null;
@@ -103,7 +108,7 @@ export function targetText(model: CoreModel, measure: Measure) {
     : modules.join("、");
 }
 
-/** 新故障模式的默认参数：取现有基线恢复链。 */
+/** 新故障模式的默认参数：取现有基线的检测与恢复阶梯。 */
 export const blankMode = (moduleId: string) => ({
   id: newId("mode"),
   moduleId,
@@ -112,9 +117,12 @@ export const blankMode = (moduleId: string) => ({
   fit: 100,
   coverage: 0.95,
   detectHours: 10 / 3600,
-  recoverHours: 252 / 3600,
+  lateDetectHours: 60 / 3600,
   reworkHours: 150 / 3600,
-  missedLossHours: 462 / 3600,
+  ladder: makeLadder({
+    restart: { success: 0.99, hours: 180 / 3600, failHours: 180 / 3600 },
+    manual: { success: 1, hours: 2 },
+  }),
   impact: 1,
   evidence: "",
 });
@@ -123,8 +131,24 @@ export const blankModule = (groupId: string) => ({
   groupId,
   name: "新模块",
   unitsPerCard: 1,
+  scaling: "per-card" as const,
+  fixedTarget: null,
   importance: 1,
   complexity: null,
   anchor: "",
   note: "",
 });
+
+/** 恢复阶梯的一行摘要：只列用到的级别及其成功率，最后一级兜底。 */
+export const ladderText = (mode: FaultMode) => {
+  const used = recoveryLevels.filter((level) => mode.ladder[level].success > 0);
+  return used
+    .map(
+      (level, index) =>
+        recoveryLevelNames[level] +
+        (index === used.length - 1
+          ? ""
+          : " " + percent(mode.ladder[level].success, 0)),
+    )
+    .join(" → ");
+};

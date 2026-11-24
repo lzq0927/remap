@@ -1,4 +1,11 @@
-import type { CoreModel, EvidenceState, Measure } from "./model";
+import {
+  higherIsBetter,
+  readParam,
+  type CoreModel,
+  type EvidenceState,
+  type Measure,
+  type MeasureCategory,
+} from "./model";
 import { applyMeasures, assess, createEvaluator } from "./assess";
 
 const enabledIds = (model: CoreModel) =>
@@ -77,7 +84,7 @@ export function shapley(model: CoreModel, ids: string[] = enabledIds(model)) {
 export interface MeasureContribution {
   id: string;
   name: string;
-  direction: Measure["direction"];
+  category: MeasureCategory;
   enabled: boolean;
   evidence: EvidenceState;
   /** 只启用这一项时相对现状的提升。 */
@@ -103,7 +110,7 @@ export function contributions(model: CoreModel) {
     return {
       id: measure.id,
       name: measure.name,
-      direction: measure.direction,
+      category: measure.category,
       enabled: measure.enabled,
       evidence: measure.evidence,
       standalone: availabilityOf(new Set([measure.id])) - base,
@@ -296,7 +303,7 @@ export function solveEffect(
     );
   };
   // “降低比例”和检出率越大越好，其余参数越小越好。
-  const best = effect.op === "reduce" || effect.param === "coverage" ? 1 : 0;
+  const best = effect.op === "reduce" || higherIsBetter(effect.param) ? 1 : 0;
   if (evaluate(best) < target) return { value: best, reachable: false };
   if (evaluate(effect.value) >= target)
     return { value: effect.value, reachable: true };
@@ -308,4 +315,176 @@ export function solveEffect(
     else bad = middle;
   }
   return { value: good, reachable: true };
+}
+
+/** 措施主要参数的理想极限：按比例降低的做到 100%，越大越好的做到 1，其余做到 0。 */
+const limitOf = (measure: Measure) => {
+  const effect = measure.effects[0];
+  return effect.op === "reduce" || higherIsBetter(effect.param) ? 1 : 0;
+};
+/** 措施主要参数的现值：作用对象里离极限最远的那个，作为“改进程度”的起点。 */
+function startOf(model: CoreModel, measure: Measure) {
+  const effect = measure.effects[0];
+  if (effect.op === "reduce") return 0;
+  if (effect.param === "overhead") return model.scenario.overhead;
+  const param = effect.param,
+    values = model.modes
+      .filter((mode) => measure.modeIds.includes(mode.id))
+      .map((mode) => readParam(mode, param));
+  if (!values.length) return effect.value;
+  return higherIsBetter(param) ? Math.min(...values) : Math.max(...values);
+}
+
+export interface DoseResponse {
+  id: string;
+  name: string;
+  /** 计划取值相当于走到了多大的改进程度（0–1）。 */
+  planned: number;
+  /** 计划取值下相对“不做这项措施”的可用度提升。 */
+  plannedGain: number;
+  points: Array<{
+    /** 改进程度：0 为现状，1 为理想极限。 */
+    degree: number;
+    /** 这一程度下主要参数的取值。 */
+    value: number;
+    /** 相对“不做这项措施”的可用度提升。 */
+    gain: number;
+  }>;
+}
+/**
+ * 改进程度—收益曲线：把一项措施的主要参数从现状逐步推到理想极限，
+ * 其余措施保持当前的启用状态，看系统可用度提升多少。
+ * 主要参数是措施的第一项参数变化；“增加”类的代价项不参与。
+ */
+export function doseResponse(
+  model: CoreModel,
+  measureId: string,
+  steps = 10,
+): DoseResponse | null {
+  const measure = model.measures.find((m) => m.id === measureId);
+  if (!measure || measure.effects[0].op === "add") return null;
+  const start = startOf(model, measure),
+    limit = limitOf(measure),
+    span = limit - start;
+  if (Math.abs(span) < 1e-15) return null;
+  const others = new Set(
+    model.measures
+      .filter((m) => m.enabled && m.id !== measureId)
+      .map((m) => m.id),
+  );
+  const without = createEvaluator(model)(others);
+  const gainAt = (value: number) => {
+    const trial: CoreModel = {
+      ...model,
+      measures: model.measures.map((m) =>
+        m.id === measureId
+          ? {
+              ...m,
+              effects: m.effects.map((e, i) => (i === 0 ? { ...e, value } : e)),
+            }
+          : m,
+      ),
+    };
+    return createEvaluator(trial)(new Set([...others, measureId])) - without;
+  };
+  const planned = Math.min(
+    1,
+    Math.max(0, (measure.effects[0].value - start) / span),
+  );
+  return {
+    id: measure.id,
+    name: measure.name,
+    planned,
+    plannedGain: gainAt(measure.effects[0].value),
+    points: Array.from({ length: steps + 1 }, (_, i) => {
+      const degree = i / steps,
+        value = start + degree * span;
+      return { degree, value, gain: gainAt(value) };
+    }),
+  };
+}
+
+export interface PathStep {
+  id: string;
+  name: string;
+  category: MeasureCategory;
+  /** 加入这一项带来的提升。 */
+  gain: number;
+  /** 加入后的系统可用度。 */
+  availability: number;
+  /** 当前设计里是否已启用。 */
+  enabled: boolean;
+}
+/**
+ * 组合收益路径：从现状出发，每一步加入“在已选措施基础上提升最大”的那一项。
+ * 排在前面的就是考虑了相互重叠之后最值得先做的措施；没有提升的不再加入。
+ */
+export function priorityPath(model: CoreModel, limit = 30) {
+  const evaluate = createEvaluator(model),
+    chosen = new Set<string>(),
+    base = evaluate(chosen),
+    steps: PathStep[] = [];
+  let current = base;
+  while (steps.length < limit) {
+    let pick: { measure: Measure; value: number } | null = null;
+    for (const measure of model.measures) {
+      if (chosen.has(measure.id)) continue;
+      chosen.add(measure.id);
+      const value = evaluate(chosen);
+      chosen.delete(measure.id);
+      if (!pick || value > pick.value) pick = { measure, value };
+    }
+    if (!pick || pick.value <= current + 1e-9) break;
+    chosen.add(pick.measure.id);
+    steps.push({
+      id: pick.measure.id,
+      name: pick.measure.name,
+      category: pick.measure.category,
+      gain: pick.value - current,
+      availability: pick.value,
+      enabled: pick.measure.enabled,
+    });
+    current = pick.value;
+  }
+  const target = model.scenario.target,
+    reached = steps.findIndex((step) => step.availability >= target);
+  return { base, steps, reachedAt: reached < 0 ? null : reached + 1 };
+}
+
+/**
+ * “至少做到什么程度”：在给定的一组措施里，其余各项按计划做足，
+ * 求某一项最少要兑现计划的百分之几，系统才刚好达标。
+ * 返回 0 表示这一项可以不做，1 表示必须做足；整组做足也不达标时返回 null。
+ */
+export function minimumDegrees(model: CoreModel, ids: string[]) {
+  const target = model.scenario.target,
+    set = new Set(ids),
+    result = new Map<string, number | null>();
+  const full = createEvaluator(model)(set);
+  for (const id of ids) {
+    if (full < target) {
+      result.set(id, null);
+      continue;
+    }
+    const scaled = (share: number) =>
+      createEvaluator({
+        ...model,
+        measures: model.measures.map((m) =>
+          m.id === id ? { ...m, applicability: m.applicability * share } : m,
+        ),
+      })(set);
+    if (scaled(0) >= target) {
+      result.set(id, 0);
+      continue;
+    }
+    let low = 0,
+      high = 1;
+    for (let i = 0; i < 40; i++) {
+      const middle = (low + high) / 2;
+      if (scaled(middle) >= target) high = middle;
+      else low = middle;
+    }
+    result.set(id, high);
+  }
+  return result;
 }

@@ -23,6 +23,7 @@ import { api } from "../api";
 import {
   allocationMethodInfo,
   analyze,
+  targetFromCurve,
   type Analysis,
   type CoreModel,
   type VerificationResult,
@@ -70,9 +71,9 @@ const steps = [
   { id: "verify", name: "机制验证", icon: ShieldCheck },
 ] as const;
 const purposes = [
-  "把系统可用度目标分到每个模块，得到各模块的损失预算。",
-  "按现有架构、故障模式和恢复能力算出现状，找出超预算的模块。",
-  "选择并调整可靠性措施，把差距补上。",
+  "按规模确定系统目标，影响大的模块单独指定，其余按方法分到每个模块。",
+  "由器件失效率、故障模式和恢复链算出现状，从频次和单次损失两个角度找差距。",
+  "措施分为组件级和系统级两层，按收益排出重点做哪几项、做到什么程度。",
   "用独立的仿真方法检验所选设计，给出能否达标的结论。",
 ];
 
@@ -378,7 +379,15 @@ export default function Workbench({
                 suffix="卡"
                 width={132}
                 onCommit={(v) =>
-                  update((d) => void (d.scenario.cards = Math.round(v)))
+                  update((d) => {
+                    // 规模变了，目标跟着“规模—目标”对照走
+                    d.scenario.cards = Math.round(v);
+                    const next = targetFromCurve(
+                      d.scenario.targetCurve,
+                      d.scenario.cards,
+                    );
+                    if (next) d.scenario.target = next;
+                  })
                 }
               />
             </label>
@@ -406,7 +415,17 @@ export default function Workbench({
                 digits={3}
                 suffix="%"
                 width={104}
-                onCommit={(v) => update((d) => void (d.scenario.target = v))}
+                onCommit={(v) =>
+                  update((d) => {
+                    // 直接改目标，等于给当前规模指定一个目标点
+                    d.scenario.target = v;
+                    const curve = d.scenario.targetCurve,
+                      at = curve.findIndex((p) => p.cards === d.scenario.cards);
+                    if (at >= 0) curve[at].target = v;
+                    else if (curve.length < 12)
+                      curve.push({ cards: d.scenario.cards, target: v });
+                  })
+                }
               />
             </label>
           </div>

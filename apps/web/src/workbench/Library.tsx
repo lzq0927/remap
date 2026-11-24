@@ -18,26 +18,33 @@ import {
   evidenceStates,
   faultKindNames,
   faultKinds,
+  layerOf,
   lossPerEvent,
+  measureCategories,
+  measureCategoryNames,
+  measureLayerNames,
   type EvidenceState,
   type FaultKind,
   type FaultMode,
   type Measure,
-  type MeasureDirection,
+  type MeasureCategory,
+  type MeasureLayer,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
 import MeasureDialog from "./MeasureDialog";
+import { LadderEditor } from "./RecoveryChain";
 import {
   blankMode,
   blankModule,
   dropModes,
   dropModule,
   effectText,
+  ladderText,
   newId,
   targetText,
 } from "./helpers";
-import { duration, points, saveFile } from "./format";
-import { DurationField, NumberField, TextField, Toggle } from "./ui";
+import { duration, hours, points, saveFile } from "./format";
+import { Dialog, DurationField, NumberField, TextField, Toggle } from "./ui";
 
 type Tab = "modes" | "measures" | "modules";
 
@@ -177,11 +184,15 @@ export default function Library({
 }
 
 function ModeLibrary() {
-  const { model, analysis, update } = useWorkbench();
+  const { model, analysis, update } = useWorkbench(),
+    [ladderOf, setLadderOf] = useState<string>();
   const patch = (id: string, change: Partial<FaultMode>) =>
     update((d) => Object.assign(d.modes.find((m) => m.id === id)!, change));
   const lossOf = (id: string) =>
-    analysis.baseline.modules.flatMap((m) => m.modes).find((m) => m.id === id);
+      analysis.baseline.modules
+        .flatMap((m) => m.modes)
+        .find((m) => m.id === id),
+    ladderMode = model.modes.find((m) => m.id === ladderOf);
   return (
     <section className="rw-card" aria-label="故障模式库">
       <div className="rw-card-head">
@@ -197,8 +208,8 @@ function ModeLibrary() {
         </button>
       </div>
       <p className="rw-hint">
-        每一行是一种故障模式。故障率决定多久发生一次；检出率和四段时间决定每次损失多少。事件率
-        = 单件 FIT × 模块的每卡数量 × 卡数。
+        每一行是一种故障模式。故障率决定多久发生一次；检出率、检测与发现时间、恢复阶梯决定每次损失多少。事件率
+        = 单件 FIT × 部件总数（按卡计的模块为每卡数量 × 卡数）。
       </p>
       <div className="rw-table-wrap">
         <table className="rw-table is-edit">
@@ -210,12 +221,12 @@ function ModeLibrary() {
               <th className="is-num">单件故障率</th>
               <th className="is-num">检出率</th>
               <th>检测时间</th>
-              <th>恢复时间</th>
+              <th>漏检后发现</th>
+              <th>恢复阶梯</th>
               <th>回滚重算</th>
-              <th>漏检单次损失</th>
               <th className="is-num">影响系数</th>
               <th className="is-num">单次等效损失</th>
-              <th className="is-num">现状损失</th>
+              <th className="is-num">每周损失</th>
               <th>数据来源</th>
               <th />
             </tr>
@@ -287,22 +298,39 @@ function ModeLibrary() {
                     onCommit={(coverage) => patch(mode.id, { coverage })}
                   />
                 </td>
-                {(
-                  [
-                    ["detectHours", "检测时间"],
-                    ["recoverHours", "恢复时间"],
-                    ["reworkHours", "回滚重算"],
-                    ["missedLossHours", "漏检单次损失"],
-                  ] as const
-                ).map(([key, name]) => (
-                  <td key={key}>
-                    <DurationField
-                      label={`${mode.name} 的${name}`}
-                      value={mode[key]}
-                      onCommit={(value) => patch(mode.id, { [key]: value })}
-                    />
-                  </td>
-                ))}
+                <td>
+                  <DurationField
+                    label={`${mode.name} 的检测时间`}
+                    value={mode.detectHours}
+                    onCommit={(detectHours) => patch(mode.id, { detectHours })}
+                  />
+                </td>
+                <td>
+                  <DurationField
+                    label={`${mode.name} 的漏检后发现时间`}
+                    value={mode.lateDetectHours}
+                    onCommit={(lateDetectHours) =>
+                      patch(mode.id, { lateDetectHours })
+                    }
+                  />
+                </td>
+                <td>
+                  <button
+                    className="rw-link rw-ladder-summary"
+                    aria-label={`编辑 ${mode.name} 的恢复阶梯`}
+                    title="编辑恢复阶梯"
+                    onClick={() => setLadderOf(mode.id)}
+                  >
+                    {ladderText(mode)}
+                  </button>
+                </td>
+                <td>
+                  <DurationField
+                    label={`${mode.name} 的回滚重算`}
+                    value={mode.reworkHours}
+                    onCommit={(reworkHours) => patch(mode.id, { reworkHours })}
+                  />
+                </td>
                 <td>
                   <NumberField
                     label={mode.name + " 的影响系数（%）"}
@@ -320,7 +348,7 @@ function ModeLibrary() {
                   {duration(lossPerEvent(mode))}
                 </td>
                 <td className="is-num">
-                  {(lossOf(mode.id)?.lossHours ?? 0).toFixed(2)} h
+                  {hours(lossOf(mode.id)?.lossHoursPerWeek ?? 0)}
                 </td>
                 <td>
                   <TextField
@@ -356,17 +384,49 @@ function ModeLibrary() {
         </table>
       </div>
       <p className="rw-hint">
-        单次等效损失 = 影响系数 × [ 检出率 × (检测 + 恢复 + 回滚重算) + (1 −
-        检出率) × 漏检单次损失 ]。亚健康类故障请把降速比例折算进各段时间。
+        单次等效损失 = 影响系数 × [ 检出率 × 检测时间 + (1 − 检出率) ×
+        漏检后发现时间 + 恢复阶梯各级的“到达概率 × (成功率 × 耗时 + 失败率 ×
+        失败耗时)” + 回滚重算
+        ]。恢复阶梯从小到大逐级尝试，点击可修改每一级的成功率与时间；百分数是该级的成功率，最后一级兜底。
       </p>
+      {ladderMode && (
+        <Dialog
+          title={ladderMode.name + " 的恢复阶梯"}
+          onClose={() => setLadderOf(undefined)}
+          footer={
+            <button
+              className="rw-button is-primary"
+              onClick={() => setLadderOf(undefined)}
+            >
+              完成
+            </button>
+          }
+        >
+          <LadderEditor
+            mode={ladderMode}
+            onChange={(level, change) =>
+              update((d) => {
+                Object.assign(
+                  d.modes.find((m) => m.id === ladderMode.id)!.ladder[level],
+                  change,
+                );
+              })
+            }
+          />
+          <p className="rw-hint rw-dialog-hint">
+            单次等效损失 <b>{duration(lossPerEvent(ladderMode))}</b>
+            。成功率填 0 表示这种故障不走这一级。
+          </p>
+        </Dialog>
+      )}
     </section>
   );
 }
 
 function MeasureLibrary() {
   const { model, analysis, update } = useWorkbench(),
-    [filter, setFilter] = useState<"all" | MeasureDirection>("all"),
-    [adding, setAdding] = useState<MeasureDirection>(),
+    [filter, setFilter] = useState<"all" | MeasureLayer>("all"),
+    [adding, setAdding] = useState<MeasureCategory>(),
     [editing, setEditing] = useState<string>();
   const patch = (id: string, change: Partial<Measure>) =>
     update((d) => Object.assign(d.measures.find((m) => m.id === id)!, change));
@@ -385,7 +445,7 @@ function MeasureLibrary() {
           m.effects.every((e) => e.param === "overhead"),
       );
   const rows = model.measures.filter(
-      (m) => filter === "all" || m.direction === filter,
+      (m) => filter === "all" || layerOf(m.category) === filter,
     ),
     gainOf = (id: string) =>
       analysis.contributions.items.find((c) => c.id === id),
@@ -405,13 +465,13 @@ function MeasureLibrary() {
               补回默认库中缺少的 {missing.length} 项
             </button>
           )}
-          <button className="rw-button" onClick={() => setAdding("mtbf")}>
+          <button className="rw-button" onClick={() => setAdding("prevent")}>
             <Plus size={15} aria-hidden />
-            添加提升 MTBF 的措施
+            添加组件级措施
           </button>
-          <button className="rw-button" onClick={() => setAdding("mttr")}>
+          <button className="rw-button" onClick={() => setAdding("recover")}>
             <Plus size={15} aria-hidden />
-            添加降低 MTTR 的措施
+            添加系统级措施
           </button>
         </div>
       </div>
@@ -419,12 +479,12 @@ function MeasureLibrary() {
         每一行是一项措施：它作用于哪些故障模式、把哪个参数改成多少、对其中多大比例的故障有效。启用与否也可以在第
         3 步切换。
       </p>
-      <div className="rw-tabs" role="tablist" aria-label="按方向筛选">
+      <div className="rw-tabs" role="tablist" aria-label="按层级筛选">
         {(
           [
             ["all", "全部"],
-            ["mtbf", "提升 MTBF"],
-            ["mttr", "降低 MTTR"],
+            ["component", measureLayerNames.component],
+            ["system", measureLayerNames.system],
           ] as const
         ).map(([id, name]) => (
           <button
@@ -436,8 +496,9 @@ function MeasureLibrary() {
           >
             {name}{" "}
             {
-              model.measures.filter((m) => id === "all" || m.direction === id)
-                .length
+              model.measures.filter(
+                (m) => id === "all" || layerOf(m.category) === id,
+              ).length
             }
           </button>
         ))}
@@ -448,7 +509,7 @@ function MeasureLibrary() {
             <tr>
               <th>启用</th>
               <th>措施</th>
-              <th>方向</th>
+              <th>类别</th>
               <th>作用于</th>
               <th>参数变化</th>
               <th className="is-num">适用比例</th>
@@ -483,16 +544,25 @@ function MeasureLibrary() {
                   </td>
                   <td>
                     <select
-                      aria-label={measure.name + " 的方向"}
-                      value={measure.direction}
+                      aria-label={measure.name + " 的类别"}
+                      value={measure.category}
                       onChange={(e) =>
                         patch(measure.id, {
-                          direction: e.target.value as MeasureDirection,
+                          category: e.target.value as MeasureCategory,
                         })
                       }
                     >
-                      <option value="mtbf">提升 MTBF</option>
-                      <option value="mttr">降低 MTTR</option>
+                      {(["component", "system"] as const).map((layer) => (
+                        <optgroup key={layer} label={measureLayerNames[layer]}>
+                          {measureCategories
+                            .filter((c) => layerOf(c) === layer)
+                            .map((c) => (
+                              <option key={c} value={c}>
+                                {measureCategoryNames[c]}
+                              </option>
+                            ))}
+                        </optgroup>
+                      ))}
                     </select>
                   </td>
                   <td className="rw-cell-wrap">{targetText(model, measure)}</td>
@@ -577,10 +647,7 @@ function MeasureLibrary() {
         贡献，未启用的为启用后还能再提升多少。参数变化和作用范围点右侧的编辑按钮修改。
       </p>
       {adding && (
-        <MeasureDialog
-          direction={adding}
-          onClose={() => setAdding(undefined)}
-        />
+        <MeasureDialog category={adding} onClose={() => setAdding(undefined)} />
       )}
       {editingMeasure && (
         <MeasureDialog
@@ -668,7 +735,7 @@ function ModuleLibrary() {
           </button>
         </div>
         <p className="rw-hint">
-          模块是分配目标和统计损失的单位。架构图按超节点的硬件拓扑绘制，每个模块标注在所选的硬件位置上；选“不画在图上”的模块列在图的下方。
+          模块是分配目标和统计损失的单位。按卡计的模块数量随规模增长；机房供配电这类全系统只有固定几套的设施选“全系统固定”。单次故障影响大的模块可以单独指定目标，不参与按权重分配。架构图按超节点的硬件拓扑绘制，每个模块标注在所选的硬件位置上；选“不画在图上”的模块列在图的下方。
         </p>
         <div className="rw-table-wrap">
           <table className="rw-table is-edit">
@@ -677,7 +744,9 @@ function ModuleLibrary() {
                 <th>分组</th>
                 <th>模块</th>
                 <th>架构图上的位置</th>
-                <th className="is-num">每卡数量</th>
+                <th className="is-num">数量</th>
+                <th>数量口径</th>
+                <th>单独指定目标</th>
                 <th className="is-num">重要度 ω</th>
                 <th className="is-num">故障模式</th>
                 <th className="is-num">FIT / 卡</th>
@@ -740,7 +809,7 @@ function ModuleLibrary() {
                     </td>
                     <td>
                       <NumberField
-                        label={module.name + " 的每卡数量"}
+                        label={module.name + " 的数量"}
                         value={module.unitsPerCard}
                         min={0.0001}
                         max={100000}
@@ -750,6 +819,49 @@ function ModuleLibrary() {
                           patch(module.id, { unitsPerCard })
                         }
                       />
+                    </td>
+                    <td>
+                      <select
+                        aria-label={module.name + " 的数量口径"}
+                        value={module.scaling}
+                        onChange={(e) =>
+                          patch(module.id, {
+                            scaling: e.target.value as "per-card" | "fixed",
+                          })
+                        }
+                      >
+                        <option value="per-card">每卡，随规模增长</option>
+                        <option value="fixed">全系统固定</option>
+                      </select>
+                    </td>
+                    <td>
+                      <span className="rw-pin-cell">
+                        <input
+                          type="checkbox"
+                          aria-label={module.name + " 单独指定目标"}
+                          checked={module.fixedTarget !== null}
+                          onChange={(e) =>
+                            patch(module.id, {
+                              fixedTarget: e.target.checked ? 0.99999 : null,
+                            })
+                          }
+                        />
+                        {module.fixedTarget !== null && (
+                          <NumberField
+                            label={module.name + " 的指定目标（%）"}
+                            value={module.fixedTarget}
+                            factor={100}
+                            min={0.5}
+                            max={0.9999999}
+                            digits={5}
+                            suffix="%"
+                            width={112}
+                            onCommit={(fixedTarget) =>
+                              patch(module.id, { fixedTarget })
+                            }
+                          />
+                        )}
+                      </span>
                     </td>
                     <td>
                       <NumberField

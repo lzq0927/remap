@@ -33,18 +33,30 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
       (await app.inject(`/api/tasks/${other.id}/core`)).json().revision,
     ).toBe(0);
 
-    // 早期保存的模型缺少后来新增的字段，读取时补默认值，不丢数据
+    // 早期保存的模型字段与现在不同，读取时整理成当前结构，不丢数据
     const store = app.taskServices.resolve(task.id).store,
       legacy = JSON.parse(JSON.stringify(model));
     for (const group of legacy.groups) group.layout = "chain";
     for (const module of legacy.modules) {
       delete module.anchor;
+      delete module.scaling;
+      delete module.fixedTarget;
       module.container = "";
     }
-    for (const measure of legacy.measures) {
-      delete measure.applicability;
-      delete measure.source;
+    for (const mode of legacy.modes) {
+      const restart = mode.ladder.restart.hours;
+      mode.recoverHours = restart;
+      mode.missedLossHours = mode.lateDetectHours + restart + mode.reworkHours;
+      delete mode.lateDetectHours;
+      delete mode.ladder;
     }
+    legacy.measures = legacy.measures
+      .filter((m: any) => m.effects.every((e: any) => !e.param.includes(".")))
+      .map(({ category, applicability: _a, source: _s, ...rest }: any) => ({
+        ...rest,
+        direction: category === "prevent" ? "mtbf" : "mttr",
+      }));
+    delete legacy.scenario.targetCurve;
     store.putDocument(
       "core-model",
       { model: legacy, revision: 1, savedAt: "2026-11-17T00:00:00.000Z" },
@@ -52,9 +64,22 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     );
     const upgraded = (await app.inject(path)).json();
     expect(upgraded.model.scenario.target).toBe(0.85);
+    expect(upgraded.model.scenario.targetCurve).toEqual([
+      { cards: 500000, target: 0.85 },
+    ]);
     expect(upgraded.model.groups[1]).toEqual({ id: "network", name: "网络" });
-    expect(upgraded.model.modules[0].anchor).toBe("aicore");
-    expect(upgraded.model.measures[0].applicability).toBe(1);
+    expect(upgraded.model.modules[0]).toMatchObject({
+      anchor: "aicore",
+      scaling: "per-card",
+      fixedTarget: null,
+    });
+    expect(upgraded.model.modes[0].ladder.restart).toMatchObject({
+      success: 1,
+    });
+    expect(upgraded.model.measures[0]).toMatchObject({
+      category: "prevent",
+      applicability: 1,
+    });
     expect(upgraded.hash).toBe(modelHash(upgraded.model));
     await app.inject({ method: "PUT", url: path, payload: { model } });
 

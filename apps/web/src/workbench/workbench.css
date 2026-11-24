@@ -620,7 +620,7 @@ p {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 150px;
+  min-width: 108px;
 }
 .rw-weight em {
   width: 46px;
@@ -2177,4 +2177,295 @@ h2.rw-direction {
   .rw-step-nav {
     display: none;
   }
+}
+
+/* ---------- 图表与说明并排 ---------- */
+.rw-grid.is-chart {
+  grid-template-columns: minmax(0, 1.75fr) minmax(250px, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+.rw-grid.is-scale {
+  grid-template-columns: minmax(340px, 2fr) minmax(0, 3fr);
+  gap: 24px;
+}
+@media (max-width: 1100px) {
+  .rw-grid.is-chart,
+  .rw-grid.is-scale {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.rw-grid.is-chart + .rw-table-wrap {
+  margin-top: 14px;
+}
+.rw-explain.is-inline {
+  color: var(--rw-ink-2);
+  font-size: 13.5px;
+}
+.rw-explain.is-inline p {
+  margin: 0 0 10px;
+}
+.rw-explain.is-inline p:last-child {
+  margin-bottom: 0;
+}
+.rw-explain.is-inline strong,
+.rw-explain.is-inline b {
+  color: var(--rw-ink);
+}
+.rw-lead {
+  max-width: 96ch;
+  margin: 0 0 12px;
+  color: var(--rw-ink-2);
+  font-size: 14.5px;
+}
+.rw-lead b {
+  color: var(--rw-ink);
+}
+.rw-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 10px;
+  white-space: nowrap;
+}
+.rw-chart > .rw-legend {
+  display: flex;
+}
+.rw-grid.is-scale .rw-button {
+  margin: 10px 0 14px;
+}
+.rw-tip-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rw-tip-key i,
+.rw-series-name i {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.rw-series-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rw-series-name small {
+  font-size: 12px;
+}
+.rw-key.is-neutral {
+  background: #98a2b3;
+}
+.rw-risk-point {
+  outline: none;
+}
+.rw-risk-point.is-button {
+  cursor: pointer;
+}
+.rw-risk-point:hover circle:last-of-type,
+.rw-risk-point:focus-visible circle:last-of-type {
+  stroke: var(--rw-ink);
+}
+.rw-chart .rw-cross {
+  pointer-events: none;
+}
+
+/* ---------- 排名条 ---------- */
+.rw-rank {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 4px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.rw-rank li {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+}
+.rw-rank li > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rw-rank-track {
+  height: 10px;
+  border-radius: 3px;
+  background: var(--rw-idle-soft);
+}
+.rw-rank-track span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--rw-series-1);
+}
+.rw-rank em {
+  font-style: normal;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.rw-rank small {
+  display: inline-block;
+  min-width: 38px;
+  margin-left: 6px;
+  color: var(--rw-ink-3);
+  font-weight: 400;
+}
+.rw-rank + .rw-hint {
+  margin: 0;
+}
+
+/* ---------- 表头分组、恢复阶梯 ---------- */
+.rw-table thead th.is-group {
+  border-bottom: 1px solid var(--rw-line);
+  color: var(--rw-ink-2);
+  font-weight: 600;
+  text-align: center;
+}
+.rw-table.is-ladder td,
+.rw-table.is-ladder th {
+  padding: 5px 8px;
+}
+.rw-table.is-ladder tr.is-off td {
+  color: var(--rw-ink-3);
+}
+.rw-table td.is-changed {
+  color: var(--rw-accent-strong);
+  font-weight: 650;
+}
+.rw-form.is-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.rw-mode .rw-table-wrap {
+  margin-top: 12px;
+}
+.rw-cell-edit.is-left {
+  justify-content: flex-start;
+}
+.rw-pin-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+.rw-ladder-summary {
+  text-align: left;
+}
+.rw-inline-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--rw-ink-2);
+  font-size: 13px;
+}
+.rw-inline-select select {
+  max-width: 420px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--rw-line-strong);
+  border-radius: 7px;
+  background: var(--rw-surface);
+}
+.rw-chain-figures {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+}
+.rw-chain-figures svg {
+  display: block;
+  width: 100%;
+  min-width: 980px;
+  height: auto;
+}
+.rw-trace {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  gap: 8px 18px;
+  align-items: baseline;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--rw-subtle);
+  font-size: 13.5px;
+}
+.rw-trace code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.rw-trace span {
+  color: var(--rw-ink-3);
+  font-size: 12.5px;
+}
+@media (max-width: 900px) {
+  .rw-trace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .rw-trace strong {
+    margin-top: 8px;
+  }
+}
+
+/* ---------- 第 3 步：分层 ---------- */
+.rw-measure-group + .rw-measure-group {
+  margin-top: 6px;
+  padding-top: 2px;
+  border-top: 1px solid var(--rw-line);
+}
+.rw-measure-group .rw-empty {
+  margin: 0 0 8px;
+}
+.rw-candidate-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 10px 0 6px;
+  color: var(--rw-ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.rw-candidate-head small {
+  color: var(--rw-ink-3);
+  font-weight: 400;
+}
+.rw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 9px 1px 7px;
+  border: 1px solid var(--rw-line-strong);
+  border-radius: 999px;
+  color: var(--rw-ink-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.rw-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rw-series-1);
+}
+.rw-chip.is-mttr::before {
+  background: var(--rw-series-2);
+}
+.rw-focus-name {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.rw-focus-min {
+  display: block;
+  color: var(--rw-ink-3);
+  font-size: 12px;
 }

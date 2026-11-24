@@ -9,7 +9,10 @@ export const points = (value: number, digits = 2) =>
   (value >= 0 ? "+" : "−") + Math.abs(value * 100).toFixed(digits) + " pp";
 export const hours = (value: number) => {
   if (!Number.isFinite(value)) return "—";
-  const digits = Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2;
+  const size = Math.abs(value),
+    // 不到 0.01 小时的预算（如单独指定很高目标的模块）多留两位，避免显示成 0
+    digits =
+      size >= 100 ? 0 : size >= 10 ? 1 : size >= 0.01 || size === 0 ? 2 : 4;
   return value.toFixed(digits) + " h";
 };
 export const count = (value: number, digits = 0) =>
@@ -20,7 +23,10 @@ export const count = (value: number, digits = 0) =>
       })
     : "—";
 export const fit = (value: number) =>
-  count(value, value > 0 && value < 100 ? 1 : 0);
+  value > 0 && value < 1
+    ? // 全系统只有几套的设施折算到每卡后远小于 1，保留两位有效数字
+      String(Number(value.toPrecision(2)))
+    : count(value, value > 0 && value < 100 ? 1 : 0);
 /** 时长自动选择秒、分钟、小时或天。 */
 export const duration = (valueHours: number) => {
   if (!Number.isFinite(valueHours)) return "—";
@@ -30,6 +36,18 @@ export const duration = (valueHours: number) => {
   if (valueHours < 1.5) return trim(valueHours * 60, 1) + " 分钟";
   if (valueHours < 72) return trim(valueHours, 1) + " 小时";
   return trim(valueHours / 24, 1) + " 天";
+};
+/**
+ * 故障频次，以周为粒度：每周不到 1 次的换成更直观的“每年几次”或“几年一次”。
+ */
+export const frequency = (perWeek: number) => {
+  if (!Number.isFinite(perWeek)) return "—";
+  if (perWeek <= 0) return "0";
+  if (perWeek >= 100) return count(perWeek) + " 次/周";
+  if (perWeek >= 0.95) return trim(perWeek, 1) + " 次/周";
+  const perYear = perWeek * (8760 / 168);
+  if (perYear >= 0.95) return trim(perYear, 1) + " 次/年";
+  return trim(1 / perYear, 1) + " 年 1 次";
 };
 export const times = (value: number) =>
   !Number.isFinite(value)

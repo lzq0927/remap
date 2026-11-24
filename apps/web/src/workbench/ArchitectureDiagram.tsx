@@ -512,7 +512,7 @@ export default function ArchitectureDiagram({
       <div className="rw-topo-scroll">
         <Topo.Provider value={context}>
           <svg
-            viewBox="0 0 1280 884"
+            viewBox="0 0 1280 968"
             role="img"
             aria-label={`系统架构图（${viewNames[active]}）`}
           >
@@ -1074,31 +1074,70 @@ export default function ArchitectureDiagram({
             <Link d="M1006 458V470" />
             <Link d="M1071 104V120" dashed />
 
-            {/* 软件、公共开销与系统合计 */}
-            <Link d="M217 760V772" color="#98a2b3" dashed />
-            <Link d="M639 760V772" color="#98a2b3" dashed />
-            <Hit slot="software">
-              <Box x={12} y={772} w={410} h={100} />
+            {/* 机房供配电：全系统共用 */}
+            <Link d="M217 760V772" color="#98a2b3" />
+            <Link d="M562 760V772" color="#98a2b3" />
+            <Link d="M1006 760V772" color="#98a2b3" />
+            <Hit slot="site-power">
+              <Box x={12} y={772} w={1256} h={72} fill="#f7f8fa" />
               <T x={28} y={796} size={14} weight={650}>
+                机房供配电 · 全系统共用
+              </T>
+              {["市电", "UPS", "柴发"].map((name, index) => (
+                <g key={name}>
+                  <Swatch
+                    x={28 + index * 62}
+                    y={808}
+                    width={54}
+                    height={22}
+                    rx={4}
+                    slot="site-power"
+                    domain="plain"
+                  />
+                  <T
+                    x={55 + index * 62}
+                    y={823}
+                    size={10.5}
+                    weight={600}
+                    fill="#5b6676"
+                    anchor="middle"
+                  >
+                    {name}
+                  </T>
+                </g>
+              ))}
+              <Tag x={236} y={788} slot="site-power" w={236} />
+              <T x={496} y={805} size={11.5} fill={muted}>
+                向全部机柜供电，数量不随卡数增长
+              </T>
+              <T x={496} y={823} size={11.5} fill={muted}>
+                一次失效打断全部任务并需人工恢复，所以单独指定很高的目标，不按权重分配
+              </T>
+            </Hit>
+
+            {/* 软件、公共开销与系统合计 */}
+            <Hit slot="software">
+              <Box x={12} y={856} w={410} h={100} />
+              <T x={28} y={880} size={14} weight={650}>
                 软件栈 · 调度 / 框架 / 未归因
               </T>
-              <Tag x={28} y={814} slot="software" />
-              <T x={246} y={832} size={11.5} fill={muted}>
+              <Tag x={28} y={898} slot="software" />
+              <T x={246} y={916} size={11.5} fill={muted}>
                 运行在全部硬件之上
               </T>
-              <T x={246} y={849} size={11.5} fill={muted}>
+              <T x={246} y={933} size={11.5} fill={muted}>
                 任何一处出错都打断任务
               </T>
             </Hit>
             <g role="group" aria-label="公共开销">
-              <Box x={434} y={772} w={410} h={100} dashed />
-              <T x={450} y={796} size={14} weight={650}>
+              <Box x={434} y={856} w={410} h={100} dashed />
+              <T x={450} y={880} size={14} weight={650}>
                 公共开销 · 保存检查点与在线检测
               </T>
-              <T x={450} y={822} fill={muted}>
+              <T x={450} y={906} fill={muted}>
                 与故障无关，占运行时间 {percent(system.overhead)}
               </T>
-              <text x={450} y={852} fontSize={15} fontWeight={700} fill={ink}>
+              <text x={450} y={936} fontSize={15} fontWeight={700} fill={ink}>
                 {hours(system.overheadLossHours)}
                 <tspan fontSize={12} fontWeight={400} fill={muted}>
                   {" / 预算 " + hours(allocation.overheadLossHours)}
@@ -1108,16 +1147,16 @@ export default function ArchitectureDiagram({
             <g role="group" aria-label="系统合计">
               <Box
                 x={856}
-                y={772}
+                y={856}
                 w={412}
                 h={100}
                 fill="#f0f4fb"
                 stroke="#bfd0ea"
               />
-              <T x={872} y={796} size={14} weight={650}>
+              <T x={872} y={880} size={14} weight={650}>
                 训练集群 · {scale(model.scenario.cards)}（各部分串联）
               </T>
-              <text x={872} y={830} fontSize={22} fontWeight={700} fill={ink}>
+              <text x={872} y={914} fontSize={22} fontWeight={700} fill={ink}>
                 {percent(active === "target" ? target : system.availability)}
                 <tspan fontSize={12.5} fontWeight={400} fill={muted}>
                   {active === "target"
@@ -1125,7 +1164,7 @@ export default function ArchitectureDiagram({
                     : `　${viewNames[active]} → 目标 ${percent(target)}`}
                 </tspan>
               </text>
-              <T x={872} y={856} fill="#475467">
+              <T x={872} y={940} fill="#475467">
                 {fit(system.fitPerCard)} FIT / 卡 · 损失{" "}
                 {hours(system.lossHours)} / 预算 {hours(allocation.lossHours)}
               </T>
