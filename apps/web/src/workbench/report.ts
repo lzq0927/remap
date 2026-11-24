@@ -137,13 +137,13 @@ ${table(
     m.pinned ? "单独指定" : "权重 " + percent(m.weight, 1),
     percent(m.availability),
     hours(m.lossHoursPerWeek),
-    m.maxEventsPerWeek === null ? "—" : frequency(m.maxEventsPerWeek),
+    m.maxRatePerWeek === null ? "—" : frequency(m.maxRatePerWeek),
     m.maxMttrHours === null ? "—" : duration(m.maxMttrHours),
   ]),
 )}
 
 <h2>2　可用度评估（现状）</h2>
-<p>每卡故障率 ${fit(baseline.system.fitPerCard)} FIT，系统故障频次 ${escape(frequency(baseline.system.eventsPerWeek))}（MTBF ${duration(baseline.system.mtbfHours)}），单次等效损失 ${duration(baseline.system.mttrHours)}，每周损失 ${hours(baseline.system.lossHoursPerWeek)}；窗口内约 ${count(baseline.system.events, 1)} 次故障，损失 ${hours(baseline.system.lossHours)}。</p>
+<p>每卡故障率 ${fit(baseline.system.fitPerCard)} FIT，系统故障频次 ${escape(frequency(baseline.system.ratePerWeek))}（MTBF ${duration(baseline.system.mtbfHours)}），单次等效损失 ${duration(baseline.system.mttrHours)}，每周损失 ${hours(baseline.system.lossHoursPerWeek)}；窗口内约 ${count(baseline.system.events, 1)} 次故障，损失 ${hours(baseline.system.lossHours)}。</p>
 <div class="formula">每周损失 = 故障频次 × 单次等效损失；单次等效损失 = κ·[ c·t检出 + (1−c)·t发现 + Σₖ 到达ₖ·(pₖ·tₖ + (1−pₖ)·fₖ)·κₖ + 回滚重算 ]</div>
 ${table(
   [
@@ -167,10 +167,8 @@ ${table(
       return [
         m.name,
         fit(m.fitPerCard),
-        frequency(m.eventsPerWeek),
-        budget.maxEventsPerWeek === null
-          ? "—"
-          : frequency(budget.maxEventsPerWeek),
+        frequency(m.ratePerWeek),
+        budget.maxRatePerWeek === null ? "—" : frequency(budget.maxRatePerWeek),
         duration(m.mttrHours),
         budget.maxMttrHours === null ? "—" : duration(budget.maxMttrHours),
         percent(m.availability),

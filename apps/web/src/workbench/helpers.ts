@@ -108,7 +108,7 @@ export function targetText(model: CoreModel, measure: Measure) {
     : modules.join("、");
 }
 
-/** 新故障模式的默认参数：取现有基线的检测与恢复阶梯。 */
+/** 新故障模式的默认参数：取默认场景中断类故障的检测与恢复链。 */
 export const blankMode = (moduleId: string) => ({
   id: newId("mode"),
   moduleId,
@@ -118,10 +118,10 @@ export const blankMode = (moduleId: string) => ({
   coverage: 0.95,
   detectHours: 10 / 3600,
   lateDetectHours: 60 / 3600,
-  reworkHours: 150 / 3600,
+  reworkHours: 300 / 3600,
   ladder: makeLadder({
-    restart: { success: 0.99, hours: 180 / 3600, failHours: 180 / 3600 },
-    manual: { success: 1, hours: 2 },
+    restart: { success: 0.99, hours: 600 / 3600, failHours: 600 / 3600 },
+    manual: { success: 1, hours: 4 },
   }),
   impact: 1,
   evidence: "",
@@ -139,16 +139,20 @@ export const blankModule = (groupId: string) => ({
   note: "",
 });
 
-/** 恢复阶梯的一行摘要：只列用到的级别及其成功率，最后一级兜底。 */
+/** 恢复链的一行摘要：只列链上的级别及其成功率，最后一级兜底。 */
 export const ladderText = (mode: FaultMode) => {
-  const used = recoveryLevels.filter((level) => mode.ladder[level].success > 0);
+  const used = recoveryLevels.filter(
+    (level) => mode.ladder[level].success > 0 || mode.ladder[level].gate,
+  );
   return used
     .map(
       (level, index) =>
         recoveryLevelNames[level] +
-        (index === used.length - 1
-          ? ""
-          : " " + percent(mode.ladder[level].success, 0)),
+        (mode.ladder[level].success <= 0
+          ? "（不具备）"
+          : index === used.length - 1
+            ? ""
+            : " " + percent(mode.ladder[level].success, 0)),
     )
     .join(" → ");
 };

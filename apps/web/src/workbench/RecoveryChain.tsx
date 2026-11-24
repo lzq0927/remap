@@ -1,7 +1,9 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import {
   applyMeasures,
+  eventPaths,
   ladderOutcomes,
+  levelBenefit,
   lossPerEvent,
   recoveryLevelNames,
   recoveryLevelNotes,
@@ -10,17 +12,38 @@ import {
   type FaultMode,
   type LadderLevel,
   type RecoveryLevel,
+  type RecoveryPath,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
 import { duration, frequency, hours, percent } from "./format";
-import { DurationField, NumberField } from "./ui";
+import { DurationField, NumberField, useTooltip } from "./ui";
 
 const ink = "#101828",
   muted = "#667085",
   line = "#98a2b3",
   accent = "#1d5fd0";
 
-/** 恢复阶梯编辑：每一级的成功率、耗时、失败耗时、影响范围和是否回滚。 */
+/** 恢复链各环节的固定配色：同一环节在所有图里用同一个颜色。 */
+type StageKey = "detect" | "late" | RecoveryLevel;
+const stageOrder: StageKey[] = ["detect", "late", ...recoveryLevels];
+const stageColors: Record<StageKey, string> = {
+  detect: "#98a2b3",
+  late: "#e87ba4",
+  replay: "#1baf7a",
+  process: "#2a78d6",
+  elastic: "#eda100",
+  restart: "#eb6834",
+  manual: "#008300",
+};
+const stageNames: Record<StageKey, string> = {
+  detect: "检测",
+  late: "漏检后发现",
+  ...recoveryLevelNames,
+};
+const share = (value: number) =>
+  percent(value, value > 0 && value < 0.01 ? 2 : 1);
+
+/** 恢复链编辑：每一级的成功率、耗时、走向、影响范围和是否回滚。 */
 export function LadderEditor({
   mode,
   onChange,
@@ -37,15 +60,18 @@ export function LadderEditor({
             <th className="is-num">成功率</th>
             <th>成功耗时</th>
             <th>失败白费</th>
+            <th>成功后</th>
+            <th>失败后</th>
             <th className="is-num">影响范围</th>
-            <th>成功后回滚</th>
+            <th>回滚</th>
+            <th>必经</th>
           </tr>
         </thead>
         <tbody>
           {recoveryLevels.map((level, index) => {
             const step = mode.ladder[level],
               name = `${mode.name} · ${recoveryLevelNames[level]}`,
-              off = step.success <= 0;
+              off = step.success <= 0 && !step.gate;
             return (
               <tr key={level} className={off ? "is-off" : ""}>
                 <td>
@@ -63,7 +89,7 @@ export function LadderEditor({
                     max={1}
                     digits={3}
                     suffix="%"
-                    width={88}
+                    width={84}
                     onCommit={(success) => onChange(level, { success })}
                   />
                 </td>
@@ -84,6 +110,36 @@ export function LadderEditor({
                   />
                 </td>
                 <td>
+                  <select
+                    aria-label={name + "成功后"}
+                    value={step.then}
+                    disabled={off || level === "manual"}
+                    onChange={(e) =>
+                      onChange(level, {
+                        then: e.target.value as LadderLevel["then"],
+                      })
+                    }
+                  >
+                    <option value="done">恢复</option>
+                    <option value="next">再走下一级</option>
+                  </select>
+                </td>
+                <td>
+                  <select
+                    aria-label={name + "失败后"}
+                    value={step.onFail}
+                    disabled={off || level === "manual"}
+                    onChange={(e) =>
+                      onChange(level, {
+                        onFail: e.target.value as LadderLevel["onFail"],
+                      })
+                    }
+                  >
+                    <option value="next">走下一级</option>
+                    <option value="manual">转人工</option>
+                  </select>
+                </td>
+                <td>
                   <NumberField
                     label={name + "的影响范围（%）"}
                     value={step.impact}
@@ -92,24 +148,34 @@ export function LadderEditor({
                     max={1}
                     digits={2}
                     suffix="%"
-                    width={84}
+                    width={80}
                     disabled={off}
                     onCommit={(impact) => onChange(level, { impact })}
                   />
                 </td>
                 <td>
-                  <label className="rw-check">
-                    <input
-                      type="checkbox"
-                      aria-label={name + "成功后回滚"}
-                      checked={step.rollback}
-                      disabled={off}
-                      onChange={(e) =>
-                        onChange(level, { rollback: e.target.checked })
-                      }
-                    />
-                    <span>{step.rollback ? "回滚" : "不回滚"}</span>
-                  </label>
+                  <input
+                    type="checkbox"
+                    aria-label={name + "恢复后回滚重算"}
+                    title="在这一级恢复后，还要回滚到检查点重算"
+                    checked={step.rollback}
+                    disabled={off}
+                    onChange={(e) =>
+                      onChange(level, { rollback: e.target.checked })
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={name + "是必经环节"}
+                    title="必经：成功率为 0 时不跳过，按失败处理"
+                    checked={step.gate}
+                    disabled={level === "manual"}
+                    onChange={(e) =>
+                      onChange(level, { gate: e.target.checked })
+                    }
+                  />
                 </td>
               </tr>
             );
@@ -117,14 +183,16 @@ export function LadderEditor({
         </tbody>
       </table>
       <p className="rw-hint">
-        成功率填 0
-        表示不使用这一级。故障被发现后从上到下依次尝试：成功就结束，失败则白费“失败白费”的时间再升到下一级；最后一个使用的级别按必定成功计算。
+        故障被发现后从上到下走：每一级成功后或者就此恢复，或者再走下一级（如弹性恢复换好资源后还要
+        CKPT
+        回滚）；失败后白费“失败白费”的时间，再走下一级或直接转人工。成功率填 0
+        的级别默认跳过；勾选“必经”后不跳过，按失败处理（表示这一步绕不开，但现在还不具备）。失败后无处可去的级别按必定成功计算。
       </p>
     </div>
   );
 }
 
-/** 恢复链示意图：故障发生 → 检测 → 逐级升级的恢复阶梯。 */
+/** 恢复链示意图：故障发生 → 检测 → 各恢复级别及其走向。 */
 function ChainFigure({
   mode,
   label,
@@ -135,20 +203,26 @@ function ChainFigure({
   perWeek: number;
 }) {
   const outcomes = ladderOutcomes(mode),
-    width = 1180,
-    stepX = 166,
-    stepY = 40,
-    boxW = 154,
-    boxH = 64,
+    boxW = 172,
+    boxH = 66,
+    gap = 78,
+    top = 64,
     startX = 372,
-    height = 44 + boxH + Math.max(0, outcomes.length - 1) * stepY + 18;
-  const Arrow = ({ d }: { d: string }) => (
+    x = (index: number) => startX + index * (boxW + gap),
+    width = Math.max(1180, x(outcomes.length) - gap + 4),
+    rail = top + boxH + 48,
+    height = rail + 30,
+    indexOf = (level: RecoveryLevel | null) =>
+      outcomes.findIndex((o) => o.level === level),
+    marker = "rw-arrow-" + label.length + "-" + mode.id;
+  const Arrow = ({ d, dashed }: { d: string; dashed?: boolean }) => (
     <path
       d={d}
       fill="none"
       stroke={line}
       strokeWidth={1.6}
-      markerEnd="url(#rw-arrow)"
+      strokeDasharray={dashed ? "5 4" : undefined}
+      markerEnd={`url(#${marker})`}
     />
   );
   return (
@@ -159,7 +233,7 @@ function ChainFigure({
     >
       <defs>
         <marker
-          id="rw-arrow"
+          id={marker}
           viewBox="0 0 8 8"
           refX="7"
           refY="4"
@@ -173,110 +247,201 @@ function ChainFigure({
       <text x={0} y={14} fontSize={12.5} fontWeight={650} fill={accent}>
         {label}
       </text>
+      <text x={width} y={14} fontSize={11.5} fill={muted} textAnchor="end">
+        回滚重算 {duration(mode.reworkHours) || "0"}
+        （在需要回滚的级别恢复后计入）
+      </text>
       {/* 故障发生 */}
       <rect
         x={0}
-        y={26}
+        y={top}
         width={132}
         height={boxH}
         rx={8}
         fill="#f1f4f8"
         stroke="#cdd3dc"
       />
-      <text x={12} y={48} fontSize={12.5} fontWeight={650} fill={ink}>
+      <text x={12} y={top + 24} fontSize={12.5} fontWeight={650} fill={ink}>
         故障发生
       </text>
-      <text x={12} y={68} fontSize={12} fill={muted}>
+      <text x={12} y={top + 44} fontSize={12} fill={muted}>
         {frequency(perWeek)}
       </text>
-      <Arrow d={`M132 ${26 + boxH / 2}H164`} />
+      <Arrow d={`M132 ${top + boxH / 2}H164`} />
       {/* 检测 */}
       <rect
         x={166}
-        y={26}
+        y={top}
         width={176}
         height={boxH}
         rx={8}
         fill="#fff"
         stroke="#cdd3dc"
       />
-      <text x={178} y={46} fontSize={12.5} fontWeight={650} fill={ink}>
+      <rect
+        x={166}
+        y={top}
+        width={176}
+        height={4}
+        rx={2}
+        fill={stageColors.detect}
+      />
+      <text x={178} y={top + 22} fontSize={12.5} fontWeight={650} fill={ink}>
         检测
       </text>
-      <text x={178} y={63} fontSize={11.5} fill={muted}>
+      <text x={178} y={top + 39} fontSize={11.5} fill={muted}>
         检出 {percent(mode.coverage, 1)} ·{" "}
         {duration(mode.detectHours) || "即时"}
       </text>
-      <text x={178} y={79} fontSize={11.5} fill={muted}>
+      <text x={178} y={top + 55} fontSize={11.5} fill={muted}>
         漏检 {percent(1 - mode.coverage, 1)} · {duration(mode.lateDetectHours)}
         后发现
       </text>
       {outcomes.length > 0 && (
-        <Arrow d={`M342 ${26 + boxH / 2}H${startX - 2}`} />
+        <Arrow d={`M342 ${top + boxH / 2}H${startX - 2}`} />
       )}
-      {/* 恢复阶梯 */}
+      {/* 任务恢复 */}
+      {outcomes.length > 0 && (
+        <>
+          <line
+            x1={startX}
+            x2={x(outcomes.length - 1) + boxW}
+            y1={rail}
+            y2={rail}
+            stroke="#0ca30c"
+            strokeWidth={2}
+          />
+          <text x={startX} y={rail + 18} fontSize={12} fill="#067647">
+            任务恢复
+          </text>
+        </>
+      )}
       {outcomes.map((outcome, index) => {
         const step = mode.ladder[outcome.level],
-          x = startX + index * stepX,
-          y = 26 + index * stepY,
-          last = index === outcomes.length - 1;
+          left = x(index),
+          unavailable = step.success <= 0,
+          next = index + 1 < outcomes.length ? index + 1 : -1,
+          successIndex = indexOf(outcome.successTo),
+          failIndex = indexOf(outcome.failTo),
+          middle = top + boxH / 2,
+          failed = outcome.reach * (1 - outcome.success);
         return (
           <g key={outcome.level}>
             <rect
-              x={x}
-              y={y}
+              x={left}
+              y={top}
               width={boxW}
               height={boxH}
               rx={8}
               fill="#fff"
-              stroke={accent}
+              stroke={unavailable ? line : "#8c98a8"}
+              strokeDasharray={unavailable ? "5 4" : undefined}
+            />
+            <rect
+              x={left}
+              y={top}
+              width={boxW}
+              height={4}
+              rx={2}
+              fill={stageColors[outcome.level]}
+              opacity={unavailable ? 0.35 : 1}
             />
             <text
-              x={x + 10}
-              y={y + 19}
+              x={left + 10}
+              y={top + 22}
               fontSize={12.5}
               fontWeight={650}
               fill={ink}
             >
               {recoveryLevelNames[outcome.level]}
             </text>
-            <text x={x + 10} y={y + 36} fontSize={11.5} fill={muted}>
-              到达 {percent(outcome.reach, outcome.reach < 0.01 ? 2 : 1)} · 成功{" "}
-              {percent(outcome.success, 1)}
+            <text x={left + 10} y={top + 39} fontSize={11.5} fill={muted}>
+              {unavailable
+                ? "现在不具备（成功率 0）"
+                : `成功率 ${percent(outcome.success, 1)} · ${duration(step.hours) || "0"}`}
             </text>
-            <text x={x + 10} y={y + 53} fontSize={11.5} fill={muted}>
-              {duration(step.hours) || "0"}
+            <text x={left + 10} y={top + 55} fontSize={11.5} fill={muted}>
+              到达 {share(outcome.reach)}
               {step.impact < 1 ? ` · 影响 ${percent(step.impact, 1)}` : ""}
-              {step.rollback ? " · 回滚" : " · 不回滚"}
             </text>
-            {!last && (
+            {/* 成功后再走下一级 */}
+            {successIndex >= 0 && outcome.passed > 0 && (
               <>
-                <Arrow
-                  d={`M${x + boxW} ${y + 22}H${x + stepX + 28}V${y + stepY - 2}`}
-                />
-                <text x={x + boxW + 6} y={y + 14} fontSize={11} fill={muted}>
-                  失败 {percent(1 - outcome.success, 1)}
-                  {step.failHours > 0
-                    ? ` · 白费 ${duration(step.failHours)}`
-                    : ""}
+                <Arrow d={`M${left + boxW} ${middle}H${x(successIndex) - 2}`} />
+                <text
+                  x={left + boxW + gap / 2}
+                  y={middle - 7}
+                  fontSize={11}
+                  fill="#067647"
+                  textAnchor="middle"
+                >
+                  成功
                 </text>
               </>
             )}
+            {/* 在这一级恢复 */}
+            {outcome.resolved > 0 && (
+              <>
+                <Arrow d={`M${left + boxW / 2} ${top + boxH}V${rail - 2}`} />
+                <text
+                  x={left + boxW / 2 + (index === outcomes.length - 1 ? -8 : 8)}
+                  y={top + boxH + 28}
+                  fontSize={11}
+                  fill="#067647"
+                  textAnchor={index === outcomes.length - 1 ? "end" : "start"}
+                >
+                  恢复 {share(outcome.resolved)}
+                  {step.rollback ? "，回滚" : ""}
+                </text>
+              </>
+            )}
+            {/* 失败：走下一级，或越过中间的级别转人工 */}
+            {failIndex >= 0 &&
+              failed > 0 &&
+              (failIndex === next && successIndex < 0 ? (
+                <>
+                  <Arrow
+                    dashed
+                    d={`M${left + boxW} ${middle}H${x(failIndex) - 2}`}
+                  />
+                  <text
+                    x={left + boxW + gap / 2}
+                    y={middle - 7}
+                    fontSize={11}
+                    fill={muted}
+                    textAnchor="middle"
+                  >
+                    失败 {share(1 - outcome.success)}
+                  </text>
+                </>
+              ) : (
+                <>
+                  <Arrow
+                    dashed
+                    d={`M${left + boxW - 30} ${top}V${top - 22 - (index % 2) * 12}H${x(failIndex) + 40 + (index % 2) * 24}V${top - 2}`}
+                  />
+                  <text
+                    x={left + boxW - 22}
+                    y={top - 28 - (index % 2) * 12}
+                    fontSize={11}
+                    fill={muted}
+                  >
+                    失败 {share(1 - outcome.success)}，转
+                    {recoveryLevelNames[outcome.failTo!]}
+                  </text>
+                </>
+              ))}
           </g>
         );
       })}
       {outcomes.length === 0 && (
-        <text x={startX} y={26 + boxH / 2 + 4} fontSize={12} fill={muted}>
+        <text x={startX} y={top + boxH / 2 + 4} fontSize={12} fill={muted}>
           没有配置恢复级别
         </text>
       )}
-      {/* 结果 */}
-      <text x={width} y={20} fontSize={11.5} fill={muted} textAnchor="end">
-        回滚重算 {duration(mode.reworkHours) || "0"}（需要回滚的级别成功后计入）
-      </text>
       <text
         x={width}
-        y={height - 6}
+        y={height - 8}
         fontSize={13}
         fontWeight={700}
         fill={ink}
@@ -288,9 +453,294 @@ function ChainFigure({
   );
 }
 
+interface Segment {
+  key: StageKey;
+  hours: number;
+  /** 这一级失败白费的时间：用浅色表示。 */
+  failed?: boolean;
+  /** 悬停提示里的补充说明。 */
+  note?: string;
+}
+/** 一条横向的堆叠条：每一段是一个环节的时间，长度与时间成正比。 */
+function TimeBar({
+  segments,
+  full,
+  bind,
+  label,
+}: {
+  segments: Segment[];
+  /** 条的满宽对应多少小时。 */
+  full: number;
+  bind: ReturnType<typeof useTooltip>["bind"];
+  label: string;
+}) {
+  const total = segments.reduce((sum, s) => sum + s.hours, 0);
+  return (
+    <div className="rw-timebar" role="img" aria-label={label}>
+      <div className="rw-timebar-track">
+        {segments
+          .filter((s) => s.hours > 0)
+          .map((s, index) => (
+            <span
+              key={index}
+              tabIndex={0}
+              className={s.failed ? "is-failed" : ""}
+              style={{
+                width: (s.hours / full) * 100 + "%",
+                background: stageColors[s.key],
+              }}
+              {...bind(
+                <>
+                  <strong>{duration(s.hours)}</strong>
+                  <span>
+                    {stageNames[s.key]}
+                    {s.failed ? "（失败白费）" : ""}
+                  </span>
+                  <strong>{share(total > 0 ? s.hours / total : 0)}</strong>
+                  <span>占这一条的比例</span>
+                  {s.note && (
+                    <>
+                      <strong />
+                      <span>{s.note}</span>
+                    </>
+                  )}
+                </>,
+              )}
+            />
+          ))}
+      </div>
+      <div className="rw-timebar-labels">
+        {segments
+          .filter((s) => s.hours > 0)
+          .map((s, index) => (
+            <span key={index} style={{ width: (s.hours / full) * 100 + "%" }}>
+              {s.hours / full > 0.085 && (
+                <>
+                  {stageNames[s.key]}
+                  {s.failed ? "失败" : ""}
+                  <b>{duration(s.hours)}</b>
+                </>
+              )}
+            </span>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+/** 期望耗时的构成：检测与各恢复级别的“概率 × 时间”，回滚重算并入恢复的那一级。 */
+const expectedSegments = (mode: FaultMode): Segment[] => {
+  const stages = stageLoss(mode);
+  return [
+    { key: "detect" as const, hours: stages.detect },
+    { key: "late" as const, hours: stages.late },
+    ...recoveryLevels.map((level) => ({
+      key: level,
+      hours: stages.levels[level] + stages.levelRework[level],
+      note:
+        stages.levelRework[level] > 0
+          ? `其中回滚重算 ${duration(stages.levelRework[level])}`
+          : undefined,
+    })),
+  ];
+};
+/** 把路径整理成横条：回滚重算并入恢复的那一级；检测差别很小时把检出与漏检合并。 */
+function pathRows(mode: FaultMode) {
+  const paths = eventPaths(mode).filter((p) => p.probability > 0),
+    total = lossPerEvent(mode),
+    lateShare =
+      total > 0
+        ? (mode.impact * (1 - mode.coverage) * mode.lateDetectHours) / total
+        : 0,
+    merge = lateShare < 0.05;
+  const rows = new Map<
+    string,
+    { probability: number; wait: number; path: RecoveryPath; missed: boolean }
+  >();
+  for (const path of paths) {
+    const key =
+        (merge || path.detected ? "" : "late|") +
+        path.segments
+          .slice(1)
+          .map((s) => s.stage + (s.ok ? "" : "!"))
+          .join(">"),
+      row = rows.get(key);
+    if (row) {
+      row.wait += path.probability * path.segments[0].hours;
+      row.probability += path.probability;
+    } else
+      rows.set(key, {
+        probability: path.probability,
+        wait: path.probability * path.segments[0].hours,
+        path,
+        missed: !merge && !path.detected,
+      });
+  }
+  return [...rows.values()]
+    .map(({ probability, wait, path, missed }) => {
+      const segments: Segment[] = [
+        { key: missed ? "late" : "detect", hours: wait / probability },
+      ];
+      for (const s of path.segments.slice(1))
+        if (s.stage === "rework") {
+          const last = segments[segments.length - 1];
+          last.hours += s.hours;
+          last.note = `其中回滚重算 ${duration(s.hours)}`;
+        } else
+          segments.push({
+            key: s.stage as RecoveryLevel,
+            hours: s.hours,
+            failed: !s.ok,
+          });
+      const steps = path.segments
+        .slice(1)
+        .filter((s) => s.stage !== "rework")
+        .map(
+          (s) =>
+            recoveryLevelNames[s.stage as RecoveryLevel] + (s.ok ? "" : "失败"),
+        );
+      return {
+        probability,
+        segments,
+        hours: segments.reduce((sum, s) => sum + s.hours, 0),
+        name:
+          (missed ? "漏检 → " : "") +
+          (steps.length ? steps.join(" → ") : "无需恢复"),
+      };
+    })
+    .sort((a, b) => b.probability - a.probability);
+}
+
+/** 各环节耗时：一条线看出时间花在哪里；再按路径拆开，看每条路径多长、多大概率走到。 */
+function StageTimes({
+  before,
+  after,
+  changed,
+}: {
+  before: FaultMode;
+  after: FaultMode;
+  changed: boolean;
+}) {
+  const tooltip = useTooltip(),
+    [sameScale, setSameScale] = useState(false),
+    [view, setView] = useState<"before" | "after">("after");
+  const states = [
+      { id: "before" as const, name: "现状", mode: before },
+      ...(changed
+        ? [{ id: "after" as const, name: "设计后", mode: after }]
+        : []),
+    ],
+    bars = states.map((state) => {
+      const segments = expectedSegments(state.mode);
+      return {
+        ...state,
+        segments,
+        total: segments.reduce((sum, s) => sum + s.hours, 0),
+      };
+    }),
+    longest = Math.max(...bars.map((b) => b.total), 1e-12),
+    used = stageOrder.filter((key) =>
+      bars.some((bar) =>
+        bar.segments.some((s) => s.key === key && s.hours > 0),
+      ),
+    );
+  const shown = changed && view === "after" ? after : before,
+    rows = pathRows(shown),
+    visible = rows.slice(0, 8),
+    rest = rows.slice(8),
+    longestPath = Math.max(...visible.map((r) => r.hours), 1e-12);
+  return (
+    <div className="rw-stage-times">
+      <div className="rw-card-head">
+        <h3>各环节耗时：时间花在哪一块</h3>
+        <span className="rw-legend">
+          {used.map((key) => (
+            <span key={key} className="rw-legend-item">
+              <i className="rw-dot" style={{ background: stageColors[key] }} />
+              {stageNames[key]}
+            </span>
+          ))}
+        </span>
+      </div>
+      <div className="rw-timebars">
+        {bars.map((bar) => (
+          <Fragment key={bar.id}>
+            <strong>{bar.name}</strong>
+            <TimeBar
+              segments={bar.segments}
+              full={sameScale ? longest : bar.total || 1e-12}
+              bind={tooltip.bind}
+              label={`${bar.name}单次等效损失 ${duration(bar.total)} 的构成：${bar.segments
+                .filter((s) => s.hours > 0)
+                .map((s) => `${stageNames[s.key]} ${duration(s.hours)}`)
+                .join("，")}`}
+            />
+            <em>{duration(bar.total)}</em>
+          </Fragment>
+        ))}
+      </div>
+      <p className="rw-hint">
+        每一段是这个环节的期望耗时（走到它的概率 ×
+        时间），整条的长度就是单次等效损失；回滚重算并入恢复的那一级，所以“CKPT
+        回滚”一段 ≈ 恢复时间 + 保存间隔的一半。
+        {changed &&
+          (sameScale
+            ? "两条用同一时间尺度，可以直接比长短。"
+            : "两条各自撑满，方便看清构成；总时长见右侧。")}
+        {changed && (
+          <button className="rw-link" onClick={() => setSameScale(!sameScale)}>
+            {sameScale ? "改为各自撑满" : "改为同一时间尺度"}
+          </button>
+        )}
+      </p>
+
+      <div className="rw-card-head">
+        <h3>按路径看：每条路径多长、多大概率走到</h3>
+        {changed && (
+          <div className="rw-tabs" role="tablist" aria-label="路径显示">
+            {states.map((state) => (
+              <button
+                key={state.id}
+                role="tab"
+                aria-selected={view === state.id}
+                className={view === state.id ? "is-active" : ""}
+                onClick={() => setView(state.id)}
+              >
+                {state.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="rw-paths">
+        {visible.map((row) => (
+          <Fragment key={row.name}>
+            <b>{share(row.probability)}</b>
+            <span>{row.name}</span>
+            <TimeBar
+              segments={row.segments}
+              full={longestPath}
+              bind={tooltip.bind}
+              label={`${row.name}，概率 ${share(row.probability)}，耗时 ${duration(row.hours)}`}
+            />
+            <em>{duration(row.hours)}</em>
+          </Fragment>
+        ))}
+      </div>
+      <p className="rw-hint">
+        每一行是一种可能的经过，条的长度是这条路径实际花的时间（同一时间尺度），左边是走到它的概率；浅色段是失败白费的时间。各行“概率
+        × 时间”相加就是上面的单次等效损失。
+        {rest.length > 0 &&
+          `另有 ${rest.length} 条更少见的路径未列出，合计 ${share(rest.reduce((sum, r) => sum + r.probability, 0))}。`}
+      </p>
+      {tooltip.node}
+    </div>
+  );
+}
+
 /** 恢复链与计算过程：选一个故障模式，对比措施前后的每一环。 */
 export default function RecoveryChain() {
-  const { model, analysis } = useWorkbench(),
+  const { model, analysis, update } = useWorkbench(),
     designModes = useMemo(() => applyMeasures(model).modes, [model]),
     results = analysis.baseline.modules.flatMap((m) => m.modes),
     designResults = analysis.design.modules.flatMap((m) => m.modes),
@@ -310,28 +760,53 @@ export default function RecoveryChain() {
     afterStages = stageLoss(after),
     beforeLadder = ladderOutcomes(before),
     afterLadder = ladderOutcomes(after),
+    benefit = levelBenefit(after),
     changed = JSON.stringify(before) !== JSON.stringify(after);
+  // 成功后还要走下一级的环节（如弹性恢复）：不具备时是转人工，还是跳过它直接走下一级
+  const gated = model.modes.filter((m) =>
+      recoveryLevels.some((level) => m.ladder[level].then === "next"),
+    ),
+    gateOn = gated.some((m) =>
+      recoveryLevels.some(
+        (level) => m.ladder[level].then === "next" && m.ladder[level].gate,
+      ),
+    );
   const cell = (value: number) => (value > 0 ? duration(value) : "—");
   const levelText = (
     mode: FaultMode,
     level: RecoveryLevel,
     outcomes: typeof beforeLadder,
-  ) => {
+  ): ReactNode => {
     const outcome = outcomes.find((o) => o.level === level),
       step = mode.ladder[level];
     if (!outcome) return <span className="rw-muted">不使用</span>;
+    if (step.success <= 0)
+      return (
+        <>
+          到达 {share(outcome.reach)} · 现在不具备，转
+          {outcome.failTo ? recoveryLevelNames[outcome.failTo] : "—"}
+        </>
+      );
     return (
       <>
-        到达 {percent(outcome.reach, outcome.reach < 0.01 ? 2 : 1)} · 成功{" "}
-        {percent(outcome.success, 1)} · {duration(step.hours) || "0"}
+        到达 {share(outcome.reach)} · 成功 {percent(outcome.success, 1)} ·{" "}
+        {duration(step.hours) || "0"}
         {step.failHours > 0 && outcome.success < 1
           ? `（失败白费 ${duration(step.failHours)}）`
           : ""}
         {step.impact < 1 ? ` · 影响 ${percent(step.impact, 1)}` : ""}
+        {outcome.successTo
+          ? ` · 成功后再走${recoveryLevelNames[outcome.successTo]}`
+          : ""}
       </>
     );
   };
-  const rows: [string, React.ReactNode, number, React.ReactNode, number][] = [
+  const reworkShare = (mode: FaultMode, outcomes: typeof beforeLadder) =>
+    outcomes.reduce(
+      (sum, o) => sum + (mode.ladder[o.level].rollback ? o.resolved : 0),
+      0,
+    );
+  const rows: [string, ReactNode, number, ReactNode, number, ReactNode][] = [
     [
       "检测 · 检出",
       <>
@@ -342,6 +817,7 @@ export default function RecoveryChain() {
         {percent(after.coverage, 1)} × {duration(after.detectHours) || "0"}
       </>,
       afterStages.detect,
+      null,
     ],
     [
       "检测 · 漏检后发现",
@@ -353,47 +829,44 @@ export default function RecoveryChain() {
         {percent(1 - after.coverage, 1)} × {duration(after.lateDetectHours)}
       </>,
       afterStages.late,
+      null,
     ],
     ...recoveryLevels
       .filter(
         (level) =>
-          before.ladder[level].success > 0 || after.ladder[level].success > 0,
+          beforeLadder.some((o) => o.level === level) ||
+          afterLadder.some((o) => o.level === level),
       )
-      .map(
-        (level, index) =>
-          [
-            `恢复 ${index + 1} · ${recoveryLevelNames[level]}`,
-            levelText(before, level, beforeLadder),
-            beforeStages.levels[level],
-            levelText(after, level, afterLadder),
-            afterStages.levels[level],
-          ] as [string, React.ReactNode, number, React.ReactNode, number],
-      ),
+      .map((level, index) => {
+        const saved = benefit[level];
+        return [
+          `恢复 ${index + 1} · ${recoveryLevelNames[level]}`,
+          levelText(before, level, beforeLadder),
+          beforeStages.levels[level],
+          levelText(after, level, afterLadder),
+          afterStages.levels[level],
+          saved === null || Math.abs(saved) < 1e-12 ? null : saved > 0 ? (
+            <>每次省 {duration(saved)}</>
+          ) : (
+            <span className="rw-warn-text">
+              每次反而多花 {duration(-saved)}
+            </span>
+          ),
+        ] as [string, ReactNode, number, ReactNode, number, ReactNode];
+      }),
     [
       "回滚重算",
       <>
         {duration(before.reworkHours) || "0"} ×{" "}
-        {percent(
-          beforeLadder.reduce(
-            (sum, o) =>
-              sum + (before.ladder[o.level].rollback ? o.resolved : 0),
-            0,
-          ),
-          1,
-        )}
+        {percent(reworkShare(before, beforeLadder), 1)}
       </>,
       beforeStages.rework,
       <>
         {duration(after.reworkHours) || "0"} ×{" "}
-        {percent(
-          afterLadder.reduce(
-            (sum, o) => sum + (after.ladder[o.level].rollback ? o.resolved : 0),
-            0,
-          ),
-          1,
-        )}
+        {percent(reworkShare(after, afterLadder), 1)}
       </>,
       afterStages.rework,
+      null,
     ],
   ];
 
@@ -418,25 +891,53 @@ export default function RecoveryChain() {
         </label>
       </div>
       <p className="rw-hint">
-        故障发生后先被检出，或漏检后被兜底手段发现；然后沿恢复阶梯从小到大逐级尝试，失败才升到下一级。每一环的“概率
-        × 时间”相加就是单次等效损失，再乘故障频次得到每周损失。
+        故障发生后先被检出，或漏检后被兜底手段发现；然后沿恢复链从小到大走：进程重调度成功即恢复，失败走弹性恢复；弹性恢复成功后再走
+        CKPT 回滚，失败转人工；CKPT 回滚失败也转人工。每一环的“概率 ×
+        时间”相加就是单次等效损失，再乘故障频次和运行时间占比得到每周损失。
       </p>
+      {gated.length > 0 && (
+        <p className="rw-chain-option">
+          <label className="rw-inline-select">
+            <span>还不具备弹性恢复时，进程重调度失败后</span>
+            <select
+              aria-label="不具备弹性恢复时的走法"
+              value={gateOn ? "manual" : "skip"}
+              onChange={(e) =>
+                update((d) => {
+                  for (const mode of d.modes)
+                    for (const level of recoveryLevels)
+                      if (mode.ladder[level].then === "next")
+                        mode.ladder[level].gate = e.target.value === "manual";
+                })
+              }
+            >
+              <option value="manual">只能转人工（弹性恢复是必经环节）</option>
+              <option value="skip">跳过它，直接走 CKPT 回滚</option>
+            </select>
+          </label>
+          <span className="rw-muted">
+            这决定“现状”怎么算，对全部 {gated.length}{" "}
+            个故障模式生效；弹性恢复具备之后两种走法结果相同。
+          </span>
+        </p>
+      )}
       <div className="rw-chain-figures">
         <ChainFigure
           mode={before}
           label="现状"
-          perWeek={beforeResult.eventsPerWeek}
+          perWeek={beforeResult.ratePerWeek}
         />
         {changed && (
           <ChainFigure
             mode={after}
             label="设计后（已启用措施生效）"
-            perWeek={afterResult.eventsPerWeek}
+            perWeek={afterResult.ratePerWeek}
           />
         )}
       </div>
+      <StageTimes before={before} after={after} changed={changed} />
       <div className="rw-table-wrap">
-        <table className="rw-table">
+        <table className="rw-table rw-chain-table">
           <thead>
             <tr>
               <th>环节</th>
@@ -444,11 +945,19 @@ export default function RecoveryChain() {
               <th className="is-num">期望损失</th>
               <th>设计后：概率 × 时间</th>
               <th className="is-num">期望损失</th>
+              <th>这一级值多少</th>
             </tr>
           </thead>
           <tbody>
             {rows.map(
-              ([name, beforeText, beforeValue, afterText, afterValue]) => (
+              ([
+                name,
+                beforeText,
+                beforeValue,
+                afterText,
+                afterValue,
+                worth,
+              ]) => (
                 <tr key={name}>
                   <td>{name}</td>
                   <td className="rw-muted">{beforeText}</td>
@@ -464,6 +973,7 @@ export default function RecoveryChain() {
                   >
                     {cell(afterValue)}
                   </td>
+                  <td>{worth ?? <span className="rw-muted">—</span>}</td>
                 </tr>
               ),
             )}
@@ -480,9 +990,14 @@ export default function RecoveryChain() {
                   duration(afterResult.mttrHours),
                 ],
                 [
-                  "× 故障频次",
-                  frequency(beforeResult.eventsPerWeek),
-                  frequency(afterResult.eventsPerWeek),
+                  "× 故障频次（每连续运行一周）",
+                  frequency(beforeResult.ratePerWeek),
+                  frequency(afterResult.ratePerWeek),
+                ],
+                [
+                  "× 运行时间占比（停机时不产生新故障）",
+                  percent(analysis.baseline.system.runShare, 1),
+                  percent(analysis.design.system.runShare, 1),
                 ],
                 [
                   "= 每周损失",
@@ -497,11 +1012,16 @@ export default function RecoveryChain() {
                 <td className="is-num">{beforeValue}</td>
                 <td />
                 <td className="is-num">{afterValue}</td>
+                <td />
               </tr>
             ))}
           </tfoot>
         </table>
       </div>
+      <p className="rw-hint">
+        “这一级值多少”按设计后的恢复链算：把这一级拿掉（成功率设为
+        0）后，单次等效损失会增加多少。写“反而多花”的级别，是成功率太低或耗时太长，先试它比直接走后面的级别更慢，需要提高成功率或缩短耗时才值得保留。
+      </p>
     </section>
   );
 }
@@ -549,8 +1069,8 @@ export function ComputationTrace() {
               <th className="is-num">每卡 FIT</th>
               <th className="is-num">故障频次</th>
               <th className="is-num">× 单次等效损失</th>
-              <th className="is-num">= 每周损失</th>
-              <th className="is-num">损失负荷 ρ</th>
+              <th className="is-num">÷ 168 h = 损失负荷 ρ</th>
+              <th className="is-num">每周损失</th>
               <th className="is-num">占比</th>
             </tr>
           </thead>
@@ -564,12 +1084,10 @@ export function ComputationTrace() {
                     ? row.fitPerCard.toFixed(0)
                     : row.fitPerCard.toPrecision(3)}
                 </td>
-                <td className="is-num">{frequency(row.eventsPerWeek)}</td>
+                <td className="is-num">{frequency(row.ratePerWeek)}</td>
                 <td className="is-num">{duration(row.mttrHours)}</td>
-                <td className="is-num is-strong">
-                  {hours(row.lossHoursPerWeek)}
-                </td>
-                <td className="is-num">{row.load.toFixed(4)}</td>
+                <td className="is-num is-strong">{row.load.toFixed(4)}</td>
+                <td className="is-num">{hours(row.lossHoursPerWeek)}</td>
                 <td className="is-num">{percent(row.share, 1)}</td>
               </tr>
             ))}
@@ -577,12 +1095,12 @@ export function ComputationTrace() {
           <tfoot>
             <tr>
               <td colSpan={3}>故障损失合计</td>
-              <td className="is-num">{frequency(system.eventsPerWeek)}</td>
+              <td className="is-num">{frequency(system.ratePerWeek)}</td>
               <td className="is-num">{duration(system.mttrHours)}</td>
+              <td className="is-num">{system.load.toFixed(4)}</td>
               <td className="is-num">
                 {hours(system.failureLossHoursPerWeek)}
               </td>
-              <td className="is-num">{system.load.toFixed(4)}</td>
               <td className="is-num">100%</td>
             </tr>
           </tfoot>
@@ -593,7 +1111,7 @@ export function ComputationTrace() {
           [
             [
               "① 损失负荷",
-              `ρ = Σ 事件率 × 单次等效损失 = ${system.load.toFixed(4)}`,
+              `ρ = Σ 故障频次 × 单次等效损失 ÷ 168 = ${system.load.toFixed(4)}`,
               "每运行 1 小时，平均因故障损失 ρ 小时",
             ],
             [

@@ -92,7 +92,9 @@ export interface ModuleAllocation {
   minMtbfHours: number | null;
   /** 保持现状故障率时允许的最大等效 MTTR，小时（降低 MTTR 方向）。 */
   maxMttrHours: number | null;
-  /** 保持现状单次损失时允许的故障频次，次 / 周。 */
+  /** 保持现状单次损失时允许的故障频次：每连续运行一周的次数。 */
+  maxRatePerWeek: number | null;
+  /** 同上，折算成目标状态下每个日历周实际发生的次数。 */
   maxEventsPerWeek: number | null;
   /** 每周的损失预算，小时。 */
   lossHoursPerWeek: number;
@@ -218,6 +220,7 @@ export function allocate(
       maxFitPerCard: hasLoss ? ((share / now.mttrHours) * 1e9) / cards : null,
       minMtbfHours: hasLoss && share > 0 ? now.mttrHours / share : null,
       maxMttrHours: hasRate ? share / now.rate : null,
+      maxRatePerWeek: hasLoss ? (share / now.mttrHours) * 168 : null,
       maxEventsPerWeek: hasLoss
         ? (share / now.mttrHours) * uptime * week
         : null,
@@ -287,6 +290,8 @@ export const loadPerTenThousand = (point: TargetPoint) =>
 
 /** 单次事件损失达到窗口总预算的这个比例，就算高后果事件。 */
 export const consequenceThreshold = 1 / 3;
+/** 每个窗口发生不到这么多次才算“少见”；更频繁的事件窗口损失接近平均值，按平均分预算即可。 */
+export const consequenceRareLimit = 3;
 export interface ModuleConsequence {
   id: string;
   name: string;
@@ -308,11 +313,12 @@ export interface ModuleConsequence {
  * 多数故障每周发生很多次、每次损失很小，窗口损失接近其平均值，按平均损失分配预算即可。
  * 少数事件一次就吃掉窗口预算的一大块：平均损失很小，但只要发生，这个窗口就不达标。
  * 这类模块要约束的是“窗口内发生的概率”，所以应单独定目标。
+ * 只统计少见的事件（每个窗口不到 consequenceRareLimit 次）；恢复能力按当前设计计。
  * 建议值：允许不达标的窗口比例（1 − 达标比例要求）拿出一半，平均分给这些模块。
  */
 export function consequences(
   model: CoreModel,
-  parameters: ResolvedParameters = applyMeasures(model, new Set()),
+  parameters: ResolvedParameters = applyMeasures(model),
 ): ModuleConsequence[] {
   const { hours, target, cards, passRatio } = model.scenario,
     budget = hours * (1 - target),
@@ -337,7 +343,10 @@ export function consequences(
       }
       return { module, worst, heavyRate, heavyLoad };
     })
-    .filter((row) => row.heavyRate > 0);
+    .filter(
+      (row) =>
+        row.heavyRate > 0 && row.heavyRate * hours < consequenceRareLimit,
+    );
   const riskEach =
     rows.length > 0 ? Math.max(0, (1 - passRatio) / 2) / rows.length : 0;
   return rows.map(({ module, worst, heavyRate, heavyLoad }) => {

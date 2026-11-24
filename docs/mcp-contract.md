@@ -44,7 +44,7 @@ input_mapping `{id}` 对应 GET /api/tasks/:taskId/inputs/:id/mapping；只接�
 四步工作台的四个步骤共用一份任务内模型（文档类型 `core-model`），工具与界面读写同一份数据。
 
 - `core_model_get` → GET `/core`，返回 `{model,revision,savedAt,hash,verification,verificationCount}`；未保存过时返回默认场景，`revision` 为 0。
-- `core_analysis` → GET `/core/analysis`，返回 `{hash,baseline,design,allocation,baselineGaps,designGaps,contributions,recommendation,consequences}`。`baseline` 是未加措施的现状，`design` 是启用措施后的结果；各模块带 `eventsPerWeek`、`lossHoursPerWeek` 和逐环节的 `stages`；`allocation.modules[].pinned` 表示该模块的目标是单独指定的；`consequences` 列出单次故障就占窗口预算 1/3 以上的模块及建议目标。
+- `core_analysis` → GET `/core/analysis`，返回 `{hash,baseline,design,allocation,baselineGaps,designGaps,contributions,recommendation,consequences}`。`baseline` 是未加措施的现状，`design` 是启用措施后的结果；各模块带 `ratePerWeek`（故障频次：每连续运行一周的次数）、`eventsPerWeek`（日历周实际发生的次数）、`lossHoursPerWeek` 和逐环节的 `stages`；`allocation.modules[].pinned` 表示该模块的目标是单独指定的；`consequences` 列出单次故障就占窗口预算 1/3 以上的模块及建议目标。
 - `core_model_save` → POST `/core`，body `{model}`。整份替换并使 `revision` 加 1；结构不合法返回 SCHEMA_INVALID，原模型不变。界面使用等价的 PUT。
 - `core_verify` → POST `/core/verify`，body `{trials?,seed?}`（100–20000 个窗口，种子为 32 位无符号整数，省略时随机）。同步返回验证记录并追加保存为 `core-verification-<序号>`；记录带 `modelHash`，与当前模型的 `hash` 不一致即表示参数已变、结果过期。
 

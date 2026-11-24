@@ -1,10 +1,11 @@
-import { recoveryLevels, type CoreModel } from "./model";
+import type { CoreModel } from "./model";
 import {
   applyMeasures,
   assess,
   unitCount,
   type Assessment,
   type ResolvedParameters,
+  recoveryRoute,
 } from "./assess";
 import { allocate, type AllocationResult } from "./allocate";
 
@@ -92,11 +93,7 @@ export function simulate(
     cumulative.push(sum + m.rate);
     return sum + m.rate;
   }, 0);
-  const ladders = modes.map(({ mode }) =>
-    recoveryLevels
-      .map((level) => mode.ladder[level])
-      .filter((step) => step.success > 0),
-  );
+  const routes = modes.map(({ mode }) => recoveryRoute(mode.ladder));
   const exponential = (mean: number) =>
     mean > 0 ? -Math.log(1 - random()) * mean : 0;
   const samples = new Float64Array(trials),
@@ -126,15 +123,20 @@ export function simulate(
         random() < mode.coverage
           ? mode.detectHours
           : exponential(mode.lateDetectHours);
-      const used = ladders[index];
-      for (let k = 0; k < used.length; k++) {
-        const step = used[k];
-        if (k === used.length - 1 || random() < step.success) {
+      const route = routes[index];
+      for (let at = route.length ? 0 : -1; at >= 0; ) {
+        const { step, success, successTo, failTo } = route[at];
+        if (success >= 1 || random() < success) {
           stopped += exponential(step.hours) * step.impact;
-          if (step.rollback) stopped += random() * 2 * mode.reworkHours;
-          break;
+          if (successTo < 0) {
+            if (step.rollback) stopped += random() * 2 * mode.reworkHours;
+            break;
+          }
+          at = successTo;
+        } else {
+          stopped += step.failHours * step.impact;
+          at = failTo;
         }
-        stopped += step.failHours * step.impact;
       }
       stopped *= mode.impact;
       const counted = Math.min(stopped, hours - clock);

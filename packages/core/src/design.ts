@@ -1,10 +1,12 @@
 import {
   higherIsBetter,
+  layerOf,
   readParam,
   type CoreModel,
   type EvidenceState,
   type Measure,
   type MeasureCategory,
+  type MeasureLayer,
 } from "./model";
 import { applyMeasures, assess, createEvaluator } from "./assess";
 
@@ -352,9 +354,10 @@ export interface DoseResponse {
   }>;
 }
 /**
- * 改进程度—收益曲线：把一项措施的主要参数从现状逐步推到理想极限，
+ * 改进程度—收益曲线：把一项措施从“不做”（0）逐步推到主要参数的理想极限（1），
  * 其余措施保持当前的启用状态，看系统可用度提升多少。
- * 主要参数是措施的第一项参数变化；“增加”类的代价项不参与。
+ * 计划点之前，措施的全部参数按同一比例从现状走向计划值；计划点之后，主要参数（第一项
+ * 参数变化）继续走向极限，其余参数停在计划值。“增加”类的代价项不作为主要参数。
  */
 export function doseResponse(
   model: CoreModel,
@@ -372,34 +375,41 @@ export function doseResponse(
       .filter((m) => m.enabled && m.id !== measureId)
       .map((m) => m.id),
   );
-  const without = createEvaluator(model)(others);
-  const gainAt = (value: number) => {
-    const trial: CoreModel = {
+  const without = createEvaluator(model)(others),
+    withMeasure = new Set([...others, measureId]),
+    trial = (change: Partial<Measure>): CoreModel => ({
       ...model,
       measures: model.measures.map((m) =>
-        m.id === measureId
-          ? {
-              ...m,
-              effects: m.effects.map((e, i) => (i === 0 ? { ...e, value } : e)),
-            }
-          : m,
+        m.id === measureId ? { ...m, ...change } : m,
       ),
-    };
-    return createEvaluator(trial)(new Set([...others, measureId])) - without;
-  };
+    });
   const planned = Math.min(
     1,
     Math.max(0, (measure.effects[0].value - start) / span),
   );
+  const gainAt = (degree: number) => {
+    if (degree <= 0) return 0;
+    const scaled =
+      degree < planned
+        ? // 还没做到计划：全部参数按同一比例打折
+          trial({
+            applicability: measure.applicability * (degree / planned),
+          })
+        : trial({
+            effects: measure.effects.map((e, i) =>
+              i === 0 ? { ...e, value: start + degree * span } : e,
+            ),
+          });
+    return createEvaluator(scaled)(withMeasure) - without;
+  };
   return {
     id: measure.id,
     name: measure.name,
     planned,
-    plannedGain: gainAt(measure.effects[0].value),
+    plannedGain: createEvaluator(model)(withMeasure) - without,
     points: Array.from({ length: steps + 1 }, (_, i) => {
-      const degree = i / steps,
-        value = start + degree * span;
-      return { degree, value, gain: gainAt(value) };
+      const degree = i / steps;
+      return { degree, value: start + degree * span, gain: gainAt(degree) };
     }),
   };
 }
@@ -487,4 +497,36 @@ export function minimumDegrees(model: CoreModel, ids: string[]) {
     result.set(id, high);
   }
   return result;
+}
+
+/**
+ * 两个方向各能补多少：只启用措施库里全部组件级措施、或只启用全部系统级措施时，
+ * 每个模块的损失负荷相对现状能降低多少（0–1）。用来判断差距该优先从哪边补。
+ */
+export function layerPotential(model: CoreModel) {
+  const loadsWith = (ids: string[]) =>
+      new Map(
+        assess(model, applyMeasures(model, new Set(ids))).modules.map((m) => [
+          m.id,
+          m.load,
+        ]),
+      ),
+    idsOf = (layer: MeasureLayer) =>
+      model.measures
+        .filter((m) => layerOf(m.category) === layer)
+        .map((m) => m.id),
+    base = loadsWith([]),
+    component = loadsWith(idsOf("component")),
+    system = loadsWith(idsOf("system")),
+    cut = (after: number | undefined, before: number) =>
+      before > 0 ? Math.max(0, 1 - (after ?? before) / before) : 0;
+  return new Map(
+    [...base].map(([id, load]) => [
+      id,
+      {
+        component: cut(component.get(id), load),
+        system: cut(system.get(id), load),
+      },
+    ]),
+  );
 }

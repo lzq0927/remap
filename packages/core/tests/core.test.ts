@@ -153,6 +153,15 @@ describe("评估：串联可修系统的更新报酬模型", () => {
     expect(result.modules[0].events).toBeCloseTo(8, 12);
     // 按周（168 小时）折算的频次和损失
     expect(result.modules[0].eventsPerWeek).toBeCloseTo(8 * 1.68, 12);
+    // 故障频次按连续运行一周计，不随停机多少变化
+    expect(result.modules[0].ratePerWeek).toBeCloseTo(
+      result.modules[0].rate * 168,
+      12,
+    );
+    expect(result.system.runShare).toBeCloseTo(
+      1 / (1 + result.system.load),
+      12,
+    );
     expect(result.modules[1].lossHoursPerWeek).toBeCloseTo(12 * 1.68, 12);
     expect(
       result.modules.reduce((sum, m) => sum + m.lossHours, 0) +
@@ -254,6 +263,102 @@ describe("恢复阶梯：从小到大逐级尝试", () => {
     expect(stages.levels.restart * 3600).toBeCloseTo(0.02 * 180, 9);
     // 弹性恢复不回滚，只有退回全局恢复的 2% 才回滚
     expect(stages.rework * 3600).toBeCloseTo(0.02 * 150, 9);
+  });
+  it("恢复链的走向：成功后可以继续下一级，失败后可以直接转人工", () => {
+    // 进程重调度成功即恢复，失败走弹性恢复；弹性恢复成功再走 CKPT 回滚，失败转人工；
+    // CKPT 回滚失败也转人工。
+    const chain = (elastic: number) => ({
+      coverage: 0.99,
+      detectHours: seconds(10),
+      lateDetectHours: seconds(60),
+      reworkHours: seconds(60),
+      impact: 1,
+      ladder: makeLadder({
+        process: {
+          success: 0.3,
+          hours: seconds(240),
+          failHours: seconds(240),
+          rollback: false,
+        },
+        elastic: {
+          success: elastic,
+          hours: seconds(60),
+          failHours: seconds(60),
+          gate: true,
+          then: "next",
+          onFail: "manual",
+        },
+        restart: {
+          success: 0.99,
+          hours: seconds(300),
+          failHours: seconds(300),
+        },
+        manual: { success: 1, hours: 1 },
+      }),
+    });
+    const outcomes = ladderOutcomes(chain(0.99));
+    expect(outcomes.map((o) => [o.level, o.successTo, o.failTo])).toEqual([
+      ["process", null, "elastic"],
+      ["elastic", "restart", "manual"],
+      ["restart", null, "manual"],
+      ["manual", null, null],
+    ]);
+    expect(outcomes.map((o) => o.reach)).toEqual([
+      1,
+      expect.closeTo(0.7, 12),
+      expect.closeTo(0.693, 12),
+      // 人工：弹性恢复失败 0.7×0.01，加上 CKPT 回滚失败 0.693×0.01
+      expect.closeTo(0.01393, 12),
+    ]);
+    // 弹性恢复成功后还没恢复完，不在这一级结束
+    expect(outcomes[1].resolved).toBe(0);
+    expect(outcomes[1].passed).toBeCloseTo(0.693, 12);
+    // 10.5 + 240 + 0.7×60 + 0.693×300 + 0.68607×60 + 0.01393×(3600 + 60)
+    expect(lossPerEvent(chain(0.99)) * 3600).toBeCloseTo(592.548, 9);
+    const stages = stageLoss(chain(0.99));
+    expect(stages.levelRework.restart * 3600).toBeCloseTo(0.68607 * 60, 9);
+    expect(stages.levelRework.elastic).toBe(0);
+    // 弹性恢复不可用但又是必经环节：进程重调度失败后只能转人工，CKPT 回滚走不到
+    const without = ladderOutcomes(chain(0));
+    expect(without.map((o) => o.reach)).toEqual([
+      1,
+      expect.closeTo(0.7, 12),
+      0,
+      expect.closeTo(0.7, 12),
+    ]);
+    expect(lossPerEvent(chain(0)) * 3600).toBeCloseTo(
+      10.5 + 240 + 0.7 * (60 + 3600 + 60),
+      9,
+    );
+    // 不标为必经时，不可用的级别被跳过：进程重调度失败后直接走 CKPT 回滚
+    const skipped = chain(0);
+    skipped.ladder.elastic.gate = false;
+    expect(ladderOutcomes(skipped).map((o) => o.level)).toEqual([
+      "process",
+      "restart",
+      "manual",
+    ]);
+    expect(lossPerEvent(skipped) * 3600).toBeCloseTo(
+      10.5 + 240 + 0.7 * (300 + 0.99 * 60 + 0.01 * 3660),
+      9,
+    );
+    // 路径：各段时间相加是这条路径的损失，概率合计为 1
+    const paths = eventPaths(chain(0.99)),
+      main = paths.find(
+        (p) =>
+          p.detected &&
+          p.level === "restart" &&
+          p.segments.some((x) => x.stage === "process" && !x.ok),
+      )!;
+    expect(main.probability).toBeCloseTo(0.99 * 0.7 * 0.99 * 0.99, 12);
+    expect(main.segments.map((x) => [x.stage, x.ok])).toEqual([
+      ["detect", true],
+      ["process", false],
+      ["elastic", true],
+      ["restart", true],
+      ["rework", true],
+    ]);
+    expect(main.lossHours * 3600).toBeCloseTo(10 + 240 + 60 + 300 + 60, 9);
   });
   it("事件路径的概率合计为 1，按概率加权的损失等于单次等效损失", () => {
     for (const m of [mode(), ...defaultCoreModel().modes]) {
@@ -538,7 +643,7 @@ describe("规模与目标、高后果事件", () => {
   });
   it("单次损失占窗口预算三分之一以上的事件单独列出，并给出窗口风险", () => {
     const model = tiny(),
-      rows = consequences(model);
+      rows = consequences(model, applyMeasures(model, new Set()));
     // B 的漏检路径：单次 10 + 1 = 11 h，窗口预算 10 h；每窗口 0.05×0.2×100 = 1 次
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: "b" });
@@ -549,7 +654,13 @@ describe("规模与目标、高后果事件", () => {
     // 建议目标：允许 (1 − 0.9)/2 = 5% 的窗口被这类事件打断
     const rate = -Math.log(0.95) / 100;
     expect(rows[0].suggestedTarget).toBeCloseTo(1 / (1 + rate * 11), 12);
-    // 默认场景：静默故障的漏检分支和机房供电
+    // 每个窗口发生很多次的事件不算：窗口损失接近平均值，按平均分预算即可
+    const frequent = tiny();
+    frequent.modes[1].fit *= 5;
+    expect(consequences(frequent, applyMeasures(frequent, new Set()))).toEqual(
+      [],
+    );
+    // 默认场景（恢复能力按当前设计计）：静默故障的漏检分支和机房供电
     expect(
       consequences(defaultCoreModel())
         .map((row) => row.id)
@@ -596,18 +707,24 @@ describe("设计：贡献分摊、推荐与参数反推", () => {
     );
     expect(again.contributions.items).toEqual(first.contributions.items);
   });
-  it("默认场景：用户四项措施不足，采用推荐的补充措施后达标", () => {
+  it("默认场景：用户给出的措施不足，采用推荐的补充措施后达标", () => {
     const model = defaultCoreModel(),
       result = analyze(model);
     expect(model.measures.length).toBeGreaterThanOrEqual(30);
     expect(model.measures.filter((m) => m.enabled).map((m) => m.id)).toEqual([
-      "hbm-ecc",
       "aicore-screening",
+      "hbm-ecc",
       "optical-reliability",
+      "online-screen",
       "sdc-detection",
+      "slow-detect",
+      "fast-detect",
+      "elastic-recover",
+      "fault-agent",
+      "fast-checkpoint",
     ]);
-    expect(result.baseline.system.availability).toBeCloseTo(0.6503, 3);
-    expect(result.design.system.availability).toBeCloseTo(0.7968, 3);
+    expect(result.baseline.system.availability).toBeCloseTo(0.1042, 3);
+    expect(result.design.system.availability).toBeCloseTo(0.7666, 3);
     expect(result.recommendation.kind).toBe("add");
     expect(result.recommendation.add.length).toBeGreaterThan(0);
     const adopted = structuredClone(model);

@@ -48,9 +48,8 @@ const starter: Record<MeasureCategory, MeasureEffect[]> = {
   detect: [{ param: "coverage", op: "set", value: 0.99 }],
   recover: [{ param: "restart.hours", op: "set", value: 60 / 3600 }],
   contain: [
-    { param: "elastic.success", op: "set", value: 0.95 },
-    { param: "elastic.hours", op: "set", value: 180 / 3600 },
-    { param: "elastic.impact", op: "set", value: 0.02 },
+    { param: "elastic.success", op: "set", value: 0.99 },
+    { param: "elastic.hours", op: "set", value: 60 / 3600 },
   ],
   checkpoint: [{ param: "reworkHours", op: "set", value: 30 / 3600 }],
 };

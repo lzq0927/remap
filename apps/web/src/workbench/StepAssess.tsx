@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Timer, Trash2, TrendingUp } from "lucide-react";
 import {
   diagramSlotNames,
   diagramSlots,
   faultKindNames,
   faultKinds,
+  layerPotential,
   lossPerEvent,
   type FaultKind,
   type FaultMode,
@@ -80,7 +81,8 @@ export default function StepAssess() {
   const { model, analysis, update } = useWorkbench(),
     { baseline, design, allocation, baselineGaps, consequences } = analysis,
     [selected, setSelected] = useState<string>(),
-    tooltip = useTooltip();
+    tooltip = useTooltip(),
+    potential = useMemo(() => layerPotential(model), [model]);
   const system = baseline.system,
     ranked = [...baseline.modules].sort((a, b) => b.lossHours - a.lossHours),
     byFit = [...baseline.modules].sort((a, b) => b.fitPerCard - a.fitPerCard),
@@ -104,9 +106,9 @@ export default function StepAssess() {
       <section className="rw-stats" aria-label="系统现状">
         {[
           [
-            "每周故障次数",
-            frequency(system.eventsPerWeek),
-            `系统 MTBF ${duration(system.mtbfHours)}`,
+            "故障频次",
+            frequency(system.ratePerWeek),
+            `每连续运行一周；系统 MTBF ${duration(system.mtbfHours)}`,
           ],
           [
             "单次等效损失",
@@ -218,7 +220,8 @@ export default function StepAssess() {
               {ranked.map((module) => {
                 const gap = gapOf(module.id),
                   budget = budgetOf(module.id),
-                  tone = gapTone(gap);
+                  tone = gapTone(gap),
+                  reach = potential.get(module.id);
                 return (
                   <tr key={module.id}>
                     <td>
@@ -234,12 +237,12 @@ export default function StepAssess() {
                     </td>
                     <td className="is-num">{percent(budget.availability)}</td>
                     <td className="is-num is-strong">
-                      {frequency(module.eventsPerWeek)}
+                      {frequency(module.ratePerWeek)}
                     </td>
                     <td className="is-num">
-                      {budget.maxEventsPerWeek === null
+                      {budget.maxRatePerWeek === null
                         ? "—"
-                        : frequency(budget.maxEventsPerWeek)}
+                        : frequency(budget.maxRatePerWeek)}
                     </td>
                     <td className="is-num is-strong">
                       {duration(module.mttrHours)}
@@ -291,17 +294,25 @@ export default function StepAssess() {
                       <Status tone={tone}>{usageText(gap)}</Status>
                     </td>
                     <td>
-                      {gap.suggestion === "none" ? (
+                      {gap.suggestion === "none" || !reach ? (
                         <span className="rw-muted">—</span>
-                      ) : gap.suggestion === "mtbf" ? (
-                        <span className="rw-direction is-mtbf">
-                          <TrendingUp size={14} aria-hidden />
-                          降低频次
-                        </span>
                       ) : (
-                        <span className="rw-direction is-mttr">
-                          <Timer size={14} aria-hidden />
-                          缩短单次损失
+                        <span className="rw-direction-cell">
+                          {reach.system >= reach.component ? (
+                            <span className="rw-direction is-mttr">
+                              <Timer size={14} aria-hidden />
+                              缩短单次损失
+                            </span>
+                          ) : (
+                            <span className="rw-direction is-mtbf">
+                              <TrendingUp size={14} aria-hidden />
+                              降低频次
+                            </span>
+                          )}
+                          <small>
+                            措施库可降：单次损失 {percent(reach.system, 0)} ·
+                            频次 {percent(reach.component, 0)}
+                          </small>
                         </span>
                       )}
                     </td>
@@ -337,8 +348,11 @@ export default function StepAssess() {
           </table>
         </div>
         <p className="rw-hint">
-          每周损失 = 故障频次 ×
-          单次等效损失。“允许”的两列是分别只走一条路时的要求：单次损失不变时频次要降到多少，或频次不变时单次损失要缩到多少。“优先方向”：单次损失高于系统平均的模块先缩短单次损失，否则先降低频次。竖线是损失预算。
+          故障频次是每连续运行一周（168 小时）发生的次数，等于 168 ÷
+          MTBF，只由器件失效率和数量决定。每周损失 = 故障频次 × 单次等效损失 ×
+          运行时间占比（停机时不产生新故障，现状运行时间占{" "}
+          {percent(system.runShare, 0)}
+          ）。“允许”的两列是分别只走一条路时的要求：单次损失不变时频次要降到多少，或频次不变时单次损失要缩到多少。“优先方向”看措施库里哪一边能补得更多：把全部系统级措施用上，这个模块的损失能降多少（缩短单次损失）；把全部组件级措施用上能降多少（降低频次）。竖线是损失预算。
         </p>
       </section>
 
@@ -362,14 +376,14 @@ export default function StepAssess() {
               return {
                 id: m.id,
                 name: m.name,
-                x: m.eventsPerWeek,
+                x: m.ratePerWeek,
                 y: m.mttrHours,
-                toX: after.eventsPerWeek,
+                toX: after.ratePerWeek,
                 toY: after.mttrHours,
                 labelled: labelled.has(m.id),
                 tip: (
                   <>
-                    <strong>{frequency(m.eventsPerWeek)}</strong>
+                    <strong>{frequency(m.ratePerWeek)}</strong>
                     <span>{m.name} · 故障频次</span>
                     <strong>{duration(m.mttrHours)}</strong>
                     <span>单次等效损失</span>
@@ -378,7 +392,7 @@ export default function StepAssess() {
                       每周损失（预算 {hours(budget.lossHoursPerWeek)}）
                     </span>
                     <strong>
-                      {frequency(after.eventsPerWeek)} ×{" "}
+                      {frequency(after.ratePerWeek)} ×{" "}
                       {duration(after.mttrHours)}
                     </strong>
                     <span>设计后</span>
@@ -426,7 +440,10 @@ export default function StepAssess() {
               <p>
                 <strong>单次等效损失。</strong>
                 故障先被检出（概率
-                c），或漏检后被兜底手段发现；然后沿恢复阶梯从小到大逐级尝试——重执行、进程重调度、域级弹性恢复、检查点全局恢复、人工——成功就结束，失败则白费一段时间再升级。各环节的“概率
+                c），或漏检后被兜底手段发现；然后沿恢复链从小到大走——就地恢复、进程重调度、弹性恢复、CKPT
+                回滚、人工。进程重调度成功即恢复，失败走弹性恢复；弹性恢复成功后再走
+                CKPT 回滚，失败转人工；CKPT
+                回滚失败也转人工。每一级不论成败都要花掉它的时间。各环节的“概率
                 × 时间”相加：
               </p>
               <Formula>
@@ -434,8 +451,10 @@ export default function StepAssess() {
                 (1−pₖ)·fₖ·κₖ) + Σ需回滚 到达ₖ·pₖ·t回滚 ]
               </Formula>
               <p>
-                到达ₖ 是前面各级都失败的概率；pₖ、tₖ、fₖ、κₖ 是第 k
-                级的成功率、成功耗时、失败白费的时间和影响范围。
+                到达ₖ 是走到第 k
+                级的概率（沿上面的走法逐级推出）；pₖ、tₖ、fₖ、κₖ 是第 k
+                级的成功率、成功耗时、失败白费的时间和影响范围。回滚重算只在最终恢复的那一级计一次，CKPT
+                回滚一次的耗时 ≈ 恢复时间 + 保存间隔的一半。
               </p>
             </li>
             <li>
@@ -521,7 +540,7 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
       <section className="rw-editor-metrics">
         {[
           ["FIT / 卡", fit(result.fitPerCard)],
-          ["故障频次", frequency(result.eventsPerWeek)],
+          ["故障频次", frequency(result.ratePerWeek)],
           ["单次等效损失", duration(result.mttrHours)],
           [
             "损失 / 预算",
@@ -728,7 +747,7 @@ function ModuleEditor({ moduleId }: { moduleId: string }) {
             />
             <p className="rw-mode-result">
               单次等效损失 <b>{duration(lossPerEvent(mode))}</b> ·{" "}
-              <b>{frequency(modeResult.eventsPerWeek)}</b> · 每周损失{" "}
+              <b>{frequency(modeResult.ratePerWeek)}</b> · 每周损失{" "}
               <b>{hours(modeResult.lossHoursPerWeek)}</b>
             </p>
             <label className="rw-mode-evidence">

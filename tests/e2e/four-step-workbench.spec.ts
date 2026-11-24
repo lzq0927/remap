@@ -25,8 +25,8 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
     "目标分配",
   );
   const summary = page.getByRole("region", { name: "场景与结论" });
-  await expect(summary).toContainText("65.03%");
-  await expect(summary).toContainText("79.68%");
+  await expect(summary).toContainText("10.42%");
+  await expect(summary).toContainText("76.66%");
 
   // 第 1 步：预算闭合，切换方法后各模块目标随之变化
   const allocation = page.getByRole("region", { name: "分配结果" });
@@ -47,18 +47,19 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   );
   const sitePower = allocation.getByRole("row", { name: /机房供配电/ });
   await expect(sitePower).toContainText("单独指定");
-  await expect(sitePower).toContainText("47.9 年 1 次");
+  await expect(sitePower).toContainText("年 1 次");
   const optical = allocation.getByRole("row", { name: /光模块/ });
-  await expect(optical).toContainText("2.21 h");
-  await expect(optical).toContainText("≤ 19.2 次/周");
+  await expect(optical).toContainText("2.58 h");
+  // 允许的故障频次按“每连续运行一周”计
+  await expect(optical).toContainText("≤ 48.1 次/年");
   await page.getByRole("radio", { name: /ARINC/ }).check();
-  await expect(optical).toContainText("1.40 h");
+  await expect(optical).toContainText("2.52 h");
   await expect(allocation).toContainText("= 8.40 h，与总预算一致");
   await expect(
     page
       .getByRole("region", { name: "架构上的目标" })
       .getByRole("group", { name: /^光模块，目标可用度/ }),
-  ).toContainText("1.40 h");
+  ).toContainText("2.52 h");
   await expect(page.getByRole("region", { name: "分配依据" })).toContainText(
     "wᵢ = ρᵢ / Σⱼ ρⱼ",
   );
@@ -80,76 +81,105 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   ).toHaveCount(14);
   await expect(architecture).toContainText("机房供配电 · 全系统共用");
   const hbm = architecture.getByRole("button", { name: /^HBM，/ });
-  await expect(hbm).toContainText("95.33%");
-  await expect(hbm).toContainText("99.63%");
+  await expect(hbm).toContainText("44.55%");
+  await expect(hbm).toContainText("99.34%");
   await expect(hbm).toContainText("850 FIT");
-  await expect(hbm).toContainText("5.42 h / 0.59 h");
+  await expect(hbm).toContainText("21.9 h / 1.07 h");
   await architecture.getByRole("tab", { name: "设计后" }).click();
-  await expect(hbm).toContainText("98.08%");
+  await expect(hbm).toContainText("97.54%");
   await architecture.getByRole("tab", { name: "现状" }).click();
   // 差距从频次（MTBF）和单次损失（MTTR）两个角度给出，以周为粒度
   const gapTable = page.getByRole("region", { name: "差距明细" });
   await expect(gapTable).toContainText("缩短单次损失");
   await expect(gapTable.getByRole("row", { name: /^光模块/ })).toContainText(
-    "111 次/周",
+    "168 次/周",
   );
   await expect(
     page.getByRole("img", { name: "各模块的故障频次与单次等效损失" }),
   ).toBeVisible();
-  // 恢复链：每一环的概率和时间，合计就是单次等效损失
+  // 恢复链：进程重调度 → 弹性恢复 → CKPT 回滚 → 人工，每一环的概率和时间
   const chain = page.getByRole("region", { name: "恢复链与计算过程" });
   await expect(
-    chain.getByRole("img", { name: /静默数据错误的恢复链（现状）/ }),
+    chain.getByRole("img", { name: /光模块失效的恢复链（现状）/ }),
   ).toBeVisible();
-  await expect(chain).toContainText("10.0% × 48 小时");
+  await expect(
+    chain.getByRole("img", { name: /光模块失效的恢复链（设计后/ }),
+  ).toBeVisible();
+  // 现状没有弹性恢复：进程重调度失败的 70% 只能转人工
+  await expect(
+    chain.getByRole("row", { name: /^恢复 2 · 弹性恢复/ }),
+  ).toContainText("现在不具备，转人工恢复");
   await expect(chain.getByRole("row", { name: /^单次等效损失/ })).toContainText(
-    "4.9 小时",
+    "2.9 小时",
   );
+  await expect(chain.getByRole("row", { name: /^单次等效损失/ })).toContainText(
+    "9.9 分钟",
+  );
+  // 横向条：一条线看出各环节耗时；再按路径拆开
+  await expect(
+    chain.getByRole("img", { name: /^设计后单次等效损失 9.9 分钟 的构成/ }),
+  ).toBeVisible();
+  await expect(
+    chain.getByRole("img", {
+      name: /进程重调度失败 → 弹性恢复 → CKPT 回滚，概率 68.6%，耗时 11.2 分钟/,
+    }),
+  ).toBeVisible();
+  // 进程重调度成功率只有 30%、每次都要花 4 分钟：先试它反而更慢
+  await expect(
+    chain.getByRole("row", { name: /^恢复 1 · 进程重调度/ }),
+  ).toContainText("每次反而多花 1.6 分钟");
+  // 没有弹性恢复时的走法可以切换：跳过它直接走 CKPT 回滚，现状随之改变
+  await chain.getByLabel("不具备弹性恢复时的走法").selectOption("skip");
+  await expect(summary).toContainText("50.43%");
+  await chain.getByLabel("不具备弹性恢复时的走法").selectOption("manual");
+  await expect(summary).toContainText("10.42%");
   await expect(
     page.getByRole("region", { name: "可用度计算过程" }),
-  ).toContainText("= 65.03%");
+  ).toContainText("= 10.42%");
   await hbm.click();
   const drawer = page.getByRole("dialog", { name: "HBM" });
   const fit = drawer.getByLabel("不可纠正错误 的单件故障率");
   await fit.fill("425");
   await fit.press("Enter");
-  await expect(drawer).toContainText("可用度 97.61%");
-  await expect(drawer).toContainText("检查点全局恢复");
+  await expect(drawer).toContainText("可用度 61.64%");
+  await expect(drawer).toContainText("CKPT 回滚");
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
-  await expect(summary).not.toContainText("65.03%");
+  await expect(summary).not.toContainText("10.42%");
   await hbm.click();
   await fit.fill("850");
   await fit.press("Enter");
   await page.keyboard.press("Escape");
-  await expect(summary).toContainText("65.03%");
+  await expect(summary).toContainText("10.42%");
 
   // 第 3 步：措施分两层，Shapley 贡献、改进程度收益、组合路径与结论
   await page.getByRole("button", { name: "下一步：机制设计" }).click();
   const advice = page.getByRole("region", { name: "推荐方案" });
-  await expect(advice).toContainText("距目标还差 15.32 pp");
+  await expect(advice).toContainText("距目标还差 18.34 pp");
   const component = page.getByRole("region", { name: "组件级高可用" });
-  await expect(component).toContainText("光模块可靠性提升");
-  await expect(component).toContainText("已启用 3 / 7");
+  await expect(component).toContainText("Hi-One 下一代光模块");
+  await expect(component).toContainText("已启用 4 / 7");
   const system = page.getByRole("region", { name: "系统级可靠性机制" });
-  await expect(system).toContainText("静默故障在线检测增强");
+  await expect(system).toContainText("静默故障在线检测");
   await expect(
     page.getByRole("region", { name: "各措施的贡献" }),
-  ).toContainText("+14.65 pp");
+  ).toContainText("+66.23 pp");
   // 参数可调：把静默检出率提到 99%，设计后可用度随之提高
-  const coverage = page.getByLabel("静默故障在线检测增强 · 检出率");
+  const coverage = page.getByLabel("静默故障在线检测 · 检出率");
   await coverage.fill("99");
   await coverage.press("Enter");
-  await expect(summary).not.toContainText("79.68%");
+  await expect(summary).toContainText("78.75%");
   await coverage.fill("95");
   await coverage.press("Enter");
-  await expect(summary).toContainText("79.68%");
+  await expect(summary).toContainText("76.66%");
   // 系统级按恢复链分为检测、恢复、隔离与弹性、检查点四类，候选可展开
-  await expect(system).toContainText("已启用 1 / 23");
+  await expect(system).toContainText("已启用 6 / 23");
   for (const group of ["检测", "恢复", "隔离与弹性", "检查点"])
     await expect(
       system.getByRole("heading", { name: new RegExp("^" + group) }),
     ).toBeVisible();
+  await expect(system).toContainText("智能故障管理 Agent");
+  await expect(system).toContainText("CKPT 回滚优化");
   await system.getByRole("button", { name: /显示全部 10 项候选/ }).click();
   await expect(system).toContainText("链路透明恢复");
   // 改进程度—收益、组合收益路径
@@ -157,28 +187,28 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   await expect(
     dose.getByRole("img", { name: "各措施的改进程度与系统可用度提升" }),
   ).toBeVisible();
-  await expect(
-    dose.getByRole("row", { name: /光模块可靠性提升/ }),
-  ).toContainText("90%");
+  await expect(dose.getByRole("row", { name: /^弹性恢复/ })).toContainText(
+    "99.00%",
+  );
   const path = page.getByRole("region", { name: "组合收益路径" });
-  await expect(path).toContainText("第 11 项即可达标");
+  await expect(path).toContainText("第 9 项即可达标");
   await expect(
-    path.getByRole("row", { name: /^1 通信与算子重执行/ }),
-  ).toContainText("73.11%");
+    path.getByRole("row", { name: /^1 进程重调度增强/ }),
+  ).toContainText("50.07%");
   // 结论：重点做哪几项、做到什么程度
   const focus = page.getByRole("region", { name: "重点措施结论" });
-  await expect(focus).toContainText("这组措施可达 95.36%");
-  await expect(focus.getByRole("row", { name: /域级弹性恢复/ })).toContainText(
-    "建议启用",
-  );
+  await expect(focus).toContainText("这组措施可达 95.60%");
+  await expect(
+    focus.getByRole("row", { name: /进程重调度增强/ }),
+  ).toContainText("建议启用");
   await advice.getByRole("button", { name: "采用建议" }).click();
   await expect(advice).toContainText("当前设计已达标");
-  await expect(summary).toContainText("95.36%");
-  await expect(focus.getByRole("row", { name: /域级弹性恢复/ })).toContainText(
-    "兑现 ≥ 96%",
-  );
+  await expect(summary).toContainText("95.60%");
   await expect(
-    page.getByRole("switch", { name: "停用 域级弹性恢复" }),
+    focus.getByRole("row", { name: /进程重调度增强/ }),
+  ).toContainText("兑现 ≥ 95%");
+  await expect(
+    page.getByRole("switch", { name: "停用 进程重调度增强" }),
   ).toHaveAttribute("aria-checked", "true");
   await expect(
     page
@@ -246,10 +276,10 @@ test("基础库配置：故障模式库、措施库和架构模块可以增删�
   const fit = modes.getByLabel("光模块失效 的单件故障率（FIT）");
   await fit.fill("250");
   await fit.press("Enter");
-  await expect(summary).not.toContainText("65.03%");
+  await expect(summary).not.toContainText("10.42%");
   await fit.fill("500");
   await fit.press("Enter");
-  await expect(summary).toContainText("65.03%");
+  await expect(summary).toContainText("10.42%");
   await modes.getByRole("button", { name: "添加故障模式" }).click();
   await expect(modes.getByRole("row")).toHaveCount(17);
   await modes.getByRole("button", { name: "删除故障模式 新故障模式" }).click();
@@ -261,7 +291,14 @@ test("基础库配置：故障模式库、措施库和架构模块可以增删�
     .click();
   const ladder = page.getByRole("dialog", { name: "光模块失效 的恢复阶梯" });
   await expect(ladder).toContainText("进程重调度");
-  await expect(ladder).toContainText("单次等效损失 6.9 分钟");
+  await expect(ladder).toContainText("弹性恢复");
+  await expect(ladder.getByLabel("光模块失效 · 弹性恢复成功后")).toHaveValue(
+    "next",
+  );
+  await expect(ladder.getByLabel("光模块失效 · 弹性恢复失败后")).toHaveValue(
+    "manual",
+  );
+  await expect(ladder).toContainText("单次等效损失 2.9 小时");
   await ladder.getByRole("button", { name: "完成" }).click();
 
   // 措施库：30 项默认措施；删除后可从默认库补回；可新增
@@ -284,12 +321,12 @@ test("基础库配置：故障模式库、措施库和架构模块可以增删�
   await dialog.getByLabel("光模块失效").check();
   await dialog.getByRole("button", { name: "添加并启用" }).click();
   await expect(measures.getByRole("row")).toHaveCount(32);
-  await expect(summary).not.toContainText("79.68%");
+  await expect(summary).not.toContainText("76.66%");
   // 适用比例直接在表中调整
   const share = measures.getByLabel("光模块链路冗余 的适用比例（%）");
   await share.fill("0");
   await share.press("Enter");
-  await expect(summary).toContainText("79.68%");
+  await expect(summary).toContainText("76.66%");
 
   // 架构模块：可以指定每个模块标注在架构图的哪个硬件上
   await page.getByRole("tab", { name: /架构模块/ }).click();

@@ -470,7 +470,7 @@ p {
 .rw-drawer {
   display: flex;
   flex-direction: column;
-  width: min(620px, 100vw);
+  width: min(900px, 100vw);
   height: 100%;
   background: var(--rw-surface);
   box-shadow: -12px 0 32px rgba(16, 24, 40, 0.16);
@@ -2468,4 +2468,132 @@ h2.rw-direction {
   display: block;
   color: var(--rw-ink-3);
   font-size: 12px;
+}
+
+/* ---------- 恢复链：各环节耗时 ---------- */
+.rw-stage-times {
+  margin: 4px 0 18px;
+  padding: 16px 18px 6px;
+  border: 1px solid var(--rw-line);
+  border-radius: 10px;
+}
+.rw-stage-times h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.rw-stage-times .rw-card-head {
+  margin-bottom: 12px;
+}
+.rw-stage-times > .rw-hint {
+  margin: 10px 0 18px;
+}
+.rw-dot {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.rw-timebars {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: 12px 14px;
+  align-items: start;
+}
+.rw-timebars > strong,
+.rw-timebars > em,
+.rw-paths > em,
+.rw-paths > b {
+  height: 26px;
+  line-height: 26px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rw-timebars > em,
+.rw-paths > em {
+  font-weight: 650;
+  text-align: right;
+}
+.rw-timebar-track {
+  display: flex;
+  gap: 2px;
+  height: 26px;
+}
+.rw-timebar-track span {
+  min-width: 2px;
+  border-radius: 3px;
+  outline: none;
+}
+.rw-timebar-track span.is-failed {
+  opacity: 0.45;
+}
+.rw-timebar-track span:hover,
+.rw-timebar-track span:focus-visible {
+  box-shadow: 0 0 0 2px var(--rw-ink);
+}
+.rw-timebar-labels {
+  display: flex;
+  gap: 2px;
+  min-height: 18px;
+  margin-top: 3px;
+  color: var(--rw-ink-2);
+  font-size: 12px;
+}
+.rw-timebar-labels span {
+  min-width: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rw-timebar-labels b {
+  margin-left: 5px;
+  color: var(--rw-ink);
+  font-weight: 600;
+}
+.rw-paths {
+  display: grid;
+  grid-template-columns:
+    max-content minmax(180px, max-content) minmax(0, 1fr)
+    max-content;
+  gap: 6px 14px;
+  align-items: start;
+  font-size: 13px;
+}
+.rw-paths > span {
+  line-height: 26px;
+  color: var(--rw-ink-2);
+}
+.rw-paths > b {
+  text-align: right;
+}
+.rw-paths .rw-timebar-labels {
+  display: none;
+}
+.rw-chain-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+.rw-warn-text {
+  color: var(--rw-warn);
+  font-weight: 600;
+}
+.rw-direction-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rw-direction-cell small {
+  color: var(--rw-ink-3);
+  font-size: 11.5px;
+}
+.rw-chain-table td:nth-child(2),
+.rw-chain-table td:nth-child(4) {
+  min-width: 200px;
+  white-space: normal;
+  font-size: 12.5px;
 }

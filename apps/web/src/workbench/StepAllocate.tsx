@@ -11,6 +11,7 @@ import {
   allocate,
   allocationMethodInfo,
   allocationMethods,
+  consequenceRareLimit,
   consequenceThreshold,
   createEvaluator,
   loadPerTenThousand,
@@ -170,13 +171,14 @@ export default function StepAllocate() {
               <h2>单次故障后果很大的模块：单独定目标</h2>
             </div>
             <p className="rw-hint">
-              多数故障每周发生很多次、每次损失很小，窗口损失接近平均值，按平均损失分预算即可。少数事件一次就吃掉窗口预算的一大块（这里按
+              多数故障每周发生很多次、每次损失很小，窗口损失接近平均值，按平均损失分预算即可。少数事件发生得少（每个窗口不到{" "}
+              {consequenceRareLimit} 次），但一次就吃掉窗口预算的一大块（这里按
               ≥ {percent(consequenceThreshold, 0)}{" "}
-              计）：平均下来很小，可只要发生，这个窗口就不达标。它们该约束的是“发生的概率”，所以目标单独指定，先从总预算里扣除。
+              计）：平均下来很小，可只要发生，这个窗口就不达标。它们该约束的是“发生的概率”，所以目标单独指定，先从总预算里扣除。恢复能力按当前设计计。
             </p>
             {consequences.length === 0 ? (
               <p className="rw-empty">
-                按现状参数，没有单次损失达到窗口预算{" "}
+                按当前设计，没有少见且单次损失达到窗口预算{" "}
                 {percent(consequenceThreshold, 0)} 的事件。
               </p>
             ) : (
@@ -452,9 +454,9 @@ export default function StepAllocate() {
                                 {hours(row.lossHoursPerWeek)}
                               </td>
                               <td className="is-num">
-                                {row.maxEventsPerWeek === null
+                                {row.maxRatePerWeek === null
                                   ? "—"
-                                  : "≤ " + frequency(row.maxEventsPerWeek)}
+                                  : "≤ " + frequency(row.maxRatePerWeek)}
                               </td>
                               <td className="is-num">
                                 {row.maxMttrHours === null
@@ -492,7 +494,7 @@ export default function StepAllocate() {
               </table>
             </div>
             <p className="rw-hint">
-              后两列是兑现预算的两条路，任选其一或组合：保持现状的单次损失不变，把故障频次降到左边的值（提升
+              后两列是兑现预算的两条路，任选其一或组合：保持现状的单次损失不变，把故障频次（每连续运行一周的次数）降到左边的值（提升
               MTBF）；或保持现状的故障频次不变，把单次损失缩短到右边的值（降低
               MTTR）。点模块目标旁的图钉可以改为单独指定。
             </p>

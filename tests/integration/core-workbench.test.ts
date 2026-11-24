@@ -18,7 +18,7 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     expect(initial.verification).toBeNull();
 
     const model = defaultCoreModel();
-    model.scenario.target = 0.85;
+    model.scenario.target = 0.7;
     model.measures.find((m) => m.id === "elastic-recover")!.enabled = true;
     const saved = await app.inject({
       method: "PUT",
@@ -27,7 +27,7 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     });
     expect(saved.statusCode, saved.body).toBe(200);
     expect(saved.json()).toMatchObject({ revision: 1, hash: modelHash(model) });
-    expect((await app.inject(path)).json().model.scenario.target).toBe(0.85);
+    expect((await app.inject(path)).json().model.scenario.target).toBe(0.7);
     // 任务之间互不影响
     expect(
       (await app.inject(`/api/tasks/${other.id}/core`)).json().revision,
@@ -63,9 +63,9 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
       "core-model",
     );
     const upgraded = (await app.inject(path)).json();
-    expect(upgraded.model.scenario.target).toBe(0.85);
+    expect(upgraded.model.scenario.target).toBe(0.7);
     expect(upgraded.model.scenario.targetCurve).toEqual([
-      { cards: 500000, target: 0.85 },
+      { cards: 500000, target: 0.7 },
     ]);
     expect(upgraded.model.groups[1]).toEqual({ id: "network", name: "网络" });
     expect(upgraded.model.modules[0]).toMatchObject({
@@ -85,7 +85,7 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
 
     const analysis = (await app.inject(path + "/analysis")).json();
     expect(analysis.hash).toBe(modelHash(model));
-    expect(analysis.design.system.availability).toBeGreaterThan(0.85);
+    expect(analysis.design.system.availability).toBeGreaterThan(0.7);
     expect(analysis.recommendation.kind).toBe("met");
 
     const verified = await app.inject({

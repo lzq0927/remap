@@ -15,7 +15,8 @@ export * from "./verify";
 export function analyze(model: CoreModel) {
   const baselineParameters = applyMeasures(model, new Set()),
     baseline = assess(model, baselineParameters),
-    design = assess(model, applyMeasures(model)),
+    designParameters = applyMeasures(model),
+    design = assess(model, designParameters),
     allocation = allocate(model, model.allocation.method, baseline);
   return {
     hash: modelHash(model),
@@ -26,8 +27,8 @@ export function analyze(model: CoreModel) {
     designGaps: gaps(design, allocation),
     contributions: contributions(model),
     recommendation: recommend(model),
-    /** 单次故障后果很大的模块（按现状计）。 */
-    consequences: consequences(model, baselineParameters),
+    /** 单次故障后果很大的模块（恢复能力按当前设计计）。 */
+    consequences: consequences(model, designParameters),
   };
 }
 export type Analysis = ReturnType<typeof analyze>;

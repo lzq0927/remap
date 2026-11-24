@@ -26,8 +26,10 @@ export const faultKindNames: Record<FaultKind, string> = {
 };
 
 /**
- * 恢复阶梯的级别，粒度从小到大。故障发生并被发现后依次尝试：
- * 成功就结束；失败则白费这一级的失败耗时，升到下一级。成功率为 0 的级别表示不使用。
+ * 恢复链的级别，粒度从小到大。故障被发现后从第一个可用的级别开始：
+ * - 成功后或者就此恢复，或者继续走下一级（例如弹性恢复换好资源后，还要走 CKPT 回滚）；
+ * - 失败后白费这一级的失败耗时，或者升到下一级，或者直接转人工。
+ * 成功率为 0 的级别默认跳过；标为“必经”的级别即使成功率为 0 也留在链上，按失败处理。
  */
 export const recoveryLevels = [
   "replay",
@@ -38,31 +40,37 @@ export const recoveryLevels = [
 ] as const;
 export type RecoveryLevel = (typeof recoveryLevels)[number];
 export const recoveryLevelNames: Record<RecoveryLevel, string> = {
-  replay: "重执行",
+  replay: "就地恢复",
   process: "进程重调度",
-  elastic: "域级弹性恢复",
-  restart: "检查点全局恢复",
+  elastic: "弹性恢复",
+  restart: "CKPT 回滚",
   manual: "人工恢复",
 };
 export const recoveryLevelNotes: Record<RecoveryLevel, string> = {
-  replay: "原地重做出错的通信或算子，不回滚",
-  process: "只重建受影响的进程，再回滚到检查点",
-  elastic: "只让出故障的那个域停下，其余继续训练，不回滚",
-  restart: "整个任务重启，从检查点恢复后重算",
+  replay: "原地重执行、绕行或快照降载，任务不回滚",
+  process: "只重新调度出错的进程",
+  elastic: "隔离并替换故障资源，重建通信域",
+  restart: "从最近的检查点恢复并重算",
   manual: "自动手段都失败后由人处理",
 };
 export const levelSchema = z
   .object({
-    /** 这一级的成功率；0 表示不使用这一级。 */
+    /** 这一级的成功率；0 表示不可用。 */
     success: probability,
     /** 成功时的耗时（小时）。 */
     hours: hoursValue,
-    /** 失败时白费的时间（小时），之后升到下一级。 */
+    /** 失败时白费的时间（小时）。 */
     failHours: hoursValue,
     /** 这一级执行期间损失的任务产能比例。 */
     impact: probability,
-    /** 成功后是否还要回滚到检查点重算。 */
+    /** 在这一级恢复后是否还要回滚到检查点重算。 */
     rollback: z.boolean(),
+    /** 成功之后：done 就此恢复；next 继续走下一级。 */
+    then: z.enum(["done", "next"]).default("done"),
+    /** 失败之后：next 升到下一级；manual 直接转人工。 */
+    onFail: z.enum(["next", "manual"]).default("next"),
+    /** 必经环节：成功率为 0 时不跳过，按失败处理。 */
+    gate: z.boolean().default(false),
   })
   .strict();
 export type LadderLevel = z.infer<typeof levelSchema>;
@@ -97,6 +105,9 @@ export function makeLadder(
         failHours: 0,
         impact: 1,
         rollback: defaultRollback[level],
+        then: "done" as const,
+        onFail: "next" as const,
+        gate: false,
         ...levels[level],
       },
     ]),

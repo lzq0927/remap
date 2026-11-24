@@ -14,9 +14,8 @@ const seconds = (value: number) => value / 3600;
  * - 故障率：2026-11-12 周度用户场景（每卡 HBM＋NPU 合计 1700 FIT，各占全部故障 15%；
  *   光模块占 35%；静默故障占 1.4%，其中 AICore 占 85%）。
  * - 其余 35% 的模块拆分：按 2026-10-14 基线故障库各对象的相对构成折算，属先验。
- * - 恢复链：现有评估模型的基线参数（95% 在 10 秒检出、其余 60 秒超时；恢复 180 秒、
- *   成功率 99%、失败后人工追加 2 小时；检查点周期 300 秒、保存 4 秒）。
- * - 措施库：用户给出的四项，加上现有基础机制（8 项）和扩展机制库（16 项）的全部条目。
+ * - 检测与恢复链：2026-11-24 用户给出的现有措施与预计改进（见下方常量）。
+ * - 措施库：用户给出的 10 项默认启用；其余取自现有基础机制和扩展机制库，作为候选。
  * 所有数值都是可编辑的场景输入，不代表厂商实测器件失效率。
  */
 const TOTAL_FIT = 1700 / 0.3;
@@ -39,14 +38,36 @@ const rest = (key: keyof typeof restBasis) =>
 const restSlow = (key: keyof typeof restBasis) =>
   (REST_FIT * restBasis[key].slow) / restTotal;
 
-// 基线恢复阶梯：检查点全局恢复一次 180 秒，成功率 99%；失败后转人工，追加 2 小时。
-// 两级成功后都要回滚到检查点重算，平均 150 秒（检查点周期 300 秒的一半）。
-const RESTART = seconds(180);
-const MANUAL = 2;
-const REWORK = seconds(150);
-const baseLadder = () =>
+// ---------- 现有恢复链（2026-11-24 用户给定） ----------
+// 进程重调度：成功率 0.3，耗时 240 秒；成功即恢复，失败转弹性恢复。
+const PROCESS = { success: 0.3, hours: seconds(240) };
+// CKPT 回滚：保存间隔 10 分钟、恢复 10 分钟、成功率 0.99、每次保存阻塞 4 秒。
+// 回滚一次的耗时粗看是 间隔 / 2 + 恢复时间。
+const CKPT_INTERVAL = seconds(600);
+const CKPT_RESTORE = seconds(600);
+const CKPT_BLOCK = seconds(4);
+const REWORK = CKPT_INTERVAL / 2;
+// 人工恢复 4 小时。
+const MANUAL = 4;
+/**
+ * 恢复链：进程重调度成功即恢复，失败走弹性恢复；弹性恢复成功再走 CKPT 回滚，失败转人工；
+ * CKPT 回滚失败也转人工。现状没有弹性恢复：它是必经环节，成功率为 0，所以进程重调度
+ * 失败后只能转人工，CKPT 回滚要等弹性恢复具备后才走得到。
+ * 假设：每一级的尝试时间不论成败都要花掉；进程重调度的 240 秒已含重新加载，不另计回滚重算。
+ */
+const chain = (withProcess: boolean) =>
   makeLadder({
-    restart: { success: 0.99, hours: RESTART, failHours: RESTART },
+    ...(withProcess
+      ? {
+          process: {
+            ...PROCESS,
+            failHours: PROCESS.hours,
+            rollback: false,
+          },
+        }
+      : {}),
+    elastic: { success: 0, gate: true, then: "next", onFail: "manual" },
+    restart: { success: 0.99, hours: CKPT_RESTORE, failHours: CKPT_RESTORE },
     manual: { success: 1, hours: MANUAL },
   });
 const hard = (
@@ -61,12 +82,12 @@ const hard = (
   name,
   kind: "hard",
   fit,
-  // 95% 在 10 秒内检出，其余由 60 秒超时兜底发现。
+  // 95% 在 10 秒内检出，其余由 60 秒超时兜底发现（超时时间为沿用的假设）。
   coverage: 0.95,
   detectHours: seconds(10),
   lateDetectHours: seconds(60),
   reworkHours: REWORK,
-  ladder: baseLadder(),
+  ladder: chain(true),
   impact: 1,
   evidence,
 });
@@ -82,17 +103,19 @@ const silent = (
   name,
   kind: "sdc",
   fit,
-  // 90% 在线检出；漏检的要到 48 小时后才被发现，期间的训练结果作废。
+  // 90% 在 10 秒内在线检出；漏检的要到 48 小时后才被发现，期间的训练结果作废。
   coverage: 0.9,
-  detectHours: seconds(1),
+  detectHours: seconds(10),
   lateDetectHours: 48,
   reworkHours: REWORK,
-  ladder: baseLadder(),
+  // 假设：出错的核必须先隔离，重新调度进程无效，所以不走进程重调度。
+  ladder: chain(false),
   impact: 1,
   evidence,
 });
-// 亚健康不中断任务，只是降速 5%。检测等待与漏检损失已折算成等效停机时间：
-// 检出前 5 分钟 × 5% = 15 秒；漏检持续 24 小时 × 5% = 1.2 小时；处置 3 分钟，不回滚。
+// 亚健康不中断任务，性能损耗系数 0.1（影响系数）。检出率 0.8，检出后快照 / 降载 300 秒。
+// 假设（用户未给出）：检出需要 5 分钟；漏检的降速持续 24 小时后才被发现。
+const SLOW_LOSS = 0.1;
 const slow = (
   id: string,
   moduleId: string,
@@ -104,16 +127,17 @@ const slow = (
   name,
   kind: "slow",
   fit,
-  coverage: 0.95,
-  detectHours: seconds(0.05 * 300),
-  lateDetectHours: 0.05 * 24,
+  coverage: 0.8,
+  detectHours: seconds(300),
+  lateDetectHours: 24,
   reworkHours: 0,
   ladder: makeLadder({
-    restart: { success: 1, hours: RESTART, rollback: false },
+    replay: { success: 1, hours: seconds(300), rollback: false },
   }),
-  impact: 1,
+  impact: SLOW_LOSS,
   evidence:
-    priorSplit + "；降速 5%，检测等待与漏检损失已按降速比例折算为等效停机时间",
+    priorSplit +
+    "；用户给定：检出率 0.8、快照 / 降载 300 秒、性能损耗系数 0.1。检出需 5 分钟、漏检持续 24 小时为假设",
 });
 
 const userScenario = "2026-11-12 周度用户场景";
@@ -135,9 +159,8 @@ const HARD = [
 ];
 const SDC = ["aicore-sdc", "other-sdc"];
 const SLOW = ["node-slow", "power-slow"];
-/** 基线故障库中可由进程重调度、局部弹性恢复处理的中断。 */
-const LOCAL = ["npu-fault", "hbm-uce", "node-fault", "iod-fault"];
-const RESTARTED = [...SDC, ...HARD];
+/** 走“进程重调度 → 弹性恢复 → CKPT 回滚 → 人工”这条恢复链的故障模式。 */
+const CHAINED = [...HARD, ...SDC];
 
 const effect = (
   param: MeasureEffect["param"],
@@ -169,48 +192,50 @@ const measure = (
 const user = {
   enabled: true,
   evidence: "planned" as const,
-  source: "用户方案",
+  source: "用户方案（2026-11-24）",
 };
+/** 扩展机制库按 180 秒的全局恢复给出各阶段节省；这里按相同比例折算到现在的恢复时间。 */
+const RESTART_180 = 180;
 
 /** 默认措施库：可在“基础库”中增删改，也可随时从这里补回缺失的条目。 */
 export function defaultMeasures(): Measure[] {
   return [
     // ---------- 组件级高可用：降低失效率 ----------
     measure(
-      "hbm-ecc",
-      "HBM 纠错增强",
-      "prevent",
-      ["hbm-uce"],
-      [effect("fit", "reduce", 0.6)],
-      "更强的 ECC 与行列修复把一部分不可纠正错误变为可纠正；可覆盖的错误模式需工程核验。",
-      user,
-    ),
-    measure(
       "aicore-screening",
-      "AICore 静默故障压测筛查",
+      "AICore 静默故障压测",
       "prevent",
       ["aicore-sdc"],
       [effect("fit", "reduce", 0.6)],
-      "上线前与在网周期压测筛除易产生静默错误的核；只降低 AICore 静默分支的发生率。",
+      "上线前与在网周期压测筛除易产生静默错误的核，AICore 静默故障消减 60%。",
+      user,
+    ),
+    measure(
+      "hbm-ecc",
+      "HBM 新纠错技术",
+      "prevent",
+      ["hbm-uce"],
+      [effect("fit", "reduce", 0.6)],
+      "新的纠错技术把一部分不可纠正错误变为可纠正，HBM 不可纠正错误消减 60%。",
       user,
     ),
     measure(
       "optical-reliability",
-      "光模块可靠性提升",
+      "Hi-One 下一代光模块",
       "prevent",
       ["optical-fault"],
-      [effect("fit", "set", 50)],
-      "器件筛选与链路保护把单只光模块失效率从 500 FIT 降到 50 FIT。",
+      [effect("fit", "reduce", 0.9)],
+      "下一代光模块把单只失效率消减 90%（500 FIT → 50 FIT）。",
       user,
     ),
     measure(
-      "sdc-online-screen",
-      "在线压测与异常资源筛除",
+      "online-screen",
+      "在线压测增强与筛查",
       "prevent",
-      SDC,
-      [effect("fit", "reduce", 0.25)],
-      "运行中周期压测并筛除异常资源，目标是静默故障发生率下降 25%。只对验证过的资源子集成立；压测占用的时间未计入。",
-      { source: "扩展机制库 H-SDC-SCREEN" },
+      ["node-fault", "npu-fault", "hbm-uce", "aicore-sdc"],
+      [effect("fit", "reduce", 0.1)],
+      "运行中周期压测并筛除异常资源，主要对 CPU、DDR、SSD 和 NPU 模组，失效率消减 10%。压测占用的时间未计入。",
+      user,
     ),
     measure(
       "memory-predict",
@@ -243,36 +268,30 @@ export function defaultMeasures(): Measure[] {
     // ---------- 系统级：检测 ----------
     measure(
       "sdc-detection",
-      "静默故障在线检测增强",
+      "静默故障在线检测",
       "detect",
       SDC,
       [effect("coverage", "set", 0.95)],
-      "检出率从 90% 提到 95%，漏检分支减半；检出后只需回滚到最近的干净检查点。",
-      { ...user, source: "用户方案；基础机制 D-SDC" },
-    ),
-    measure(
-      "fast-detect",
-      "中断快速检测",
-      "detect",
-      HARD,
-      [
-        effect("coverage", "set", 0.999),
-        effect("detectHours", "set", seconds(1)),
-      ],
-      "心跳与错误日志联合判定：99.9% 在 1 秒内发现，其余仍由 60 秒超时兜底。未计误报和检测资源开销。",
-      { source: "基础机制 D-HARD" },
+      "针对静默类故障：检出率从 90% 提到 95%，检测时间保持 10 秒；漏检分支减半。",
+      user,
     ),
     measure(
       "slow-detect",
-      "亚健康快速检测",
+      "亚健康检测",
       "detect",
       SLOW,
-      [
-        effect("coverage", "set", 0.99),
-        effect("detectHours", "set", seconds(0.05 * 30)),
-      ],
-      "95% 在 5 分钟发现提到 99% 在 30 秒发现；按降速 5% 折算，等效检测等待为 1.5 秒。需要区分真实亚健康与负载变化。",
-      { source: "基础机制 D-SLOW" },
+      [effect("coverage", "set", 0.9)],
+      "针对亚健康类故障：检出率从 0.8 提到 0.9；检出后快照 / 降载 300 秒，性能损耗系数 0.1。需要区分真实亚健康与负载变化。",
+      user,
+    ),
+    measure(
+      "fast-detect",
+      "故障检测",
+      "detect",
+      HARD,
+      [effect("coverage", "set", 0.99)],
+      "针对中断类故障：检出率从 95% 提到 99%，其余仍由超时兜底。",
+      user,
     ),
     measure(
       "sdc-abft",
@@ -311,8 +330,8 @@ export function defaultMeasures(): Measure[] {
       { source: "本工作台补充" },
     ),
 
-    // ---------- 系统级：恢复阶梯，粒度从小到大 ----------
-    // 第 1 级 重执行
+    // ---------- 系统级：恢复链，粒度从小到大 ----------
+    // 就地恢复：成功后任务不回滚
     measure(
       "replay",
       "通信与算子重执行",
@@ -323,7 +342,7 @@ export function defaultMeasures(): Measure[] {
         effect("replay.hours", "set", seconds(5)),
         effect("replay.failHours", "set", seconds(10)),
       ],
-      "瞬态中断先原地重执行：成功时 5 秒恢复且不回滚，失败白费 10 秒后升级。基线成功率 90%，再按各模块瞬态故障的占比折减（HBM 约 70% 为可重放的瞬态错误），综合取 80%。",
+      "瞬态中断先原地重执行：成功时 5 秒恢复且不回滚，失败白费 10 秒后走进程重调度。基线成功率 90%，再按各模块瞬态故障的占比折减（HBM 约 70% 为可重放的瞬态错误），综合取 80%。",
       { source: "基础机制 R-REPLAY" },
     ),
     measure(
@@ -350,34 +369,33 @@ export function defaultMeasures(): Measure[] {
       "已检出的静默故障从保存在内存里的上一个干净 step 恢复：1 秒恢复，再重做 1 秒计算，不回滚。漏检后才发现的故障没有干净 step 可用，成功率按检出比例取 90%。",
       { source: "基础机制 R-SDC" },
     ),
-    // 第 2 级 进程重调度
+    // 进程重调度
     measure(
       "fast-recover",
-      "进程重调度",
+      "进程重调度增强",
       "recover",
-      LOCAL,
+      HARD,
       [
         effect("process.success", "set", 0.95),
         effect("process.hours", "set", seconds(60)),
-        effect("process.failHours", "set", seconds(120)),
+        effect("process.failHours", "set", seconds(60)),
       ],
-      "只重建受影响的进程：95% 在 60 秒内恢复，之后仍要回滚到检查点；失败白费 120 秒后升级到全局恢复。",
-      { source: "基础机制 R-PROCESS" },
+      "把进程重调度的成功率从 0.3 提到 0.95、耗时从 240 秒压到 60 秒。取值来自基础机制的设计目标，用户方案里没有这一项，用来看“提高进程重调度成功率”值多少。",
+      { source: "基础机制 R-PROCESS（设计目标）" },
     ),
-    // 第 3 级 域级弹性恢复
+    // 弹性恢复
     measure(
       "elastic-recover",
-      "域级弹性恢复",
+      "弹性恢复",
       "contain",
-      LOCAL,
+      CHAINED,
       [
-        effect("elastic.success", "set", 0.98),
-        effect("elastic.hours", "set", RESTART),
-        effect("elastic.impact", "set", 1 / 50),
-        effect("elastic.failHours", "set", seconds(120)),
+        effect("elastic.success", "set", 0.99),
+        effect("elastic.hours", "set", seconds(60)),
+        effect("elastic.failHours", "set", seconds(60)),
       ],
-      "把任务分成 50 个数据并行域：98% 的中断只让一个域停 180 秒，其余域继续训练，状态冗余所以不回滚；失败白费 120 秒后升级到全局恢复。",
-      { source: "基础机制 R-ELASTIC" },
+      "以前没有。隔离并替换故障资源、重建通信域，成功率 0.99，耗时 60 秒；成功后再走 CKPT 回滚，失败转人工。用户说明当前参数粒度较粗。",
+      user,
     ),
     measure(
       "contain",
@@ -385,11 +403,10 @@ export function defaultMeasures(): Measure[] {
       "contain",
       ["iod-fault", "fabric-fault"],
       [
-        effect("elastic.success", "set", 0.5),
-        effect("elastic.hours", "set", RESTART),
-        effect("elastic.impact", "set", 4.6 / 180),
+        effect("replay.success", "set", 0.5),
+        effect("replay.hours", "set", seconds(4.6)),
       ],
-      "把互联故障限制在一个域内：180 秒全局停止变为 1 秒全局协调加 1/50 的域局部恢复，等效 4.6 秒。是互联故障走域级弹性恢复的前提。成功率尚无实测，暂取 50%，请按故障注入结果修改。",
+      "把互联故障限制在一个域内：全局停止变为 1 秒全局协调加 1/50 的域局部恢复，等效 4.6 秒，不回滚。成功率尚无实测，暂取 50%，请按故障注入结果修改。",
       { source: "扩展机制库 I-CONTAIN" },
     ),
     measure(
@@ -398,9 +415,8 @@ export function defaultMeasures(): Measure[] {
       "contain",
       ["optical-fault", "fabric-fault"],
       [
-        effect("elastic.success", "set", 0.5),
-        effect("elastic.hours", "set", 0.5),
-        effect("elastic.impact", "set", 165.6 / 1800),
+        effect("replay.success", "set", 0.5),
+        effect("replay.hours", "set", seconds(165.6)),
       ],
       "2 秒切换到备用路径后降速运行 30 分钟再恢复，整个降级期等效损失约 165.6 秒（相当于 30 分钟内损失 9.2% 的产能），不回滚。成功率尚无实测，暂取 50%，请按故障注入结果修改。",
       { source: "扩展机制库 R-FABRIC-DEGRADE" },
@@ -411,20 +427,20 @@ export function defaultMeasures(): Measure[] {
       "contain",
       ["management-fault"],
       [
-        effect("elastic.success", "set", 0.5),
-        effect("elastic.hours", "set", seconds(1)),
+        effect("replay.success", "set", 0.5),
+        effect("replay.hours", "set", seconds(1)),
       ],
       "管理面故障不再升级成训练中断：数据面保持运行，训练停顿预算 0–1 秒，不回滚。成功率尚无实测，暂取 50%，请按故障注入结果修改。",
       { source: "扩展机制库 H-CONTROL-CONTINUITY" },
     ),
-    // 第 4 级 检查点全局恢复
+    // CKPT 回滚
     measure(
       "recovery-classify",
       "故障分类与恢复动作匹配",
       "recover",
-      RESTARTED,
+      CHAINED,
       [effect("restart.success", "set", 0.999)],
-      "按故障类型选择恢复动作，检查点全局恢复的成功率由 99% 提到 99.9%，需要 2 小时人工处理的比例从 1% 降到 0.1%。",
+      "按故障类型选择恢复动作，CKPT 回滚的成功率由 99% 提到 99.9%，转人工的比例从 1% 降到 0.1%。",
       { source: "扩展机制库 D-RECOVERY-CLASSIFY" },
     ),
     measure(
@@ -439,8 +455,8 @@ export function defaultMeasures(): Measure[] {
         "fabric-fault",
         "software-fault",
       ],
-      [effect("restart.hours", "set", RESTART - seconds(45))],
-      "用初始化镜像恢复运行时，启动阶段从 60 秒缩到 15 秒，全局恢复由 180 秒降到 135 秒。",
+      [effect("restart.hours", "reduce", 45 / RESTART_180)],
+      "用初始化镜像恢复运行时，启动阶段从 60 秒缩到 15 秒。原库按 180 秒的全局恢复给出，这里按相同比例（25%）折算到现在的恢复时间，待核实。",
       { source: "扩展机制库 R-RUNTIME-SNAPSHOT" },
     ),
     measure(
@@ -448,8 +464,8 @@ export function defaultMeasures(): Measure[] {
       "预热进程与可信状态接替",
       "recover",
       ["software-fault"],
-      [effect("restart.hours", "set", RESTART - seconds(40))],
-      "保持预热的备用进程，启动阶段从 60 秒缩到 20 秒，全局恢复由 180 秒降到 140 秒。",
+      [effect("restart.hours", "reduce", 40 / RESTART_180)],
+      "保持预热的备用进程，启动阶段从 60 秒缩到 20 秒。原库按 180 秒的全局恢复给出，这里按相同比例（22%）折算，待核实。",
       { source: "扩展机制库 R-WARM-PROCESS" },
     ),
     measure(
@@ -457,8 +473,8 @@ export function defaultMeasures(): Measure[] {
       "HCCL 通信域弹性重建",
       "recover",
       ["npu-fault", "iod-fault", "fabric-fault", "software-fault"],
-      [effect("restart.hours", "set", RESTART - seconds(45))],
-      "通信重建阶段从 60 秒压到 15 秒，全局恢复由 180 秒降到 135 秒。",
+      [effect("restart.hours", "reduce", 45 / RESTART_180)],
+      "通信重建阶段从 60 秒压到 15 秒。原库按 180 秒的全局恢复给出，这里按相同比例（25%）折算，待核实。",
       { source: "扩展机制库 R-HCCL-ELASTIC" },
     ),
     measure(
@@ -466,44 +482,44 @@ export function defaultMeasures(): Measure[] {
       "CANN 图准备与启动缓存",
       "recover",
       ["npu-fault", "node-fault", "fabric-fault", "software-fault"],
-      [effect("restart.hours", "set", RESTART - seconds(22.5))],
-      "缓存图编译与准备结果，图准备阶段从 30 秒降到 7.5 秒，全局恢复由 180 秒降到 157.5 秒。",
+      [effect("restart.hours", "reduce", 22.5 / RESTART_180)],
+      "缓存图编译与准备结果，图准备阶段从 30 秒降到 7.5 秒。原库按 180 秒的全局恢复给出，这里按相同比例（12.5%）折算，待核实。",
       { source: "扩展机制库 R-CANN-GRAPH" },
     ),
     measure(
       "lossless-checkpoint",
       "无损检查点压缩",
       "recover",
-      RESTARTED,
-      [effect("restart.hours", "set", RESTART - seconds(20))],
-      "检查点压缩后读取 30 秒、解压 10 秒，读取阶段从 60 秒降到 40 秒，全局恢复由 180 秒降到 160 秒。不改变保存周期。",
+      CHAINED,
+      [effect("restart.hours", "reduce", 20 / RESTART_180)],
+      "检查点压缩后读取 30 秒、解压 10 秒，读取阶段从 60 秒降到 40 秒。原库按 180 秒的全局恢复给出，这里按相同比例（11%）折算，待核实。不改变保存周期。",
       { source: "扩展机制库 C-LOSSLESS" },
+    ),
+    // 人工恢复
+    measure(
+      "fault-agent",
+      "智能故障管理 Agent",
+      "recover",
+      CHAINED,
+      [effect("manual.hours", "set", 1)],
+      "自动定位并给出处置方案，人工恢复时间从 4 小时缩到 1 小时。静默故障漏检后仍要 48 小时才被发现，不在这一项里改变。",
+      user,
     ),
 
     // ---------- 系统级：检查点 ----------
     measure(
       "fast-checkpoint",
-      "更频繁的检查点",
+      "CKPT 回滚优化",
       "checkpoint",
-      RESTARTED,
+      CHAINED,
       [
-        effect("reworkHours", "set", seconds(30)),
-        effect("overhead", "set", 1 / 61),
+        effect("reworkHours", "set", seconds(120) / 2),
+        effect("restart.hours", "set", seconds(300)),
+        effect("restart.failHours", "set", seconds(300)),
+        effect("overhead", "set", seconds(0.1) / seconds(120)),
       ],
-      "检查点周期从 300 秒缩到 60 秒、每次保存 1 秒：平均回滚重算降到 30 秒，保存开销由 1.32% 升到 1.64%。",
-      { source: "基础机制 C-FAST" },
-    ),
-    measure(
-      "async-checkpoint",
-      "异步检查点保存",
-      "checkpoint",
-      RESTARTED,
-      [
-        effect("overhead", "set", 1 / 301),
-        effect("reworkHours", "add", seconds(10)),
-      ],
-      "每次保存对训练的阻塞从 4 秒降到 1 秒，保存开销由 1.32% 降到 0.33%；数据落盘滞后 10 秒，回滚时多重算 10 秒。",
-      { source: "扩展机制库 C-ASYNC" },
+      "保存间隔从 10 分钟缩到 2 分钟（平均回滚重算 5 分钟 → 1 分钟），恢复时间从 10 分钟缩到 5 分钟，每次保存的阻塞从 4 秒降到 0.1 秒（保存开销 0.66% → 0.08%）。CKPT 回滚成功率 0.99 不变。",
+      user,
     ),
   ];
 }
@@ -544,7 +560,8 @@ export function defaultCoreModel(): CoreModel {
         { cards: 100000, target: 0.99 },
         { cards: 500000, target: 0.95 },
       ],
-      overhead: 4 / 304,
+      // CKPT 保存：每 10 分钟阻塞 4 秒。
+      overhead: CKPT_BLOCK / (CKPT_INTERVAL + CKPT_BLOCK),
       passRatio: 0.9,
     },
     groups: [
@@ -606,7 +623,7 @@ export function defaultCoreModel(): CoreModel {
         "静默数据错误",
         AICORE_SDC_FIT,
         userScenario +
-          "：静默占全部故障 1.4%，AICore 占其中 85%；检出率 90%，漏检恢复 48 小时",
+          "：静默占全部故障 1.4%，AICore 占其中 85%；检出率 90%，漏检后 48 小时才发现",
       ),
       hard(
         "npu-fault",
@@ -672,7 +689,7 @@ export function defaultCoreModel(): CoreModel {
         lateDetectHours: 0,
         reworkHours: REWORK,
         // 不能自动恢复：需要人工恢复供电并重新拉起整个集群。
-        ladder: makeLadder({ manual: { success: 1, hours: 4 } }),
+        ladder: makeLadder({ manual: { success: 1, hours: MANUAL } }),
         impact: 1,
         evidence:
           "示例假设：5 年一遇、人工恢复 4 小时。请替换为机房供配电的实际运行记录",
@@ -702,6 +719,6 @@ export function defaultCoreModel(): CoreModel {
     measures: defaultMeasures(),
     allocation: { method: "agree", complexityBasis: "fit", customWeights: {} },
     source:
-      "故障率取自 2026-11-12 周度用户场景；其余模块拆分与恢复链取自现有基线故障库和评估模型，属先验。措施库取自用户方案、现有基础机制和扩展机制库。",
+      "故障率取自 2026-11-12 周度用户场景，其余模块拆分取自现有基线故障库，属先验。检测与恢复链取自 2026-11-24 用户给出的现有措施与预计改进。措施库取自用户方案、现有基础机制和扩展机制库。",
   };
 }

@@ -7,6 +7,8 @@ import {
   type CoreModel,
   type CoreModule,
   type FaultMode,
+  type Ladder,
+  type LadderLevel,
   type LevelField,
   type MeasureParam,
   type RecoveryLevel,
@@ -212,46 +214,88 @@ type ChainParameters = Pick<
   | "impact"
   | "ladder"
 >;
-/** 恢复阶梯中一个级别在一次事件里的期望表现。 */
+/** 恢复链上的一步：实际成功率，以及成功、失败后各走到哪一步（−1 表示到此结束）。 */
+export interface RouteStep {
+  level: RecoveryLevel;
+  step: LadderLevel;
+  /** 实际成功率：失败后无处可去的级别视为必定成功。 */
+  success: number;
+  /** 成功后继续走的下一步；−1 表示在这一级恢复。 */
+  successTo: number;
+  /** 失败后走的下一步；−1 表示没有后续。 */
+  failTo: number;
+}
+/**
+ * 把恢复阶梯整理成一条有向的恢复链。参与的级别是成功率大于 0 或标为“必经”的级别；
+ * 成功后“继续下一级”的走到下一个参与的级别，失败后“转人工”的直接走到人工恢复。
+ * 所有走向都朝粒度更大的方向，所以按顺序算一遍即可。
+ */
+export function recoveryRoute(ladder: Ladder): RouteStep[] {
+  const used = recoveryLevels.filter(
+      (level) => ladder[level].success > 0 || ladder[level].gate,
+    ),
+    manual = used.indexOf("manual");
+  return used.map((level, index) => {
+    const step = ladder[level],
+      next = index + 1 < used.length ? index + 1 : -1,
+      failTo = step.onFail === "manual" && manual > index ? manual : next;
+    return {
+      level,
+      step,
+      success: failTo < 0 ? 1 : step.success,
+      successTo: step.then === "next" ? next : -1,
+      failTo,
+    };
+  });
+}
+
+/** 恢复链中一个级别在一次事件里的期望表现。 */
 export interface LevelOutcome {
   level: RecoveryLevel;
   /** 事件走到这一级的概率。 */
   reach: number;
-  /** 这一级的成功率（最后一级视为必定成功）。 */
+  /** 这一级的成功率（失败后无处可去的级别视为必定成功）。 */
   success: number;
-  /** 在这一级结束的概率 = 到达概率 × 成功率。 */
+  /** 在这一级恢复的概率。 */
   resolved: number;
+  /** 这一级成功后继续走下一级的概率。 */
+  passed: number;
+  /** 成功后继续走到的级别；null 表示在这一级恢复。 */
+  successTo: RecoveryLevel | null;
+  /** 失败后走到的级别；null 表示没有后续。 */
+  failTo: RecoveryLevel | null;
   /** 这一级贡献的期望损失（小时，不含回滚重算）。 */
   lossHours: number;
-  /** 在这一级成功后回滚重算贡献的期望损失（小时）。 */
+  /** 在这一级恢复后回滚重算贡献的期望损失（小时）。 */
   reworkHours: number;
 }
 /**
- * 沿恢复阶梯逐级计算：到达概率 × [成功率 × 成功耗时 + (1 − 成功率) × 失败耗时]，
- * 耗时乘以该级的影响范围；需要回滚的级别成功后再加一次回滚重算。
- * 成功率为 0 的级别不使用；最后一个使用的级别视为必定成功。
+ * 沿恢复链逐级计算：到达概率 × [成功率 × 成功耗时 + (1 − 成功率) × 失败耗时]，
+ * 耗时乘以该级的影响范围；在需要回滚的级别恢复后再加一次回滚重算。
  */
 export function ladderOutcomes(mode: ChainParameters): LevelOutcome[] {
-  const used = recoveryLevels.filter((level) => mode.ladder[level].success > 0),
-    result: LevelOutcome[] = [];
-  let reach = 1;
-  used.forEach((level, index) => {
-    const step = mode.ladder[level],
-      success = index === used.length - 1 ? 1 : step.success;
-    result.push({
+  const route = recoveryRoute(mode.ladder),
+    reach = route.map((_, index) => (index === 0 ? 1 : 0));
+  return route.map(({ level, step, success, successTo, failTo }, index) => {
+    const arrived = reach[index],
+      ok = arrived * success;
+    if (failTo >= 0) reach[failTo] += arrived - ok;
+    if (successTo >= 0) reach[successTo] += ok;
+    return {
       level,
-      reach,
+      reach: arrived,
       success,
-      resolved: reach * success,
+      resolved: successTo >= 0 ? 0 : ok,
+      passed: successTo >= 0 ? ok : 0,
+      successTo: successTo >= 0 ? route[successTo].level : null,
+      failTo: failTo >= 0 ? route[failTo].level : null,
       lossHours:
-        reach *
+        arrived *
         step.impact *
         (success * step.hours + (1 - success) * step.failHours),
-      reworkHours: step.rollback ? reach * success * mode.reworkHours : 0,
-    });
-    reach *= 1 - success;
+      reworkHours: step.rollback && successTo < 0 ? ok * mode.reworkHours : 0,
+    };
   });
-  return result;
 }
 /** 恢复链各段对单次等效损失的期望贡献（小时，已乘影响系数）。 */
 export interface StageLoss {
@@ -261,42 +305,50 @@ export interface StageLoss {
   late: number;
   /** 各恢复级别的期望耗时。 */
   levels: Record<RecoveryLevel, number>;
-  /** 回滚重算。 */
+  /** 回滚重算合计。 */
   rework: number;
+  /** 回滚重算按“在哪一级恢复”拆开。 */
+  levelRework: Record<RecoveryLevel, number>;
 }
 export function stageLoss(mode: ChainParameters): StageLoss {
   const k = mode.impact,
     outcomes = ladderOutcomes(mode),
-    levels = Object.fromEntries(
-      recoveryLevels.map((level) => [level, 0]),
-    ) as Record<RecoveryLevel, number>;
-  for (const outcome of outcomes) levels[outcome.level] = k * outcome.lossHours;
+    zero = () =>
+      Object.fromEntries(recoveryLevels.map((level) => [level, 0])) as Record<
+        RecoveryLevel,
+        number
+      >,
+    levels = zero(),
+    levelRework = zero();
+  for (const outcome of outcomes) {
+    levels[outcome.level] = k * outcome.lossHours;
+    levelRework[outcome.level] = k * outcome.reworkHours;
+  }
   return {
     detect: k * mode.coverage * mode.detectHours,
     late: k * (1 - mode.coverage) * mode.lateDetectHours,
     levels,
     rework: k * outcomes.reduce((sum, o) => sum + o.reworkHours, 0),
+    levelRework,
   };
 }
-/** 单次事件的等效损失时间（等效 MTTR）：检测与恢复阶梯各段期望之和。 */
+/** 单次事件的等效损失时间（等效 MTTR）：检测与恢复链各段期望之和。 */
 export function lossPerEvent(mode: ChainParameters) {
-  let reach = 1,
-    recovery = 0,
-    last = -1;
-  for (let i = recoveryLevels.length - 1; i >= 0; i--)
-    if (mode.ladder[recoveryLevels[i]].success > 0) {
-      last = i;
-      break;
-    }
-  for (let i = 0; i <= last; i++) {
-    const step = mode.ladder[recoveryLevels[i]];
-    if (step.success <= 0) continue;
-    const success = i === last ? 1 : step.success;
+  const route = recoveryRoute(mode.ladder),
+    reach = route.map((_, index) => (index === 0 ? 1 : 0));
+  let recovery = 0;
+  for (let index = 0; index < route.length; index++) {
+    const { step, success, successTo, failTo } = route[index],
+      arrived = reach[index];
+    if (arrived <= 0) continue;
+    const ok = arrived * success;
+    if (failTo >= 0) reach[failTo] += arrived - ok;
+    if (successTo >= 0) reach[successTo] += ok;
     recovery +=
-      reach *
-      (step.impact * (success * step.hours + (1 - success) * step.failHours) +
-        (step.rollback ? success * mode.reworkHours : 0));
-    reach *= 1 - success;
+      arrived *
+        step.impact *
+        (success * step.hours + (1 - success) * step.failHours) +
+      (step.rollback && successTo < 0 ? ok * mode.reworkHours : 0);
   }
   return (
     mode.impact *
@@ -305,41 +357,113 @@ export function lossPerEvent(mode: ChainParameters) {
       recovery)
   );
 }
-/** 一次事件可能走的路径：是否检出 × 在哪一级恢复成功。 */
-export function eventPaths(mode: ChainParameters) {
-  const used = recoveryLevels.filter((level) => mode.ladder[level].success > 0),
-    ends: {
-      level: RecoveryLevel | null;
-      probability: number;
-      hours: number;
-    }[] = [];
-  let reach = 1,
-    spent = 0;
-  used.forEach((level, index) => {
-    const step = mode.ladder[level],
-      success = index === used.length - 1 ? 1 : step.success;
-    ends.push({
-      level,
-      probability: reach * success,
-      hours:
-        spent +
-        step.impact * step.hours +
-        (step.rollback ? mode.reworkHours : 0),
-    });
-    spent += step.impact * step.failHours;
-    reach *= 1 - success;
+/**
+ * 恢复链上每一级值多少：把这一级设为不可用后，单次等效损失增加多少小时。
+ * 正数表示这一级在省时间；负数表示先试它反而更慢（成功率太低或耗时太长）。
+ * 不在链上的级别，以及兜底的最后一级，返回 null。
+ */
+export function levelBenefit(mode: ChainParameters) {
+  const route = recoveryRoute(mode.ladder),
+    current = lossPerEvent(mode),
+    result = Object.fromEntries(
+      recoveryLevels.map((level) => [level, null]),
+    ) as Record<RecoveryLevel, number | null>;
+  route.forEach(({ level, failTo }) => {
+    if (failTo < 0) return;
+    const without = {
+      ...mode,
+      ladder: {
+        ...mode.ladder,
+        [level]: { ...mode.ladder[level], success: 0 },
+      },
+    };
+    result[level] = lossPerEvent(without) - current;
   });
-  if (!ends.length) ends.push({ level: null, probability: 1, hours: 0 });
-  return [
-    { detected: true, share: mode.coverage, wait: mode.detectHours },
-    { detected: false, share: 1 - mode.coverage, wait: mode.lateDetectHours },
-  ].flatMap((branch) =>
-    ends.map((end) => ({
-      detected: branch.detected,
-      level: end.level,
-      probability: branch.share * end.probability,
-      lossHours: mode.impact * (branch.wait + end.hours),
-    })),
+  return result;
+}
+/** 一条恢复路径上的一段：检测、某一级的一次尝试，或回滚重算。 */
+export interface PathSegment {
+  stage: "detect" | "late" | "rework" | RecoveryLevel;
+  /** 恢复级别的这次尝试是否成功；其余段恒为 true。 */
+  ok: boolean;
+  /** 等效损失时间（小时，已乘影响范围和影响系数）。 */
+  hours: number;
+}
+export interface RecoveryPath {
+  detected: boolean;
+  /** 最终在哪一级恢复；null 表示没有配置恢复级别。 */
+  level: RecoveryLevel | null;
+  probability: number;
+  segments: PathSegment[];
+  lossHours: number;
+}
+/**
+ * 一次事件可能走的全部路径：是否检出 × 恢复链上每一级的成败。
+ * 各路径概率之和为 1，按概率加权的损失之和等于单次等效损失。
+ */
+export function eventPaths(mode: ChainParameters): RecoveryPath[] {
+  const route = recoveryRoute(mode.ladder),
+    k = mode.impact,
+    ends: Omit<RecoveryPath, "detected">[] = [];
+  const visit = (
+    index: number,
+    probability: number,
+    segments: PathSegment[],
+  ) => {
+    if (probability <= 0) return;
+    const { level, step, success, successTo, failTo } = route[index];
+    if (success > 0) {
+      const done: PathSegment[] = [
+        ...segments,
+        { stage: level, ok: true, hours: k * step.impact * step.hours },
+      ];
+      if (successTo >= 0) visit(successTo, probability * success, done);
+      else {
+        if (step.rollback && mode.reworkHours > 0)
+          done.push({ stage: "rework", ok: true, hours: k * mode.reworkHours });
+        ends.push({
+          level,
+          probability: probability * success,
+          segments: done,
+          lossHours: 0,
+        });
+      }
+    }
+    if (success < 1 && failTo >= 0)
+      visit(failTo, probability * (1 - success), [
+        ...segments,
+        { stage: level, ok: false, hours: k * step.impact * step.failHours },
+      ]);
+  };
+  if (route.length) visit(0, 1, []);
+  else ends.push({ level: null, probability: 1, segments: [], lossHours: 0 });
+  return (
+    [
+      { detected: true, share: mode.coverage, wait: mode.detectHours },
+      {
+        detected: false,
+        share: 1 - mode.coverage,
+        wait: mode.lateDetectHours,
+      },
+    ] as const
+  ).flatMap((branch) =>
+    ends.map((end) => {
+      const segments: PathSegment[] = [
+        {
+          stage: branch.detected ? "detect" : "late",
+          ok: true,
+          hours: k * branch.wait,
+        },
+        ...end.segments,
+      ];
+      return {
+        detected: branch.detected,
+        level: end.level,
+        probability: branch.share * end.probability,
+        segments,
+        lossHours: segments.reduce((sum, segment) => sum + segment.hours, 0),
+      };
+    }),
   );
 }
 
@@ -364,7 +488,9 @@ export interface ModeResult {
   /** 窗口内期望事件数。 */
   events: number;
   lossHours: number;
-  /** 折算到每周（168 小时）的故障次数与损失小时。 */
+  /** 故障频次：每连续运行一周（168 小时）发生的次数 = 168 / MTBF。 */
+  ratePerWeek: number;
+  /** 折算到每个日历周实际发生的故障次数（停机时不产生新故障）与损失小时。 */
   eventsPerWeek: number;
   lossHoursPerWeek: number;
   /** 占故障损失的比例。 */
@@ -390,9 +516,12 @@ export interface Assessment {
     mtbfHours: number;
     mttrHours: number;
     events: number;
+    ratePerWeek: number;
     eventsPerWeek: number;
     lossHoursPerWeek: number;
     failureLossHoursPerWeek: number;
+    /** 运行时间占比 1 / (1 + ρ)：窗口里真正在运行的时间比例。 */
+    runShare: number;
   };
   modules: ModuleResult[];
   groups: Array<
@@ -405,6 +534,7 @@ export interface Assessment {
       | "load"
       | "events"
       | "lossHours"
+      | "ratePerWeek"
       | "eventsPerWeek"
       | "lossHoursPerWeek"
       | "availability"
@@ -450,6 +580,7 @@ export function assess(
     load: r.load,
     events: r.rate * uptime,
     lossHours: r.load * uptime,
+    ratePerWeek: r.rate * 168,
     eventsPerWeek: r.rate * uptime * week,
     lossHoursPerWeek: r.load * uptime * week,
     share: load > 0 ? r.load / load : 0,
@@ -466,6 +597,7 @@ export function assess(
       load: partLoad,
       events: partRate * uptime,
       lossHours: partLoad * uptime,
+      ratePerWeek: partRate * 168,
       eventsPerWeek: partRate * uptime * week,
       lossHoursPerWeek: partLoad * uptime * week,
       availability: 1 / (1 + partLoad),
@@ -507,9 +639,11 @@ export function assess(
       mtbfHours: rate > 0 ? 1 / rate : Infinity,
       mttrHours: rate > 0 ? load / rate : 0,
       events: rate * uptime,
+      ratePerWeek: rate * 168,
       eventsPerWeek: rate * uptime * week,
       lossHoursPerWeek: hours * (1 - availability) * week,
       failureLossHoursPerWeek: load * uptime * week,
+      runShare: 1 / (1 + load),
     },
     modules,
     groups,
