@@ -2,17 +2,26 @@
 export const percent = (value: number, digits?: number) => {
   if (!Number.isFinite(value)) return "—";
   const auto = value >= 0.9995 && value < 1 ? 3 : 2;
-  return (value * 100).toFixed(digits ?? auto) + "%";
+  let precision = digits ?? auto;
+  // 五个九这类目标不能四舍五入成 100%：位数不够时自动加位，保留非零的损失。
+  while (
+    value < 1 &&
+    value >= 0 &&
+    Number((value * 100).toFixed(precision)) === 100 &&
+    precision < 12
+  )
+    precision++;
+  return (value * 100).toFixed(precision) + "%";
 };
 /** 百分点差值，带正负号。 */
 export const points = (value: number, digits = 2) =>
   (value >= 0 ? "+" : "−") + Math.abs(value * 100).toFixed(digits) + " pp";
 export const hours = (value: number) => {
   if (!Number.isFinite(value)) return "—";
-  const size = Math.abs(value),
-    // 不到 0.01 小时的预算（如单独指定很高目标的模块）多留两位，避免显示成 0
-    digits =
-      size >= 100 ? 0 : size >= 10 ? 1 : size >= 0.01 || size === 0 ? 2 : 4;
+  // 不到 0.01 小时的预算（如单独指定很高目标的模块）保留三位有效数字，避免显示成 0
+  if (Math.abs(value) > 0 && Math.abs(value) < 0.01)
+    return Number(value.toPrecision(3)) + " h";
+  const digits = Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2;
   return value.toFixed(digits) + " h";
 };
 export const count = (value: number, digits = 0) =>

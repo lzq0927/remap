@@ -10,6 +10,7 @@ import {
   type Ladder,
   type LadderLevel,
   type LevelField,
+  type MeasureEffect,
   type MeasureParam,
   type RecoveryLevel,
 } from "./model";
@@ -25,7 +26,7 @@ const bounded = (param: MeasureParam, value: number) =>
 
 type Change = {
   id: string;
-  op: "set" | "reduce" | "add";
+  op: MeasureEffect["op"];
   value: number;
   share: number;
 };
@@ -91,10 +92,14 @@ function resolveParam(
   let value = base,
     touched = false,
     assigned: number | null = null;
-  // “设为”：按适用比例折算后，取其中最好的一项。
+  // “设为”与“从现状减少”：按适用比例折算后，取其中最好的一项。
+  // 绝对减少锚定冻结现状，不抹去校准残差，也不在另一条更快的路径上重复扣减；
+  // 同一参数上的多个阶段节省保守地按替代方案取最大值。
   for (const c of list)
-    if (c.op === "set" && enabled.has(c.id)) {
-      const candidate = base + c.share * (c.value - base);
+    if ((c.op === "set" || c.op === "subtract") && enabled.has(c.id)) {
+      const target =
+          c.op === "subtract" ? Math.max(0, base - c.value) : c.value,
+        candidate = base + c.share * (target - base);
       assigned =
         assigned === null
           ? candidate
@@ -126,7 +131,7 @@ const enabledSet = (model: CoreModel) =>
 /**
  * 把启用的措施作用到基线参数上。结果与措施顺序无关：
  * 每项措施先算出“完全适用时”的目标值，再按适用比例在现值与目标值之间折算；
- * 同一参数上多项“设为”取改善最大的一项，多项“降低”按剩余比例连乘
+ * 同一参数的“设为”及“从现状减少”取改善最大的一项，多项“降低”按剩余比例连乘
  * （检出率作用在漏检率上），“增加”逐项累加。
  */
 export function applyMeasures(

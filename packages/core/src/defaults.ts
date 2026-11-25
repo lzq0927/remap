@@ -194,8 +194,6 @@ const user = {
   evidence: "planned" as const,
   source: "用户方案（2026-11-24）",
 };
-/** 扩展机制库按 180 秒的全局恢复给出各阶段节省；这里按相同比例折算到现在的恢复时间。 */
-const RESTART_180 = 180;
 
 /** 默认措施库：可在“基础库”中增删改，也可随时从这里补回缺失的条目。 */
 export function defaultMeasures(): Measure[] {
@@ -436,11 +434,11 @@ export function defaultMeasures(): Measure[] {
     // CKPT 回滚
     measure(
       "recovery-classify",
-      "故障分类与恢复动作匹配",
+      "故障诊断与自动恢复编排",
       "recover",
       CHAINED,
       [effect("restart.success", "set", 0.999)],
-      "按故障类型选择恢复动作，CKPT 回滚的成功率由 99% 提到 99.9%，转人工的比例从 1% 降到 0.1%。",
+      "候选：根据错误与遥测选择重试、进程重启、隔离换卡等动作，把 CKPT 回滚后还要人工升级的比例从 1% 降到 0.1%（CKPT 回滚成功率 99% → 99.9%）。只减少转人工的那一部分，不改变其余恢复时间。适用事件、误判与额外尝试的开销待验证；这些概率不是厂商实测指标。",
       { source: "扩展机制库 D-RECOVERY-CLASSIFY" },
     ),
     measure(
@@ -455,8 +453,8 @@ export function defaultMeasures(): Measure[] {
         "fabric-fault",
         "software-fault",
       ],
-      [effect("restart.hours", "reduce", 45 / RESTART_180)],
-      "用初始化镜像恢复运行时，启动阶段从 60 秒缩到 15 秒。原库按 180 秒的全局恢复给出，这里按相同比例（25%）折算到现在的恢复时间，待核实。",
+      [effect("restart.hours", "subtract", seconds(45))],
+      "用初始化镜像恢复运行时，启动阶段从 60 秒缩到 15 秒。只扣这一阶段节省的时间，保留恢复时间的其余部分；同一恢复时间上的多项阶段节省只取最大的一项，不累加。",
       { source: "扩展机制库 R-RUNTIME-SNAPSHOT" },
     ),
     measure(
@@ -464,8 +462,8 @@ export function defaultMeasures(): Measure[] {
       "预热进程与可信状态接替",
       "recover",
       ["software-fault"],
-      [effect("restart.hours", "reduce", 40 / RESTART_180)],
-      "保持预热的备用进程，启动阶段从 60 秒缩到 20 秒。原库按 180 秒的全局恢复给出，这里按相同比例（22%）折算，待核实。",
+      [effect("restart.hours", "subtract", seconds(40))],
+      "保持预热的备用进程，启动阶段从 60 秒缩到 20 秒。只扣这一阶段节省的时间，保留恢复时间的其余部分；同一恢复时间上的多项阶段节省只取最大的一项，不累加。",
       { source: "扩展机制库 R-WARM-PROCESS" },
     ),
     measure(
@@ -473,8 +471,8 @@ export function defaultMeasures(): Measure[] {
       "HCCL 通信域弹性重建",
       "recover",
       ["npu-fault", "iod-fault", "fabric-fault", "software-fault"],
-      [effect("restart.hours", "reduce", 45 / RESTART_180)],
-      "通信重建阶段从 60 秒压到 15 秒。原库按 180 秒的全局恢复给出，这里按相同比例（25%）折算，待核实。",
+      [effect("restart.hours", "subtract", seconds(45))],
+      "通信重建阶段从 60 秒压到 15 秒。只扣这一阶段节省的时间，保留恢复时间的其余部分；同一恢复时间上的多项阶段节省只取最大的一项，不累加。",
       { source: "扩展机制库 R-HCCL-ELASTIC" },
     ),
     measure(
@@ -482,8 +480,8 @@ export function defaultMeasures(): Measure[] {
       "CANN 图准备与启动缓存",
       "recover",
       ["npu-fault", "node-fault", "fabric-fault", "software-fault"],
-      [effect("restart.hours", "reduce", 22.5 / RESTART_180)],
-      "缓存图编译与准备结果，图准备阶段从 30 秒降到 7.5 秒。原库按 180 秒的全局恢复给出，这里按相同比例（12.5%）折算，待核实。",
+      [effect("restart.hours", "subtract", seconds(22.5))],
+      "缓存图编译与准备结果，图准备阶段从 30 秒降到 7.5 秒。只扣这一阶段节省的时间，保留恢复时间的其余部分；同一恢复时间上的多项阶段节省只取最大的一项，不累加。",
       { source: "扩展机制库 R-CANN-GRAPH" },
     ),
     measure(
@@ -491,8 +489,8 @@ export function defaultMeasures(): Measure[] {
       "无损检查点压缩",
       "recover",
       CHAINED,
-      [effect("restart.hours", "reduce", 20 / RESTART_180)],
-      "检查点压缩后读取 30 秒、解压 10 秒，读取阶段从 60 秒降到 40 秒。原库按 180 秒的全局恢复给出，这里按相同比例（11%）折算，待核实。不改变保存周期。",
+      [effect("restart.hours", "subtract", seconds(20))],
+      "检查点压缩后读取 30 秒、解压 10 秒，读取阶段从 60 秒降到 40 秒。只扣这一阶段节省的时间，保留恢复时间的其余部分；同一恢复时间上的多项阶段节省只取最大的一项，不累加。不改变保存周期。",
       { source: "扩展机制库 C-LOSSLESS" },
     ),
     // 人工恢复

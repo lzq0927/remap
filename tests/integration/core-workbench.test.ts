@@ -1,6 +1,11 @@
 import { expect, it } from "vitest";
 import { buildApp } from "../../apps/api/src/server";
-import { defaultCoreModel, modelHash } from "../../packages/core/src/index";
+import {
+  defaultCoreModel,
+  modelHash,
+  novemberReferenceScenario,
+  targetAtScale,
+} from "../../packages/core/src/index";
 
 it("四步工作台：按任务保存模型、返回解析结果并留存独立验证记录", async () => {
   const app = await buildApp({
@@ -162,6 +167,57 @@ it("四步工作台：按任务保存模型、返回解析结果并留存独立�
     ).json();
     expect(reset.revision).toBe(4);
     expect(reset.model).toEqual(defaultCoreModel());
+  } finally {
+    await app.close();
+  }
+});
+
+it("固定域场景保存版本和完整验证快照，规模目标服务端归一且旧任务不变", async () => {
+  const app = await buildApp({
+    dataDir: ":memory:",
+    seed: false,
+    autoStartRuns: false,
+  });
+  try {
+    const task = app.taskServices.create("固定域场景"),
+      other = app.taskServices.create("历史场景");
+    const path = `/api/tasks/${task.id}/core`,
+      model = novemberReferenceScenario();
+    model.scenario.cards = 1000;
+    const saved = await app.inject({
+      method: "PUT",
+      url: path,
+      payload: { model },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const current = (await app.inject(path)).json();
+    expect(current.model.scenario.target).toBe(targetAtScale(model, 1000));
+    const result = (
+      await app.inject({
+        method: "POST",
+        url: path + "/verify",
+        payload: { trials: 100, seed: 76 },
+      })
+    ).json();
+    expect(result.modelSnapshot).toEqual(current.model);
+    expect(result.domains).toHaveLength(10);
+    expect(result.scales).toHaveLength(5);
+    model.requirements!.domains[0].targetAvailability = 0.99;
+    await app.inject({ method: "PUT", url: path, payload: { model } });
+    const store = app.taskServices.resolve(task.id).store,
+      revisions = store.documents("core-model-revision");
+    expect(revisions).toHaveLength(2);
+    expect(
+      revisions.find((r) => r.revision === 1).model.requirements.domains[0]
+        .targetAvailability,
+    ).toBe(0.98);
+    expect(
+      store.documents("core-verification")[0].modelSnapshot.requirements
+        .domains[0].targetAvailability,
+    ).toBe(0.98);
+    expect(
+      (await app.inject(`/api/tasks/${other.id}/core`)).json(),
+    ).toMatchObject({ revision: 0, model: defaultCoreModel() });
   } finally {
     await app.close();
   }

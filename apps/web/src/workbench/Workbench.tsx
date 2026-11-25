@@ -23,6 +23,7 @@ import { api } from "../api";
 import {
   allocationMethodInfo,
   analyze,
+  targetAtScale,
   targetFromCurve,
   type Analysis,
   type CoreModel,
@@ -382,10 +383,13 @@ export default function Workbench({
                   update((d) => {
                     // 规模变了，目标跟着“规模—目标”对照走
                     d.scenario.cards = Math.round(v);
-                    const next = targetFromCurve(
-                      d.scenario.targetCurve,
-                      d.scenario.cards,
-                    );
+                    // 有域级要求时按参考规模折算，否则查“规模—目标”对照
+                    const next = d.requirements
+                      ? targetAtScale(d, d.scenario.cards)
+                      : targetFromCurve(
+                          d.scenario.targetCurve,
+                          d.scenario.cards,
+                        );
                     if (next) d.scenario.target = next;
                   })
                 }
@@ -417,8 +421,21 @@ export default function Workbench({
                 width={104}
                 onCommit={(v) =>
                   update((d) => {
-                    // 直接改目标，等于给当前规模指定一个目标点
                     d.scenario.target = v;
+                    if (d.requirements) {
+                      // 有域级要求时，把当前规模的目标折算回参考规模
+                      const r = d.requirements;
+                      r.systemTarget =
+                        v > 1 - r.overheadBudget
+                          ? v
+                          : (1 - r.overheadBudget) /
+                            (1 +
+                              (((1 - r.overheadBudget) / v - 1) *
+                                r.referenceCards) /
+                                d.scenario.cards);
+                      return;
+                    }
+                    // 直接改目标，等于给当前规模指定一个目标点
                     const curve = d.scenario.targetCurve,
                       at = curve.findIndex((p) => p.cards === d.scenario.cards);
                     if (at >= 0) curve[at].target = v;

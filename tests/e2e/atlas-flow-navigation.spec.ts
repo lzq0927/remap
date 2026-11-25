@@ -48,14 +48,16 @@ for (const width of [1440, 390])
     await atlas
       .getByText("定位与筛选 · 对象、功能域、层级", { exact: true })
       .click();
-    await atlas
-      .getByRole("button", { name: "全屏大图", exact: true })
-      .click();
+    await atlas.getByRole("button", { name: "全屏大图", exact: true }).click();
     const canvas = atlas.getByLabel("交互分层拓扑画布", { exact: true });
     expect((await canvas.boundingBox())!.y).toBeLessThan(500);
-    await atlas.getByRole("button", { name: "筛选与依据", exact: true }).click();
+    await atlas
+      .getByRole("button", { name: "筛选与依据", exact: true })
+      .click();
     await expect(atlas.locator(".atlas-locate")).toBeVisible();
-    await atlas.getByRole("button", { name: "筛选与依据", exact: true }).click();
+    await atlas
+      .getByRole("button", { name: "筛选与依据", exact: true })
+      .click();
     await expect(atlas.locator(".atlas-locate")).toBeHidden();
     await atlas.screenshot({
       path: `artifacts/architecture-atlas/navigation-fullscreen-${width}.png`,

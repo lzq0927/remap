@@ -59,6 +59,8 @@ export const formatParam = (param: MeasureParam, value: number) =>
 export function applyEffect(effect: MeasureEffect, base: number, share = 1) {
   if (effect.op === "set") return base + share * (effect.value - base);
   if (effect.op === "add") return base + share * effect.value;
+  if (effect.op === "subtract")
+    return base + share * (Math.max(0, base - effect.value) - base);
   const ratio = share * effect.value;
   return effect.param === "coverage"
     ? 1 - (1 - base) * (1 - ratio)
@@ -87,7 +89,9 @@ export const effectText = (effect: MeasureEffect) =>
       percent(effect.value)
     : effect.op === "add"
       ? " 增加 " + formatParam(effect.param, effect.value)
-      : " 设为 " + formatParam(effect.param, effect.value));
+      : effect.op === "subtract"
+        ? " 从现状减少 " + formatParam(effect.param, effect.value)
+        : " 设为 " + formatParam(effect.param, effect.value));
 
 /** 措施作用范围的简短说明。 */
 export function targetText(model: CoreModel, measure: Measure) {

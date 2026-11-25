@@ -9,6 +9,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import {
+  auditLibraryMeasures,
+  correctLibraryMeasures,
   createEvaluator,
   doseResponse,
   evidenceStateNames,
@@ -31,6 +33,8 @@ import { useWorkbench } from "./Workbench";
 import { usageText } from "./StepAssess";
 import ArchitectureDiagram from "./ArchitectureDiagram";
 import MeasureDialog from "./MeasureDialog";
+import MeasureScaleCharts from "./MeasureScaleCharts";
+import FaultChainComparison from "./FaultChainComparison";
 import { LineChart, seriesColors } from "./Charts";
 import {
   applyEffect,
@@ -93,7 +97,9 @@ const valueText = (measure: Measure, value: number) => {
   return effect.op === "reduce"
     ? (effect.param === "coverage" ? "漏检率降低 " : "降低 ") +
         percent(value, 0)
-    : formatParam(effect.param, value);
+    : effect.op === "subtract"
+      ? "减少 " + formatParam(effect.param, value)
+      : formatParam(effect.param, value);
 };
 
 function LayerChip({ category }: { category: MeasureCategory }) {
@@ -122,7 +128,10 @@ export default function StepDesign() {
     target = model.scenario.target,
     nameOf = (id: string) =>
       model.measures.find((m) => m.id === id)?.name ?? id,
-    editingMeasure = model.measures.find((m) => m.id === editing);
+    editingMeasure = model.measures.find((m) => m.id === editing),
+    // 早期措施库把阶段节省写成了整段恢复时间，需要显式修正
+    legacyIssues = auditLibraryMeasures(model),
+    [scalesOpen, setScalesOpen] = useState(false);
   const enable = (ids: string[]) =>
     update((d) => {
       for (const measure of d.measures)
@@ -138,6 +147,28 @@ export default function StepDesign() {
 
   return (
     <div className="rw-stack">
+      {legacyIssues.length > 0 && (
+        <section className="rw-advice is-warn" aria-label="恢复参数口径待修正">
+          <div>
+            <strong>
+              旧版措施库有 {legacyIssues.length} 项把阶段节省误写成恢复总时长。
+            </strong>
+            <p>
+              在已校准现状下会高估收益。修正后仅减少相应阶段耗时，保留其余恢复段；旧验证需重新运行，历史快照保留。手动改过的参数不自动替换。
+            </p>
+          </div>
+          <button
+            className="rw-button"
+            onClick={() =>
+              update((d) => {
+                d.measures = correctLibraryMeasures(d).measures;
+              })
+            }
+          >
+            修正阶段节省口径
+          </button>
+        </section>
+      )}
       <section
         className={
           "rw-advice is-" +
@@ -169,7 +200,10 @@ export default function StepDesign() {
             <div>
               <strong>
                 当前设计 {percent(design.system.availability)}，距目标还差{" "}
-                {((target - design.system.availability) * 100).toFixed(2)} pp。
+                {(
+                  Math.max(0, target - design.system.availability) * 100
+                ).toFixed(2)}{" "}
+                pp。
               </strong>
               <p>
                 在已启用措施的基础上，
@@ -193,12 +227,11 @@ export default function StepDesign() {
           <>
             <div>
               <strong>
-                把措施库里有提升的措施都启用，也只能到{" "}
-                {percent(recommendation.ceiling)}，距目标还差{" "}
+                当前搜索到的组合为 {percent(recommendation.ceiling)}，距目标还差{" "}
                 {(recommendation.shortfall * 100).toFixed(2)} pp。
               </strong>
               <p>
-                要补齐差距，还需要把所有故障率或所有单次损失再降低{" "}
+                仅按系统均值估算，还需把所有故障率或所有单次损失再降低{" "}
                 <b>{percent(recommendation.furtherReduction, 0)}</b>
                 。可以加大现有措施的参数，或新增措施。
               </p>
@@ -214,6 +247,17 @@ export default function StepDesign() {
           </>
         )}
       </section>
+
+      {model.requirements && (
+        <p className="rw-alert is-info">
+          推荐同时检查整系统 {percent(target)} 及固定域目标。
+          {analysis.requirements
+            .filter((d) => !d.met)
+            .map((d) => `${d.name}尚未达到 ${percent(d.target!, 5)}`)
+            .join("；") || "固定域目标当前均满足。"}{" "}
+          推荐依据解析均值；窗口波动、局部预算及工程条件需在第四步核验。
+        </p>
+      )}
 
       <div className="rw-grid is-design">
         <div className="rw-stack">
@@ -314,6 +358,25 @@ export default function StepDesign() {
       <DoseSection />
       <PathSection />
       <FocusSection />
+
+      {/* 五个规模下每项措施单独值多少：域级约束研究里默认展开，其余场景按需展开 */}
+      {model.requirements ? (
+        <MeasureScaleCharts />
+      ) : (
+        <details
+          className="rw-disclosure"
+          onToggle={(e) => setScalesOpen(e.currentTarget.open)}
+        >
+          <summary>
+            <ChevronDown size={16} aria-hidden />
+            逐措施跨规模收益：千卡到五十万卡，每项措施单独值多少
+          </summary>
+          <div className="rw-disclosure-body">
+            {scalesOpen && <MeasureScaleCharts />}
+          </div>
+        </details>
+      )}
+      <FaultChainComparison />
 
       <ArchitectureDiagram
         views={["design", "baseline"]}
@@ -452,7 +515,7 @@ export default function StepDesign() {
               <p>
                 <strong>贡献为什么用 Shapley 值。</strong>
                 逐个“去掉看看”得到的收益加起来不等于总提升。Shapley
-                值对所有启用顺序求平均边际收益，是唯一同时满足“相加等于总提升”“作用相同的措施贡献相同”“没有作用的措施贡献为零”的分摊方式。
+                值对所有启用顺序求平均边际收益，满足“相加等于总提升”“作用相同的措施贡献相同”“没有作用的措施贡献为零”和可加性这四项公理。
               </p>
               <Formula>
                 φᵢ = Σ_S |S|!·(n−|S|−1)! / n! · [ A(S ∪ {"{i}"}) − A(S) ]
@@ -590,7 +653,9 @@ function DoseSection() {
                   <td className="is-num">
                     {effect.op === "reduce"
                       ? "不降低"
-                      : formatParam(effect.param, curve.points[0].value)}
+                      : effect.op === "subtract"
+                        ? "不减少"
+                        : formatParam(effect.param, curve.points[0].value)}
                   </td>
                   <td className="is-num is-strong">
                     {valueText(measure, effect.value)}
@@ -1057,9 +1122,11 @@ function MeasureCard({
                   <span className="rw-effect-op">
                     {effect.op === "add"
                       ? "增加"
-                      : effect.param === "coverage"
-                        ? "漏检率降低"
-                        : "降低"}
+                      : effect.op === "subtract"
+                        ? "从现状减少"
+                        : effect.param === "coverage"
+                          ? "漏检率降低"
+                          : "降低"}
                   </span>
                 )}
                 {effect.op === "reduce" || isRatio(effect.param) ? (
@@ -1203,7 +1270,9 @@ function Solver({ measure, met }: { measure: Measure; met: boolean }) {
         const shown =
           effect.op === "reduce"
             ? "降低 " + percent(result.value)
-            : formatParam(effect.param, result.value);
+            : effect.op === "subtract"
+              ? "从现状减少 " + formatParam(effect.param, result.value)
+              : formatParam(effect.param, result.value);
         return (
           <p key={index}>
             {measureParamNames[effect.param]}：

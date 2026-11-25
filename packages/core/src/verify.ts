@@ -8,6 +8,13 @@ import {
   recoveryRoute,
 } from "./assess";
 import { allocate, type AllocationResult } from "./allocate";
+import { auditLibraryMeasures } from "./measure-audit";
+import {
+  domainModel,
+  domainTargetAtScale,
+  modelAtScale,
+  studyScales,
+} from "./requirements";
 
 export const verificationLimits = {
   minTrials: 100,
@@ -20,11 +27,22 @@ export const verificationLimits = {
 export function expectedSimulationEvents(model: CoreModel, trials: number) {
   const perWindow = (parameters: ResolvedParameters) =>
     assess(model, parameters).system.events;
-  return (
+  let total =
     trials *
     (perWindow(applyMeasures(model, new Set())) +
-      perWindow(applyMeasures(model)))
-  );
+      perWindow(applyMeasures(model)));
+  if (model.requirements)
+    for (const cards of new Set([...studyScales, model.scenario.cards])) {
+      const scaled = modelAtScale(model, cards);
+      if (cards !== model.scenario.cards)
+        total += trials * assess(scaled).system.events;
+      for (const d of model.requirements.domains.filter(
+        (d) => d.targetAvailability !== null,
+      ))
+        total +=
+          trials * assess(domainModel(scaled, d.moduleIds)).system.events;
+    }
+  return total;
 }
 
 function mulberry(seed: number) {
@@ -209,7 +227,15 @@ export function simulate(
 
 export type CheckState = "pass" | "warn" | "fail";
 export interface VerificationCheck {
-  id: "mean" | "windows" | "consistency" | "modules" | "evidence";
+  id:
+    | "recovery-semantics"
+    | "mean"
+    | "windows"
+    | "consistency"
+    | "modules"
+    | "evidence"
+    | "scales"
+    | "domains";
   title: string;
   state: CheckState;
   detail: string;
@@ -234,6 +260,27 @@ export interface VerificationResult {
   }>;
   checks: VerificationCheck[];
   verdict: CheckState;
+  scales?: Array<{
+    cards: number;
+    target: number;
+    analytic: number;
+    mean: number;
+    interval: [number, number];
+    weeklyLossHours: number;
+    passRatio: number;
+    met: boolean;
+    seed: number;
+  }>;
+  domains?: Array<{
+    id: string;
+    name: string;
+    cards: number;
+    target: number;
+    mean: number;
+    interval: [number, number];
+    met: boolean;
+    seed: number;
+  }>;
 }
 
 const percent = (value: number, digits = 2) =>
@@ -276,6 +323,19 @@ export function modelHash(model: CoreModel) {
       }) => rest,
     ),
     allocation: model.allocation,
+    ...(model.requirements
+      ? {
+          requirements: {
+            referenceCards: model.requirements.referenceCards,
+            systemTarget: model.requirements.systemTarget,
+            overheadBudget: model.requirements.overheadBudget,
+            scaling: model.requirements.scaling,
+            domains: model.requirements.domains.map(
+              ({ name: _name, source: _source, ...d }) => d,
+            ),
+          },
+        }
+      : {}),
   };
 
   let hash = 0x811c9dc5;
@@ -327,7 +387,72 @@ export function verify(
       withinBudget: simulated <= budget.lossHours * 1.0001,
     };
   });
+  const scales: NonNullable<VerificationResult["scales"]> = [];
+  const domains: NonNullable<VerificationResult["domains"]> = [];
+  if (model.requirements) {
+    let stream = 1;
+    for (const cards of [
+      ...new Set([...studyScales, model.scenario.cards]),
+    ].sort((a, b) => a - b)) {
+      const scaled = modelAtScale(model, cards);
+      const sample =
+        cards === model.scenario.cards
+          ? design
+          : simulate(
+              scaled,
+              designParameters,
+              trials,
+              (seed + Math.imul(++stream, 2654435761)) >>> 0,
+            );
+      scales.push({
+        cards,
+        target: scaled.scenario.target,
+        analytic: assess(scaled, designParameters).system.availability,
+        mean: sample.mean,
+        interval: sample.interval,
+        weeklyLossHours: 168 * (1 - sample.mean),
+        passRatio: sample.passRatio,
+        met:
+          sample.interval[0] >= scaled.scenario.target &&
+          sample.passRatio >= model.scenario.passRatio,
+        seed: sample.seed,
+      });
+      for (const domain of model.requirements.domains.filter(
+        (d) => d.targetAvailability !== null,
+      )) {
+        const target = domainTargetAtScale(scaled, domain.targetAvailability!);
+        const sub = domainModel(scaled, domain.moduleIds, target),
+          p = applyMeasures(sub);
+        const sample = simulate(
+          sub,
+          p,
+          trials,
+          (seed + Math.imul(++stream, 2654435761)) >>> 0,
+        );
+        domains.push({
+          id: domain.id,
+          name: domain.name,
+          cards,
+          target,
+          mean: sample.mean,
+          interval: sample.interval,
+          met: sample.interval[0] >= target,
+          seed: sample.seed,
+        });
+      }
+    }
+  }
   const checks: VerificationCheck[] = [];
+  const legacy = auditLibraryMeasures(model).filter(
+    (issue) => model.measures.find((m) => m.id === issue.id)?.enabled,
+  );
+  if (legacy.length)
+    checks.push({
+      id: "recovery-semantics",
+      title: "恢复链阶段节省口径",
+      state: "fail",
+      detail: `${legacy.map((i) => i.name).join("、")}仍使用旧版恢复总时长。阶段节省不能替换校准后的全部恢复链，请在机制设计页显式修正并重新验证。`,
+    });
   checks.push({
     id: "mean",
     title: "平均可用度达到目标",
@@ -388,9 +513,34 @@ export function verify(
     title: "所选措施有工程证据",
     state: pending.length ? "warn" : "pass",
     detail: pending.length
-      ? `${pending.length} 项措施的参数尚未实测：${pending.map((m) => m.name).join("、")}。仿真只证明“参数成立时可以达标”，不证明产品已具备这些能力。`
+      ? `${pending.length} 项措施的参数尚未实测：${pending.map((m) => m.name).join("、")}。仿真检验给定参数下的目标达成情况，不证明产品已具备这些能力。`
       : "所选措施均已标记为有实测证据。",
   });
+  if (model.requirements) {
+    const missed = scales.filter((s) => !s.met),
+      domainMisses = domains.filter((d) => !d.met);
+    checks.push({
+      id: "scales",
+      title: "五规模系统目标",
+      state: missed.length ? "fail" : "pass",
+      detail: missed.length
+        ? `${missed.map((s) => s.cards.toLocaleString() + "卡").join("、")}的区间下限或窗口达标比例未满足要求。`
+        : "千卡、万卡、十万卡、二十万卡、五十万卡均满足按规模折算的目标；均值区间下限与窗口达标比例分别检查。",
+    });
+    checks.push({
+      id: "domains",
+      title: "固定域目标独立验证",
+      state: domainMisses.length ? "fail" : "pass",
+      detail: domainMisses.length
+        ? domainMisses
+            .map(
+              (d) =>
+                `${d.cards.toLocaleString()}卡${d.name}未达到${percent(d.target, 5)}`,
+            )
+            .join("；")
+        : "网络及供电与冷却分别独立仿真，所有规模的均值区间下限均满足固定目标；不使用系统停机期间减少暴露带来的表观收益。",
+    });
+  }
   const verdict: CheckState = checks.some((c) => c.state === "fail")
     ? "fail"
     : checks.some((c) => c.state === "warn")
@@ -409,6 +559,7 @@ export function verify(
     baseline,
     design,
     modules,
+    ...(model.requirements ? { scales, domains } : {}),
     checks,
     verdict,
   };

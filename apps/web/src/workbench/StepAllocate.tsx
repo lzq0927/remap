@@ -15,12 +15,14 @@ import {
   consequenceThreshold,
   createEvaluator,
   loadPerTenThousand,
+  targetAtScale,
   targetFromCurve,
   type AllocationMethod,
   type CoreModel,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
 import ArchitectureDiagram from "./ArchitectureDiagram";
+import ReferenceRequirements from "./ReferenceRequirements";
 import { LineChart, chartInk, chartNeutral, seriesColors } from "./Charts";
 import { duration, frequency, hours, percent, scale } from "./format";
 import { Disclosure, Formula, NumberField, Status } from "./ui";
@@ -39,7 +41,9 @@ export default function StepAllocate() {
     { allocation, baseline, consequences } = analysis,
     method = model.allocation.method,
     info = allocationMethodInfo[method],
-    { hours: window, target, overhead } = model.scenario;
+    { hours: window, target } = model.scenario,
+    // 有域级要求时，公共开销取要求里的固定预算
+    overhead = model.requirements?.overheadBudget ?? model.scenario.overhead;
   const comparison = useMemo(
     () =>
       (["agree", "arinc", "equal", "min-effort"] as const).map((id) => ({
@@ -50,10 +54,13 @@ export default function StepAllocate() {
   );
   const closure =
     allocation.modules.reduce((sum, m) => sum + m.lossHours, 0) +
-    allocation.overheadLossHours;
+    allocation.overheadLossHours +
+    allocation.unallocatedLossHours;
   const freeModules = allocation.modules.filter((m) => !m.pinned),
     maxWeight = Math.max(...freeModules.map((m) => m.weight), 1e-9),
     columns = method === "agree" ? 8 : 6;
+  const domainOf = (id: string | null) =>
+    allocation.constraints.find((d) => d.id === id)?.name;
   const setFixed = (id: string, value: number | null) =>
     update((d) => {
       d.modules.find((m) => m.id === id)!.fixedTarget = value;
@@ -61,7 +68,8 @@ export default function StepAllocate() {
 
   return (
     <div className="rw-stack">
-      <ScaleTarget />
+      {/* 有域级要求时，目标由参考规模折算，固定域先冻结；否则按“规模—目标”对照 */}
+      {model.requirements ? <ReferenceRequirements /> : <ScaleTarget />}
 
       <div className="rw-grid is-side">
         <section className="rw-card" aria-label="分配方法">
@@ -92,7 +100,15 @@ export default function StepAllocate() {
                     suffix="%"
                     width={92}
                     onCommit={(v) =>
-                      update((d) => void (d.scenario.overhead = v))
+                      update((d) => {
+                        if (d.requirements) {
+                          d.requirements.overheadBudget = v;
+                          d.scenario.target = targetAtScale(
+                            d,
+                            d.scenario.cards,
+                          );
+                        } else d.scenario.overhead = v;
+                      })
                     }
                   />
                 </dt>
@@ -104,9 +120,13 @@ export default function StepAllocate() {
             </p>
             {!allocation.feasible && (
               <p className="rw-alert is-bad" role="alert">
-                {allocation.pinnedLoad > allocation.load && allocation.load > 0
-                  ? "单独指定的目标已经用完全部预算，其余模块没有预算可分。请收紧指定的目标或下调系统目标。"
-                  : "公共开销已经超过允许的总损失，这个目标无法达到。请降低开销或下调目标。"}
+                {allocation.constraints.length > 0
+                  ? (allocation.conflict ??
+                    "分配约束不相容，请检查固定目标与开销预算。")
+                  : allocation.pinnedLoad > allocation.load &&
+                      allocation.load > 0
+                    ? "单独指定的目标已经用完全部预算，其余模块没有预算可分。请收紧指定的目标或下调系统目标。"
+                    : "公共开销已经超过允许的总损失，这个目标无法达到。请降低开销或下调目标。"}
               </p>
             )}
           </div>
@@ -258,7 +278,12 @@ export default function StepAllocate() {
               <h2>各模块的目标</h2>
               <span className="rw-closure">
                 <CheckCircle2 size={15} aria-hidden />
-                各模块预算 + 公共开销 = {hours(closure)}，与总预算一致
+                各模块预算 + 公共开销
+                {allocation.unallocatedLossHours > 0 && " + 未分配余量"} ={" "}
+                {hours(closure)}，
+                {Math.abs(closure - allocation.lossHours) < 1e-7
+                  ? "与总预算一致"
+                  : "约束冲突，需调整分配"}
               </span>
             </div>
             <div className="rw-table-wrap">
@@ -296,7 +321,14 @@ export default function StepAllocate() {
                           )!;
                           return (
                             <tr key={row.id}>
-                              <td>{row.name}</td>
+                              <td>
+                                {row.name}
+                                {domainOf(row.domainId) && (
+                                  <small className="rw-domain-tag">
+                                    {domainOf(row.domainId)}
+                                  </small>
+                                )}
+                              </td>
                               {method === "agree" && (
                                 <>
                                   <td className="is-num">
@@ -431,21 +463,26 @@ export default function StepAllocate() {
                                   ) : (
                                     <>
                                       <b>{percent(row.availability)}</b>
-                                      <button
-                                        className="rw-icon-button is-small"
-                                        title="单独指定这个模块的目标"
-                                        aria-label={
-                                          "单独指定 " + row.name + " 的目标"
-                                        }
-                                        onClick={() =>
-                                          setFixed(
-                                            row.id,
-                                            Number(row.availability.toFixed(5)),
-                                          )
-                                        }
-                                      >
-                                        <Pin size={14} />
-                                      </button>
+                                      {/* 固定域内的模块由域目标约束，不再单独指定 */}
+                                      {!row.domainId && (
+                                        <button
+                                          className="rw-icon-button is-small"
+                                          title="单独指定这个模块的目标"
+                                          aria-label={
+                                            "单独指定 " + row.name + " 的目标"
+                                          }
+                                          onClick={() =>
+                                            setFixed(
+                                              row.id,
+                                              Number(
+                                                row.availability.toFixed(5),
+                                              ),
+                                            )
+                                          }
+                                        >
+                                          <Pin size={14} />
+                                        </button>
+                                      )}
                                     </>
                                   )}
                                 </span>
@@ -606,6 +643,7 @@ export default function StepAllocate() {
           </Disclosure>
         </div>
       </div>
+      {!model.requirements && <ReferenceRequirements />}
       <ArchitectureDiagram
         views={["target"]}
         title="架构上的目标"

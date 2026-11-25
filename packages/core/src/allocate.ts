@@ -7,6 +7,7 @@ import {
   type Assessment,
   type ResolvedParameters,
 } from "./assess";
+import { domainTargetAtScale, targetAtScale } from "./requirements";
 
 export interface MethodInfo {
   id: AllocationMethod;
@@ -29,7 +30,7 @@ export const allocationMethodInfo: Record<AllocationMethod, MethodInfo> = {
     reasoning: [
       "复杂度 nᵢ：模块越复杂，固有故障越多，达到同样可用度的代价越高，所以预算与 nᵢ 成正比。",
       "重要度 ωᵢ：模块失效导致任务受损的条件概率。ωᵢ 越大，同样的故障对任务伤害越大，所以预算与 ωᵢ 成反比。",
-      "权重归一化后合计为 1，保证各模块预算合成后恰好等于系统目标。",
+      "权重归一化后合计为 1，保证各模块预算合成后恰好等于系统目标。这是把 AGREE 的复杂度 / 重要度思想用于可修复系统损失负荷的工程适配，不是直接套用不可修复系统的可靠度公式；有固定目标时先扣除，再在各自可分配的范围内归一化。",
     ],
     fit: "适合有架构和器件清单、需要给出设计目标的阶段。它不依赖现状的恢复能力，因此会暴露“故障不多但单次损失很大”的模块。",
   },
@@ -59,7 +60,7 @@ export const allocationMethodInfo: Record<AllocationMethod, MethodInfo> = {
     formula: "ρᵢ* = min(ρᵢ, ρ₀)，ρ₀ 由 Σᵢ min(ρᵢ, ρ₀) = ρ* 解出",
     reasoning: [
       "把损失最大的模块统一压到同一水位 ρ₀，低于水位的模块不要求改进。",
-      "在“改进量与损失降幅成正比”的假设下，这是达到目标所需改进总量最小的方案。",
+      "这是统一水位的改进分配启发式。没有各模块的成本曲线时，不能据此声称总工程成本最小。",
     ],
     fit: "适合资源有限、希望把改进集中在少数主要矛盾上的场景。",
   },
@@ -98,8 +99,10 @@ export interface ModuleAllocation {
   maxEventsPerWeek: number | null;
   /** 每周的损失预算，小时。 */
   lossHoursPerWeek: number;
-  /** 目标是直接指定的，不参与按权重分配。 */
+  /** 目标是在模块上直接指定的，不参与按权重分配。 */
   pinned: boolean;
+  /** 所属的固定目标责任域；预算在域内分配。 */
+  domainId: string | null;
 }
 export interface AllocationResult {
   method: AllocationMethod;
@@ -114,9 +117,21 @@ export interface AllocationResult {
   overheadLossHours: number;
   /** 最小改进量方法的统一水位 ρ₀。 */
   waterline: number | null;
-  /** 直接指定目标的模块合计占用的损失负荷，以及留给其余模块分配的部分。 */
+  /** 模块上直接指定目标合计占用的损失负荷，以及扣除全部固定目标后留给其余模块分配的部分。 */
   pinnedLoad: number;
   freeLoad: number;
+  /** 域级固定目标：每个责任域按规模折算后的目标与允许的损失负荷。 */
+  constraints: Array<{
+    id: string;
+    name: string;
+    target: number;
+    load: number;
+    moduleIds: string[];
+  }>;
+  /** 固定目标与系统预算冲突时的说明；系统不会自动放宽目标。 */
+  conflict: string | null;
+  /** 没有模块可以承接的预算（责任域内没有模块时）。 */
+  unallocatedLossHours: number;
   modules: ModuleAllocation[];
   groups: Array<{
     id: string;
@@ -157,18 +172,42 @@ export function allocate(
   method: AllocationMethod = model.allocation.method,
   baseline: Assessment = assess(model, applyMeasures(model, new Set())),
 ): AllocationResult {
-  const { hours, target, overhead, cards } = model.scenario,
+  const { hours, cards } = model.scenario,
+    // 有域级要求时，系统目标按参考规模折算，公共开销取要求里的预算。
+    target = targetAtScale(model, cards),
+    overhead = model.requirements?.overheadBudget ?? model.scenario.overhead,
     load = Math.max(0, (1 - overhead) / target - 1),
+    overheadFeasible = (1 - overhead) / target - 1 >= 0,
     uptime = hours / (1 + load),
     week = 168 / hours;
   const current = new Map(baseline.modules.map((m) => [m.id, m]));
+  // 固定目标有两种来源：域级要求（一组模块合起来的目标）和模块上直接指定的目标。
+  // 域级要求优先；模块落在某个固定域里时，它自己的指定目标不再单独生效。
+  const constraints = (model.requirements?.domains ?? [])
+    .filter((d) => d.targetAvailability !== null)
+    .map((d) => {
+      const domainTarget = domainTargetAtScale(model, d.targetAvailability!);
+      return {
+        id: d.id,
+        name: d.name,
+        target: domainTarget,
+        load: 1 / domainTarget - 1,
+        moduleIds: d.moduleIds,
+      };
+    });
+  const inDomain = new Set(constraints.flatMap((d) => d.moduleIds)),
+    fixedLoad = constraints.reduce((sum, d) => sum + d.load, 0);
   const pinnedLoads = model.modules.map((module) =>
-      module.fixedTarget === null ? null : 1 / module.fixedTarget - 1,
+      module.fixedTarget === null || inDomain.has(module.id)
+        ? null
+        : 1 / module.fixedTarget - 1,
     ),
     pinnedLoad = pinnedLoads.reduce<number>((sum, v) => sum + (v ?? 0), 0),
-    freeLoad = Math.max(0, load - pinnedLoad),
-    feasible = (1 - overhead) / target - 1 > 0 && pinnedLoad <= load,
-    free = model.modules.map((_, i) => pinnedLoads[i] === null);
+    freeLoad = Math.max(0, load - pinnedLoad - fixedLoad),
+    feasible = overheadFeasible && pinnedLoad + fixedLoad <= load + 1e-12,
+    free = model.modules.map(
+      (module, i) => pinnedLoads[i] === null && !inDomain.has(module.id),
+    );
   const complexity = model.modules.map(
     (module) =>
       module.complexity ??
@@ -177,31 +216,47 @@ export function allocate(
         : (current.get(module.id)?.fitPerCard ?? 0)),
   );
   const currentLoads = model.modules.map((m) => current.get(m.id)?.load ?? 0);
-  let raw: number[],
-    waterline: number | null = null;
-  if (method === "agree")
-    raw = model.modules.map((module, i) => complexity[i] / module.importance);
-  else if (method === "arinc") raw = currentLoads;
-  else if (method === "custom")
-    raw = model.modules.map((m) => model.allocation.customWeights[m.id] ?? 0);
-  else if (method === "min-effort") {
-    const index = model.modules.map((_, i) => i).filter((i) => free[i]),
-      solved = minEffort(
-        index.map((i) => currentLoads[i]),
-        freeLoad,
-      );
-    raw = model.modules.map(() => 0);
-    index.forEach((i, at) => (raw[i] = solved.loads[at]));
-    waterline = solved.waterline;
-  } else raw = model.modules.map(() => 1);
-  const sum = raw.reduce((total, v, i) => total + (free[i] ? v : 0), 0),
-    freeCount = free.filter(Boolean).length;
-  // 权重全为 0 时无法体现差异，退回等分配，避免预算凭空消失。
-  const shares = raw.map((v, i) =>
-    !free[i]
-      ? pinnedLoads[i]!
-      : (sum > 0 ? v / sum : 1 / Math.max(1, freeCount)) * freeLoad,
-  );
+  const raw =
+    method === "agree"
+      ? model.modules.map((module, i) => complexity[i] / module.importance)
+      : method === "arinc"
+        ? currentLoads
+        : method === "custom"
+          ? model.modules.map((m) => model.allocation.customWeights[m.id] ?? 0)
+          : model.modules.map(() => 1);
+  const shares = model.modules.map((_, i) => pinnedLoads[i] ?? 0);
+  let waterline: number | null = null,
+    unallocated = 0;
+  /** 在一组模块内按所选方法分一份预算；返回最小改进量方法的水位。 */
+  const distribute = (indices: number[], budget: number) => {
+    if (!indices.length) {
+      unallocated += budget;
+      return null;
+    }
+    const solved =
+        method === "min-effort"
+          ? minEffort(
+              indices.map((i) => currentLoads[i]),
+              budget,
+            )
+          : null,
+      local = solved ? solved.loads : indices.map((i) => raw[i]),
+      total = local.reduce((sum, v) => sum + v, 0);
+    // 权重全为 0 时无法体现差异，退回等分配，避免预算凭空消失。
+    indices.forEach((i, at) => {
+      shares[i] = budget * (total > 0 ? local[at] / total : 1 / indices.length);
+    });
+    return solved ? solved.waterline : null;
+  };
+  for (const domain of constraints)
+    distribute(
+      model.modules.flatMap((m, i) =>
+        domain.moduleIds.includes(m.id) ? [i] : [],
+      ),
+      domain.load,
+    );
+  const freeIndices = model.modules.flatMap((_, i) => (free[i] ? [i] : []));
+  if (freeIndices.length) waterline = distribute(freeIndices, freeLoad);
   const modules: ModuleAllocation[] = model.modules.map((module, i) => {
     const share = shares[i],
       now = current.get(module.id);
@@ -225,12 +280,21 @@ export function allocate(
         ? (share / now.mttrHours) * uptime * week
         : null,
       lossHoursPerWeek: share * uptime * week,
-      pinned: !free[i],
+      pinned: pinnedLoads[i] !== null,
+      domainId:
+        constraints.find((d) => d.moduleIds.includes(module.id))?.id ?? null,
     };
   });
   return {
     method,
     feasible,
+    constraints,
+    conflict: !overheadFeasible
+      ? "固定公共开销超过系统允许损失"
+      : pinnedLoad + fixedLoad > load + 1e-12
+        ? "固定目标的预算之和超过系统预算；请检查约束，系统不会自动放宽目标。"
+        : null,
+    unallocatedLossHours: unallocated * uptime,
     target,
     load,
     lossHours: hours * (1 - target),
@@ -254,39 +318,6 @@ export function allocate(
     }),
   };
 }
-
-/** 规模–目标对照中的一个点。 */
-export interface TargetPoint {
-  cards: number;
-  target: number;
-}
-/**
- * 规模与目标的关系。串联系统的故障次数与规模成正比，所以损失负荷 r = 1/A − 1 也与规模成正比：
- * A(N) = 1 / (1 + k·N)，k 是“每张卡带来的损失负荷”，代表一个可靠性水平。
- * 给定若干（规模，目标）点，先换算成各点的 k，再对规模的对数线性插值；范围之外沿用端点的 k。
- */
-export function targetFromCurve(curve: TargetPoint[], cards: number) {
-  const points = [...curve]
-    .filter((p) => p.cards > 0 && p.target > 0 && p.target < 1)
-    .sort((a, b) => a.cards - b.cards);
-  if (!points.length) return null;
-  const perCard = (p: TargetPoint) => (1 / p.target - 1) / p.cards;
-  let k: number;
-  if (cards <= points[0].cards) k = perCard(points[0]);
-  else if (cards >= points[points.length - 1].cards)
-    k = perCard(points[points.length - 1]);
-  else {
-    const hi = points.findIndex((p) => p.cards >= cards),
-      a = points[hi - 1],
-      b = points[hi],
-      t = Math.log(cards / a.cards) / Math.log(b.cards / a.cards);
-    k = perCard(a) + t * (perCard(b) - perCard(a));
-  }
-  return 1 / (1 + k * cards);
-}
-/** 每万卡的损失负荷（‰）：把不同规模的目标换算到同一把尺子上。 */
-export const loadPerTenThousand = (point: TargetPoint) =>
-  ((1 / point.target - 1) / point.cards) * 10000;
 
 /** 单次事件损失达到窗口总预算的这个比例，就算高后果事件。 */
 export const consequenceThreshold = 1 / 3;

@@ -4,7 +4,16 @@ import {
   type DiagramSlot,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
-import { count, duration, fit, hours, percent, scale, times } from "./format";
+import {
+  count,
+  duration,
+  fit,
+  frequency,
+  hours,
+  percent,
+  scale,
+  times,
+} from "./format";
 import { Status, useTooltip, type Tone } from "./ui";
 
 export type DiagramView = "target" | "baseline" | "design";
@@ -20,7 +29,7 @@ const usageLabel = (usage: number) =>
 
 // 图上的颜色：绿色系为计算部件，蓝色系为网络部件；状态色只用于器件底色和标记圆点。
 const ink = "#101828",
-  muted = "#667085",
+  muted = "#344961",
   frame = "#c9d4e2",
   compute = "#0d7668",
   computeFill = "#e6f4ee",
@@ -29,14 +38,34 @@ const ink = "#101828",
   networkPanel = "#f3f6fd",
   networkStroke = "#bccbe9",
   accent = "#1d5fd0";
-/** 损失占比分档（单一暖色由浅到深）；低于第一档不着色。 */
+/** 固定的周损失小时色尺；跨规模、现状与设计后保持一致：浅蓝表示损失少，越多越红。 */
 const heatSteps = [
-  { from: 0.2, fill: "#f2a56b", label: "20% 以上" },
-  { from: 0.1, fill: "#f8c79c", label: "10–20%" },
-  { from: 0.03, fill: "#fde7d3", label: "3–10%" },
+  { from: 40, fill: "#e96356", label: "40 h" },
+  { from: 12, fill: "#f8c7c1", label: "12 h" },
+  { from: 0, fill: "#e8f3ff", label: "0–3 h" },
 ];
-const heatOf = (share: number) =>
-  heatSteps.find((step) => share >= step.from) ?? null;
+const heatOf = (loss: number) => {
+  const stops = [
+    { at: 0, rgb: [232, 243, 255] },
+    { at: 3, rgb: [220, 236, 255] },
+    { at: 12, rgb: [248, 199, 193] },
+    { at: 40, rgb: [233, 99, 86] },
+  ];
+  const v = Math.min(40, Math.max(0, loss)),
+    i = Math.max(
+      1,
+      stops.findIndex((s) => s.at >= v),
+    ),
+    a = stops[i - 1],
+    b = stops[i],
+    t = (v - a.at) / (b.at - a.at);
+  return {
+    fill: `rgb(${a.rgb.map((n, j) => Math.round(n + (b.rgb[j] - n) * t)).join(",")})`,
+  };
+};
+/** 故障频次：每周 1 次以上写“x 次/周”，更少见的换成每年几次或几年一次。 */
+const rateText = (perWeek: number) =>
+  perWeek >= 0.95 ? count(perWeek, 1) + "次/周" : frequency(perWeek);
 const toneColors: Record<Tone, { fill: string; stroke: string; dot: string }> =
   {
     good: { fill: "#e1f4e7", stroke: "#5fb37c", dot: "#0ca30c" },
@@ -54,6 +83,12 @@ interface SlotInfo {
   mtbfHours: number;
   mttrHours: number;
   lossHours: number;
+  /** 每周损失小时。 */
+  weeklyLossHours: number;
+  /** 故障频次：每连续运行一周（168 小时）的次数。 */
+  weeklyEvents: number;
+  /** 本窗口模型里实际发生的次数（已扣除停机时间）。 */
+  observedEvents: number;
   budgetHours: number;
   usage: number;
   /** 占全部故障损失的比例。 */
@@ -172,7 +207,7 @@ function Hit({ slot, children }: { slot: DiagramSlot; children: ReactNode }) {
     </g>
   );
 }
-/** 标记：第一行可用度与目标，第二行每卡 FIT、损失与预算。 */
+/** 标记：第一行可用度与目标，第二行周损失与连续运行的故障频次。 */
 function Tag({
   x,
   y,
@@ -253,8 +288,7 @@ function Tag({
             </tspan>
           </text>
           <T x={x + 10} y={y + 33} size={11} fill={muted}>
-            {fit(info.fitPerCard)} FIT · 损失 {hours(info.lossHours)} /{" "}
-            {hours(info.budgetHours)}
+            周损失 {hours(info.weeklyLossHours)} · {rateText(info.weeklyEvents)}
           </T>
         </>
       )}
@@ -266,9 +300,12 @@ function Tag({
 function usePaint() {
   const { slots, active } = useContext(Topo);
   return (slot: DiagramSlot, domain: "compute" | "network" | "plain") => {
-    // 器件底色按“占全部故障损失的比例”分档，越深表示在这里损失的时间越多。
-    const step = active === "target" ? null : heatOf(slots[slot]?.share ?? 0);
-    if (step) return { fill: step.fill, stroke: "#c98a55" };
+    // 器件底色按每周损失小时着色（固定色尺），越红表示在这里损失的时间越多。
+    const step =
+      active === "target" || !slots[slot]
+        ? null
+        : heatOf(slots[slot]!.weeklyLossHours);
+    if (step) return { fill: step.fill, stroke: "#8c9eaf" };
     return domain === "compute"
       ? { fill: computeFill, stroke: computeStroke }
       : domain === "network"
@@ -280,7 +317,7 @@ function usePaint() {
 function useLabelColor() {
   const { slots, active } = useContext(Topo);
   return (slot: DiagramSlot, base: string) =>
-    active !== "target" && heatOf(slots[slot]?.share ?? 0) ? "#3d2a18" : base;
+    active !== "target" && slots[slot] ? ink : base;
 }
 /** 交换设备：带端口刻线的小方框。 */
 function Equipment({
@@ -422,6 +459,11 @@ export default function ArchitectureDiagram({
       mtbfHours: rate > 0 ? 1 / rate : Infinity,
       mttrHours: rate > 0 ? load / rate : 0,
       lossHours: parts.reduce((sum, m) => sum + m.lossHours, 0),
+      weeklyLossHours:
+        (parts.reduce((sum, m) => sum + m.lossHours, 0) * 168) /
+        model.scenario.hours,
+      weeklyEvents: rate * 168,
+      observedEvents: parts.reduce((sum, m) => sum + m.events, 0),
       budgetHours: budgets.reduce((sum, m) => sum + m.lossHours, 0),
       usage,
       share: parts.reduce((sum, m) => sum + m.share, 0),
@@ -458,6 +500,14 @@ export default function ArchitectureDiagram({
       <span>目标可用度</span>
       <strong>{fit(info.fitPerCard)} FIT</strong>
       <span>每卡故障率</span>
+      <strong>{rateText(info.weeklyEvents)}</strong>
+      <span>连续运行 168 小时的故障频次</span>
+      <strong>{count(info.observedEvents, 1)} 次</strong>
+      <span>本窗口实际发生（已扣停机时间）</span>
+      <strong>
+        {hours(info.lossHours)} / {hours(info.budgetHours)}
+      </strong>
+      <span>窗口损失 / 预算</span>
       <strong>{duration(info.mtbfHours)}</strong>
       <span>MTBF</span>
       <strong>{duration(info.mttrHours)}</strong>
@@ -509,6 +559,25 @@ export default function ArchitectureDiagram({
         </div>
       </div>
       {hint && <p className="rw-hint">{hint}</p>}
+      {model.requirements && (
+        <div className="rw-domain-strip">
+          {analysis.requirements.map((d) => (
+            <div key={d.id}>
+              <strong>{d.name}</strong>
+              <span>
+                {active === "design"
+                  ? "设计后 " + percent(d.design.availability, 5)
+                  : "现状 " + percent(d.baseline.availability, 5)}
+              </span>
+              <span>
+                {d.target === null
+                  ? "分配目标 " + percent(d.allocatedTarget, 5)
+                  : "目标 " + percent(d.target, 5)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="rw-topo-scroll">
         <Topo.Provider value={context}>
           <svg
@@ -1014,7 +1083,7 @@ export default function ArchitectureDiagram({
             <T x={776} y={670} fill="#475467">
               {active === "target"
                 ? "第二行：每个窗口的损失预算 · 现状可用度"
-                : "第二行：每卡 FIT · 每个窗口的损失小时 / 损失预算"}
+                : "第二行：每周损失小时 · 连续运行一周的故障频次"}
             </T>
             {active === "target" ? (
               <T x={776} y={692} fill="#475467">
@@ -1040,7 +1109,7 @@ export default function ArchitectureDiagram({
                   </g>
                 ))}
                 <T x={776} y={715} fill="#475467">
-                  器件底色：占全部故障损失
+                  器件底色：每周损失（渐变）
                 </T>
                 {[...heatSteps].reverse().map((step, i) => (
                   <g key={step.label}>
@@ -1051,7 +1120,7 @@ export default function ArchitectureDiagram({
                       height={14}
                       rx={3}
                       fill={step.fill}
-                      stroke="#c98a55"
+                      stroke="#8c9eaf"
                     />
                     <T x={960 + i * 94} y={715} fill="#475467" size={11.5}>
                       {step.label}
@@ -1165,8 +1234,10 @@ export default function ArchitectureDiagram({
                 </tspan>
               </text>
               <T x={872} y={940} fill="#475467">
-                {fit(system.fitPerCard)} FIT / 卡 · 损失{" "}
-                {hours(system.lossHours)} / 预算 {hours(allocation.lossHours)}
+                周损失 {hours((system.lossHours * 168) / model.scenario.hours)}{" "}
+                / 预算{" "}
+                {hours((allocation.lossHours * 168) / model.scenario.hours)} ·{" "}
+                {rateText(system.rate * 168)}
               </T>
             </g>
           </svg>

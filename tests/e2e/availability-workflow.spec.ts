@@ -64,7 +64,9 @@ for (const width of [1440, 390]) {
       });
     };
     await expect(
-      page.locator(".audit-workbench").getByLabel("可用度目标（0–1）", { exact: true }),
+      page
+        .locator(".audit-workbench")
+        .getByLabel("可用度目标（0–1）", { exact: true }),
     ).toHaveValue("0.99");
     await confirm();
     const catalogue = page.getByRole("region", { name: "分类故障模式库" });

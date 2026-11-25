@@ -272,12 +272,24 @@ type FaultModeShape = {
 export const effectSchema = z
   .object({
     param: z.enum(measureParams),
-    /** reduce：在现值上按比例降低；set：直接设为新值；add：在现值上增加（代价类效果）。 */
-    op: z.enum(["reduce", "set", "add"]),
+    /**
+     * reduce：在现值上按比例降低；set：直接设为新值；add：在现值上增加（代价类效果）；
+     * subtract：相对冻结现状减少一个绝对量（阶段节省），与 set 按替代方案取最好值，不重复叠加。
+     */
+    op: z.enum(["reduce", "set", "add", "subtract"]),
     value: z.number().finite().min(0).max(1e7),
   })
   .strict()
   .superRefine((effect, ctx) => {
+    if (
+      effect.op === "subtract" &&
+      (isRatioParam(effect.param) || effect.param === "overhead")
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["op"],
+        message: "绝对减少只用于故障率或时长参数",
+      });
     const bounded = effect.op === "reduce" || isRatioParam(effect.param);
     if (bounded && effect.value > 1)
       ctx.addIssue({
@@ -373,6 +385,50 @@ export const allocationSchema = z
   })
   .strict();
 
+/**
+ * 域级要求（可选）：参考规模下的系统目标、若干责任域的独立现状与固定目标，
+ * 以及按域现状反求恢复时长的校准记录。存在时，系统目标按损失负荷随规模线性折算。
+ */
+export const requirementsSchema = z
+  .object({
+    referenceCards: z.number().int().positive().max(10000000),
+    systemTarget: z.number().finite().gt(0).lt(1),
+    overheadBudget: z.number().finite().min(0).max(0.5),
+    scaling: z.literal("linear-loss-load"),
+    domains: z
+      .array(
+        z
+          .object({
+            id,
+            name: label,
+            moduleIds: z.array(id).min(1).max(64),
+            baselineAvailability: z.number().finite().gt(0).lte(1).nullable(),
+            targetAvailability: z.number().finite().gt(0).lte(1).nullable(),
+            source: note,
+          })
+          .strict(),
+      )
+      .max(24),
+    calibration: z
+      .array(
+        z
+          .object({
+            modeId: id,
+            /** 校准前后恢复链的期望耗时（各级“到达概率 × 时间”之和，不含回滚重算）。 */
+            beforeRecoveryHours: hoursValue,
+            afterRecoveryHours: hoursValue,
+            /** 校准前后漏检分支的总损失（漏检后发现 + 恢复 + 回滚重算）。 */
+            beforeMissedHours: hoursValue,
+            afterMissedHours: hoursValue,
+            source: note,
+          })
+          .strict(),
+      )
+      .max(256)
+      .default([]),
+  })
+  .strict();
+
 export const coreModelSchema = z
   .object({
     schemaVersion: z.literal(coreModelVersion),
@@ -405,6 +461,7 @@ export const coreModelSchema = z
     modes: z.array(faultModeSchema).min(1).max(256),
     measures: z.array(measureSchema).max(64),
     allocation: allocationSchema,
+    requirements: requirementsSchema.optional(),
     source: note,
   })
   .strict()
@@ -461,6 +518,40 @@ export const coreModelSchema = z
           message: "措施至少作用于一个故障模式",
         });
     });
+    const constrained = new Set<string>();
+    const domainIds = new Set<string>();
+    for (const [i, domain] of (model.requirements?.domains ?? []).entries()) {
+      if (domainIds.has(domain.id))
+        ctx.addIssue({
+          code: "custom",
+          path: ["requirements", "domains", i, "id"],
+          message: "约束标识重复：" + domain.id,
+        });
+      domainIds.add(domain.id);
+      if (new Set(domain.moduleIds).size !== domain.moduleIds.length)
+        ctx.addIssue({
+          code: "custom",
+          path: ["requirements", "domains", i, "moduleIds"],
+          message: "域内模块不能重复",
+        });
+      for (const moduleId of domain.moduleIds) {
+        if (!modules.has(moduleId))
+          ctx.addIssue({
+            code: "custom",
+            path: ["requirements", "domains", i],
+            message: "约束引用了不存在的模块：" + moduleId,
+          });
+        if (domain.targetAvailability !== null) {
+          if (constrained.has(moduleId))
+            ctx.addIssue({
+              code: "custom",
+              path: ["requirements", "domains", i],
+              message: "固定目标的责任范围不能重叠：" + moduleId,
+            });
+          constrained.add(moduleId);
+        }
+      }
+    }
   });
 
 export type CoreModel = z.infer<typeof coreModelSchema>;

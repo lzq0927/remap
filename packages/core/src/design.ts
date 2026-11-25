@@ -9,6 +9,7 @@ import {
   type MeasureLayer,
 } from "./model";
 import { applyMeasures, assess, createEvaluator } from "./assess";
+import { goalEvaluator, targetAtScale } from "./requirements";
 
 const enabledIds = (model: CoreModel) =>
   model.measures.filter((m) => m.enabled).map((m) => m.id);
@@ -152,25 +153,27 @@ export interface Recommendation {
  * 数量相同时优先证据更充分的组合，其次优先可用度更高的组合。
  */
 export function recommend(model: CoreModel): Recommendation {
-  const target = model.scenario.target,
+  const target = targetAtScale(model, model.scenario.cards),
     availabilityOf = createEvaluator(model),
+    // 达标与否看综合得分：系统目标和每个固定域目标都满足时不小于 1。
+    score = goalEvaluator(model),
     active = new Set(enabledIds(model)),
     current = availabilityOf(active),
     all = new Set(model.measures.map((m) => m.id)),
     ceiling = availabilityOf(all),
     candidates = model.measures.filter((m) => !m.enabled);
   const removable =
-    current >= target
+    score(active) >= 1
       ? model.measures
           .filter((m) => {
             if (!m.enabled) return false;
             const rest = new Set(active);
             rest.delete(m.id);
-            return availabilityOf(rest) >= target;
+            return score(rest) >= 1;
           })
           .map((m) => m.id)
       : [];
-  if (current >= target)
+  if (score(active) >= 1)
     return {
       kind: "met",
       add: [],
@@ -183,6 +186,8 @@ export function recommend(model: CoreModel): Recommendation {
     };
   const withAdded = (picked: Measure[]) =>
     availabilityOf(new Set([...active, ...picked.map((m) => m.id)]));
+  const scoreAdded = (picked: Measure[]) =>
+    score(new Set([...active, ...picked.map((m) => m.id)]));
   let best: { ids: string[]; rank: number; availability: number } | null = null;
   // 先按数量从少到多穷举，找到即为“最少补充”；组合数超出预算时改用逐步加入。
   let budget = searchBudget;
@@ -196,7 +201,7 @@ export function recommend(model: CoreModel): Recommendation {
     for (;;) {
       const picked = index.map((i) => candidates[i]),
         value = withAdded(picked);
-      if (value >= target) {
+      if (scoreAdded(picked) >= 1) {
         const rank = picked.reduce(
           (sum, m) => sum + evidenceRank[m.evidence],
           0,
@@ -219,24 +224,24 @@ export function recommend(model: CoreModel): Recommendation {
   let reach: Measure[] = [];
   if (!best) {
     // 逐步加入边际收益最大的措施；有些措施带代价，所以只在确有提升时加入。
-    let value = current;
+    let value = score(active);
     for (;;) {
       let pick: { measure: Measure; value: number } | null = null;
       for (const measure of candidates) {
         if (reach.includes(measure)) continue;
-        const next = withAdded([...reach, measure]);
+        const next = scoreAdded([...reach, measure]);
         if (!pick || next > pick.value) pick = { measure, value: next };
       }
       if (!pick || pick.value <= value + 1e-12) break;
       reach.push(pick.measure);
       value = pick.value;
-      if (value >= target) break;
+      if (value >= 1) break;
     }
-    if (value >= target) {
+    if (value >= 1) {
       // 达标后剔除去掉也不影响达标的项。
       for (const measure of [...reach].reverse()) {
         const fewer = reach.filter((m) => m !== measure);
-        if (withAdded(fewer) >= target) reach = fewer;
+        if (scoreAdded(fewer) >= 1) reach = fewer;
       }
       best = {
         ids: reach.map((m) => m.id),
@@ -264,7 +269,7 @@ export function recommend(model: CoreModel): Recommendation {
     add: reach.map((m) => m.id),
     availability: full.availability,
     ceiling: full.availability,
-    shortfall: target - full.availability,
+    shortfall: Math.max(0, target - full.availability),
     furtherReduction:
       full.load > 0 ? Math.min(1, Math.max(0, 1 - allowed / full.load)) : 0,
     removable: [],
@@ -284,7 +289,8 @@ export function solveEffect(
   const measure = model.measures.find((m) => m.id === measureId),
     effect = measure?.effects[effectIndex];
   if (!measure || !effect) return null;
-  const target = model.scenario.target;
+  // 综合得分不小于 1 即系统目标和各固定域目标都满足。
+  const target = 1;
   const evaluate = (value: number) => {
     const trial: CoreModel = {
       ...model,
@@ -300,12 +306,17 @@ export function solveEffect(
           : m,
       ),
     };
-    return createEvaluator(trial)(
+    return goalEvaluator(trial)(
       new Set(trial.measures.filter((m) => m.enabled).map((m) => m.id)),
     );
   };
-  // “降低比例”和检出率越大越好，其余参数越小越好。
-  const best = effect.op === "reduce" || higherIsBetter(effect.param) ? 1 : 0;
+  // 比例降低、绝对节省和越大越好的参数取大值，其余目标值越小越好。
+  const best =
+    effect.op === "subtract"
+      ? largestBase(model, measure, effect.param)
+      : effect.op === "reduce" || higherIsBetter(effect.param)
+        ? 1
+        : 0;
   if (evaluate(best) < target) return { value: best, reachable: false };
   if (evaluate(effect.value) >= target)
     return { value: effect.value, reachable: true };
@@ -319,15 +330,36 @@ export function solveEffect(
   return { value: good, reachable: true };
 }
 
-/** 措施主要参数的理想极限：按比例降低的做到 100%，越大越好的做到 1，其余做到 0。 */
-const limitOf = (measure: Measure) => {
+/** 措施作用对象里某个参数的最大现值：绝对节省最多只能省到这么多。 */
+const largestBase = (
+  model: CoreModel,
+  measure: Measure,
+  param: Measure["effects"][number]["param"],
+) =>
+  param === "overhead"
+    ? model.scenario.overhead
+    : Math.max(
+        0,
+        ...model.modes
+          .filter((mode) => measure.modeIds.includes(mode.id))
+          .map((mode) => readParam(mode, param)),
+      );
+/**
+ * 措施主要参数的理想极限：按比例降低的做到 100%，绝对节省的省掉全部现值，
+ * 越大越好的做到 1，其余做到 0。
+ */
+const limitOf = (model: CoreModel, measure: Measure) => {
   const effect = measure.effects[0];
-  return effect.op === "reduce" || higherIsBetter(effect.param) ? 1 : 0;
+  return effect.op === "subtract"
+    ? largestBase(model, measure, effect.param)
+    : effect.op === "reduce" || higherIsBetter(effect.param)
+      ? 1
+      : 0;
 };
 /** 措施主要参数的现值：作用对象里离极限最远的那个，作为“改进程度”的起点。 */
 function startOf(model: CoreModel, measure: Measure) {
   const effect = measure.effects[0];
-  if (effect.op === "reduce") return 0;
+  if (effect.op === "reduce" || effect.op === "subtract") return 0;
   if (effect.param === "overhead") return model.scenario.overhead;
   const param = effect.param,
     values = model.modes
@@ -367,7 +399,7 @@ export function doseResponse(
   const measure = model.measures.find((m) => m.id === measureId);
   if (!measure || measure.effects[0].op === "add") return null;
   const start = startOf(model, measure),
-    limit = limitOf(measure),
+    limit = limitOf(model, measure),
     span = limit - start;
   if (Math.abs(span) < 1e-15) return null;
   const others = new Set(
@@ -456,8 +488,13 @@ export function priorityPath(model: CoreModel, limit = 30) {
     });
     current = pick.value;
   }
-  const target = model.scenario.target,
-    reached = steps.findIndex((step) => step.availability >= target);
+  // 达标看综合得分：系统目标和各固定域目标都满足。
+  const score = goalEvaluator(model),
+    picked = new Set<string>(),
+    reached = steps.findIndex((step) => {
+      picked.add(step.id);
+      return score(picked) >= 1;
+    });
   return { base, steps, reachedAt: reached < 0 ? null : reached + 1 };
 }
 
@@ -467,17 +504,18 @@ export function priorityPath(model: CoreModel, limit = 30) {
  * 返回 0 表示这一项可以不做，1 表示必须做足；整组做足也不达标时返回 null。
  */
 export function minimumDegrees(model: CoreModel, ids: string[]) {
-  const target = model.scenario.target,
+  // 达标看综合得分：系统目标和各固定域目标都满足时不小于 1。
+  const target = 1,
     set = new Set(ids),
     result = new Map<string, number | null>();
-  const full = createEvaluator(model)(set);
+  const full = goalEvaluator(model)(set);
   for (const id of ids) {
     if (full < target) {
       result.set(id, null);
       continue;
     }
     const scaled = (share: number) =>
-      createEvaluator({
+      goalEvaluator({
         ...model,
         measures: model.measures.map((m) =>
           m.id === id ? { ...m, applicability: m.applicability * share } : m,

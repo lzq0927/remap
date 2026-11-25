@@ -83,13 +83,14 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   const hbm = architecture.getByRole("button", { name: /^HBM，/ });
   await expect(hbm).toContainText("44.55%");
   await expect(hbm).toContainText("99.34%");
-  await expect(hbm).toContainText("850 FIT");
-  await expect(hbm).toContainText("21.9 h / 1.07 h");
+  // 架构图上标每周损失和连续运行一周的故障频次
+  await expect(hbm).toContainText("周损失 21.9 h");
+  await expect(hbm).toContainText("71.4次/周");
   await architecture.getByRole("tab", { name: "设计后" }).click();
   await expect(hbm).toContainText("97.54%");
   await architecture.getByRole("tab", { name: "现状" }).click();
   // 差距从频次（MTBF）和单次损失（MTTR）两个角度给出，以周为粒度
-  const gapTable = page.getByRole("region", { name: "差距明细" });
+  const gapTable = page.getByRole("region", { name: "硬件损失差距排序" });
   await expect(gapTable).toContainText("缩短单次损失");
   await expect(gapTable.getByRole("row", { name: /^光模块/ })).toContainText(
     "168 次/周",
@@ -214,7 +215,7 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
     page
       .getByRole("region", { name: "架构上的设计结果" })
       .getByRole("group", { name: /^光模块，设计后可用度/ }),
-  ).toContainText("200 FIT");
+  ).toContainText("16.8次/周");
 
   // 第 4 步：独立仿真，结果按任务保存
   await page.getByRole("button", { name: "下一步：机制验证" }).click();

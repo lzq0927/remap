@@ -92,6 +92,14 @@ export default function StepAssess() {
       1e-9,
     ),
     gapOf = (id: string) => baselineGaps.find((g) => g.id === id)!,
+    // 差距排序：超出分配预算的损失小时从大到小
+    overBudget = (id: string) => {
+      const gap = baselineGaps.find((g) => g.id === id)!;
+      return gap.lossHours - gap.budgetHours;
+    },
+    byGap = [...baseline.modules].sort(
+      (a, b) => overBudget(b.id) - overBudget(a.id),
+    ),
     budgetOf = (id: string) => allocation.modules.find((m) => m.id === id)!;
   const selectedModule = model.modules.find((m) => m.id === selected),
     selectedResult = baseline.modules.find((m) => m.id === selected);
@@ -142,7 +150,7 @@ export default function StepAssess() {
       <ArchitectureDiagram
         views={["baseline", "design"]}
         title="系统架构图"
-        hint="按超节点的硬件拓扑绘制，每个模块的可用度与目标、每卡 FIT、损失时间与预算标在对应硬件上。点击硬件可查看并修改它的故障模式和恢复阶梯。"
+        hint="按超节点的硬件拓扑绘制，可用度与目标、每周损失和故障频次标在对应硬件上；底色浅蓝表示损失少，损失越多越红。悬停可看每卡 FIT、损失预算等明细，点击硬件可查看并修改它的故障模式和恢复链。"
         onSelect={setSelected}
         actions={
           <button
@@ -184,10 +192,10 @@ export default function StepAssess() {
         />
       </div>
 
-      <section className="rw-card" aria-label="差距明细">
+      <section className="rw-card" aria-label="硬件损失差距排序">
         <div className="rw-card-head">
           <h2>各模块的目标与差距</h2>
-          <span className="rw-muted">按每周损失从大到小排列</span>
+          <span className="rw-muted">按超出预算的每周小时从大到小排列</span>
         </div>
         <div className="rw-table-wrap">
           <table className="rw-table">
@@ -217,13 +225,23 @@ export default function StepAssess() {
               </tr>
             </thead>
             <tbody>
-              {ranked.map((module) => {
+              {byGap.map((module) => {
                 const gap = gapOf(module.id),
+                  after = design.modules.find((m) => m.id === module.id)!,
+                  modeIds = new Set(module.modes.map((m) => m.id)),
+                  related = model.measures.filter((m) =>
+                    m.modeIds.some((id) => modeIds.has(id)),
+                  ),
+                  over = Math.max(
+                    0,
+                    module.lossHoursPerWeek -
+                      budgetOf(module.id).lossHoursPerWeek,
+                  ),
                   budget = budgetOf(module.id),
                   tone = gapTone(gap),
                   reach = potential.get(module.id);
                 return (
-                  <tr key={module.id}>
+                  <tr key={module.id} data-gap-module={module.id}>
                     <td>
                       <button
                         className="rw-link"
@@ -262,6 +280,8 @@ export default function StepAssess() {
                             <span>{module.name} 每周损失</span>
                             <strong>{hours(budget.lossHoursPerWeek)}</strong>
                             <span>每周损失预算</span>
+                            <strong>{hours(after.lossHoursPerWeek)}</strong>
+                            <span>当前设计下的每周损失</span>
                             <strong>{percent(module.share, 1)}</strong>
                             <span>占全部故障损失</span>
                           </>,
@@ -291,7 +311,10 @@ export default function StepAssess() {
                       </span>
                     </td>
                     <td>
-                      <Status tone={tone}>{usageText(gap)}</Status>
+                      <span className="rw-direction-cell">
+                        <Status tone={tone}>{usageText(gap)}</Status>
+                        {over > 0 && <small>超出 {hours(over)} / 周</small>}
+                      </span>
                     </td>
                     <td>
                       {gap.suggestion === "none" || !reach ? (
@@ -309,9 +332,10 @@ export default function StepAssess() {
                               降低频次
                             </span>
                           )}
-                          <small>
-                            措施库可降：单次损失 {percent(reach.system, 0)} ·
-                            频次 {percent(reach.component, 0)}
+                          <small title={related.map((m) => m.name).join("；")}>
+                            措施库 {related.length} 项可降：单次损失{" "}
+                            {percent(reach.system, 0)} · 频次{" "}
+                            {percent(reach.component, 0)}
                           </small>
                         </span>
                       )}
@@ -352,7 +376,7 @@ export default function StepAssess() {
           MTBF，只由器件失效率和数量决定。每周损失 = 故障频次 × 单次等效损失 ×
           运行时间占比（停机时不产生新故障，现状运行时间占{" "}
           {percent(system.runShare, 0)}
-          ）。“允许”的两列是分别只走一条路时的要求：单次损失不变时频次要降到多少，或频次不变时单次损失要缩到多少。“优先方向”看措施库里哪一边能补得更多：把全部系统级措施用上，这个模块的损失能降多少（缩短单次损失）；把全部组件级措施用上能降多少（降低频次）。竖线是损失预算。
+          ）。“允许”的两列是分别只走一条路时的要求：单次损失不变时频次要降到多少，或频次不变时单次损失要缩到多少。“差距”一列同时给出超预算的倍数和超出的小时数，表按后者排序。“优先方向”看措施库里哪一边能补得更多：把全部系统级措施用上，这个模块的损失能降多少（缩短单次损失）；把全部组件级措施用上能降多少（降低频次）。竖线是损失预算。
         </p>
       </section>
 

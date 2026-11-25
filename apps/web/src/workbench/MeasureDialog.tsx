@@ -195,7 +195,16 @@ export default function MeasureDialog({
                 const param = e.target.value as MeasureParam;
                 patchEffect(index, {
                   param,
-                  value: defaultValue(param, effect.op),
+                  op:
+                    effect.op === "subtract" && isRatio(param)
+                      ? "reduce"
+                      : effect.op,
+                  value: defaultValue(
+                    param,
+                    effect.op === "subtract" && isRatio(param)
+                      ? "reduce"
+                      : effect.op,
+                  ),
                 });
               }}
             >
@@ -238,6 +247,9 @@ export default function MeasureDialog({
                   : "按比例降低"}
               </option>
               <option value="set">设为新值</option>
+              {!isRatio(effect.param) && (
+                <option value="subtract">从现状减少绝对量</option>
+              )}
               <option value="add">增加（代价）</option>
             </select>
             {effect.op === "reduce" || isRatio(effect.param) ? (
