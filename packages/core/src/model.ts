@@ -360,6 +360,11 @@ export const measureSchema = z
      */
     applicability: z.number().finite().min(0).max(1).default(1),
     enabled: z.boolean(),
+    /**
+     * 暂不优化：这项机制先保持现状。不进入推荐方案、组合路径和“各方向能补多少”的估算，
+     * 但仍可单独查看它的参数与收益。启用后即视为纳入设计。
+     */
+    hold: z.boolean().default(false),
     evidence: z.enum(evidenceStates),
     rationale: note,
     /** 措施的出处，如现有机制库的编号。 */

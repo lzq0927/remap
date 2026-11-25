@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { test, expect } from "@playwright/test";
 
 // 默认界面：不设置 remap.ui，进入四步工作台。
@@ -95,9 +96,15 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   await expect(gapTable.getByRole("row", { name: /^光模块/ })).toContainText(
     "168 次/周",
   );
-  await expect(
-    page.getByRole("img", { name: "各模块的故障频次与单次等效损失" }),
-  ).toBeVisible();
+  // 差距从哪边补：每个模块三根横条，给出降频次、缩短单次损失、两边都做各能压到预算的多少倍
+  const lever = page.getByRole("region", { name: "差距从哪边补" });
+  await expect(lever).toContainText("现状超预算的 12 个模块里");
+  await expect(lever.getByRole("row", { name: /^光模块/ })).toContainText(
+    "两边都做才达标",
+  );
+  await expect(lever.getByRole("row", { name: /^AICore/ })).toContainText(
+    "187×",
+  );
   // 恢复链：进程重调度 → 弹性恢复 → CKPT 回滚 → 人工，每一环的概率和时间
   const chain = page.getByRole("region", { name: "恢复链与计算过程" });
   await expect(
@@ -151,23 +158,43 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   // 第 3 步：措施分两层，Shapley 贡献、改进程度收益、组合路径与结论
   await page.getByRole("button", { name: "下一步：机制设计" }).click();
   const advice = page.getByRole("region", { name: "推荐方案" });
-  await expect(advice).toContainText("距目标还差 18.34 pp");
+  // 进程重调度默认暂不优化：其余措施全做也到不了目标，并指出剩余损失卡在哪一级
+  await expect(advice).toContainText("当前搜索到的组合为 87.54%");
+  await expect(advice).toContainText("距目标还差 7.46 pp");
+  await expect(advice).toContainText("进程重调度（39%）");
+  await expect(advice).toContainText("标为“暂不优化”的 进程重调度 没有计入");
   const component = page.getByRole("region", { name: "组件级高可用" });
   await expect(component).toContainText("Hi-One 下一代光模块");
   await expect(component).toContainText("已启用 4 / 7");
   const system = page.getByRole("region", { name: "系统级可靠性机制" });
   await expect(system).toContainText("静默故障在线检测");
-  await expect(
-    page.getByRole("region", { name: "各措施的贡献" }),
-  ).toContainText("+66.23 pp");
+  const contribution = page.getByRole("region", { name: "各措施的贡献" });
+  await expect(contribution).toContainText("+66.23 pp");
+  // 分摊值与“单独做”“最后加”并列给出，并解释先后顺序造成的差别
+  await expect(contribution).toContainText(
+    "单独做 +17.55 pp · 最后加 +3.68 pp",
+  );
   // 参数可调：把静默检出率提到 99%，设计后可用度随之提高
-  const coverage = page.getByLabel("静默故障在线检测 · 检出率");
+  const coverage = page.getByLabel("静默故障在线检测 · 检出率", {
+    exact: true,
+  });
   await coverage.fill("99");
   await coverage.press("Enter");
   await expect(summary).toContainText("78.75%");
   await coverage.fill("95");
   await coverage.press("Enter");
   await expect(summary).toContainText("76.66%");
+  // 改进前的参数也能在措施上直接改，并同步到现状评估
+  const agentBefore = page.getByLabel(
+    "智能故障管理 Agent · 人工恢复 · 耗时（改进前）",
+    { exact: true },
+  );
+  await agentBefore.fill("5");
+  await agentBefore.press("Enter");
+  await expect(summary).toContainText("8.62%");
+  await agentBefore.fill("4");
+  await agentBefore.press("Enter");
+  await expect(summary).toContainText("10.42%");
   // 系统级按恢复链分为检测、恢复、隔离与弹性、检查点四类，候选可展开
   await expect(system).toContainText("已启用 6 / 23");
   for (const group of ["检测", "恢复", "隔离与弹性", "检查点"])
@@ -176,36 +203,64 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
     ).toBeVisible();
   await expect(system).toContainText("智能故障管理 Agent");
   await expect(system).toContainText("CKPT 回滚优化");
-  await system.getByRole("button", { name: /显示全部 10 项候选/ }).click();
+  await expect(system).toContainText("暂不优化 1 项");
+  await system.getByRole("button", { name: /显示全部 9 项候选/ }).click();
   await expect(system).toContainText("链路透明恢复");
-  // 改进程度—收益、组合收益路径
-  const dose = page.getByRole("region", { name: "改进程度与收益" });
-  await expect(
-    dose.getByRole("img", { name: "各措施的改进程度与系统可用度提升" }),
-  ).toBeVisible();
-  await expect(dose.getByRole("row", { name: /^弹性恢复/ })).toContainText(
-    "99.00%",
+  // 各措施值多少、组合收益瀑布
+  const benefit = page.getByRole("region", { name: "各措施值多少" });
+  await expect(benefit.getByRole("row", { name: /^弹性恢复/ })).toContainText(
+    "+32.70 pp",
+  );
+  await expect(benefit.getByRole("row", { name: /^进程重调度/ })).toContainText(
+    "暂不优化",
   );
   const path = page.getByRole("region", { name: "组合收益路径" });
-  await expect(path).toContainText("第 9 项即可达标");
+  await expect(path).toContainText("还差 7.46 pp");
+  await expect(path.getByRole("row", { name: /^1 弹性恢复/ })).toContainText(
+    "47.79%",
+  );
   await expect(
-    path.getByRole("row", { name: /^1 进程重调度增强/ }),
-  ).toContainText("50.07%");
+    path.getByRole("row", { name: /^5 智能故障管理 Agent/ }),
+  ).toContainText("排在“弹性恢复”之后只剩 +3.25 pp");
+  await expect(path).toContainText("为什么和右上“各措施的贡献”对不上");
+  // 展开机制：参数—收益曲线、拖动试算；把进程重调度做到设计目标并纳入设计
+  await page.getByRole("button", { name: "展开 进程重调度" }).click();
+  await expect(
+    page.getByRole("img", {
+      name: "进程重调度：进程重调度 · 成功率取不同值时的系统可用度",
+    }),
+  ).toBeVisible();
+  const trial = page.getByLabel("进程重调度 · 进程重调度 · 成功率试算取值");
+  await trial.fill("200");
+  await expect(system).toContainText("系统可用度 86.40%");
+  await system.getByRole("button", { name: "回到计划" }).click();
+  const success = page.getByLabel("进程重调度 · 进程重调度 · 成功率", {
+    exact: true,
+  });
+  await success.fill("95");
+  await success.press("Enter");
+  for (const name of ["耗时", "失败耗时"]) {
+    const field = page.getByLabel(`进程重调度 · 进程重调度 · ${name}`, {
+      exact: true,
+    });
+    await field.fill("60");
+    await field.press("Enter");
+  }
+  await page.getByRole("switch", { name: "启用 进程重调度" }).click();
+  await expect(summary).toContainText("91.70%");
   // 结论：重点做哪几项、做到什么程度
   const focus = page.getByRole("region", { name: "重点措施结论" });
   await expect(focus).toContainText("这组措施可达 95.60%");
   await expect(
-    focus.getByRole("row", { name: /进程重调度增强/ }),
+    focus.getByRole("row", { name: /通信与算子重执行/ }),
   ).toContainText("建议启用");
   await advice.getByRole("button", { name: "采用建议" }).click();
   await expect(advice).toContainText("当前设计已达标");
   await expect(summary).toContainText("95.60%");
-  await expect(
-    focus.getByRole("row", { name: /进程重调度增强/ }),
-  ).toContainText("兑现 ≥ 95%");
-  await expect(
-    page.getByRole("switch", { name: "停用 进程重调度增强" }),
-  ).toHaveAttribute("aria-checked", "true");
+  await expect(focus.getByRole("row", { name: /进程重调度/ })).toContainText(
+    "兑现 ≥ 95%",
+  );
+  await expect(path).toContainText("项达标");
   await expect(
     page
       .getByRole("region", { name: "架构上的设计结果" })
@@ -248,6 +303,25 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   await target.fill("96");
   await target.press("Enter");
   await expect(verdict).toContainText("结果已过期");
+
+  // 一键导出：汇报 PPT（.pptx）与带图文汇报页的网页报告
+  const [deck] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "导出 PPT" }).click(),
+  ]);
+  expect(
+    readFileSync((await deck.path())!)
+      .subarray(0, 2)
+      .toString(),
+  ).toBe("PK");
+  const [report] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "导出报告", exact: true }).click(),
+  ]);
+  const html = readFileSync((await report.path())!, "utf8");
+  expect(html).toContain('class="b-slide"');
+  expect(html).toContain("立项汇报 · 可用度提升方案");
+  expect(html).toContain("1　目标分配");
   expect(errors).toEqual([]);
 });
 

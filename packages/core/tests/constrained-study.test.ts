@@ -120,6 +120,7 @@ describe("已知域级约束的五规模评估", () => {
       effects: [{ param: "overhead", op: "add", value: 0.01 }],
       applicability: 1,
       enabled: false,
+      hold: false,
       evidence: "assumed",
       rationale: "边界测试",
       source: "",

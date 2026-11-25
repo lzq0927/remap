@@ -15,6 +15,8 @@ import {
   type VerificationResult,
 } from "../../../../packages/core/src/index";
 import { measureCurveSvg } from "./measure-curve";
+import { buildBrief } from "./brief";
+import { briefBody, briefScript, briefStyles } from "./brief-html";
 import { effectText, ladderText } from "./helpers";
 import {
   count,
@@ -45,7 +47,10 @@ const table = (head: string[], rows: unknown[][]) =>
     )
     .join("")}</tbody></table>`;
 
-/** 生成可离线打开的四步报告；数值与界面取自同一份解析结果。 */
+/**
+ * 生成可离线打开的报告：前面是图文汇报页，后面是四步的全部明细表；
+ * 数值与界面取自同一份解析结果。
+ */
 export function buildReport(
   title: string,
   model: CoreModel,
@@ -107,9 +112,13 @@ export function buildReport(
       .join("；"),
   )}。当前规模 ${escape(scale(scenario.cards))} 的目标为 ${percent(scenario.target)}。</p>`;
 
+  // 报告开头是图文汇报页（与导出的 PPT 同一份内容），后面是全部明细表
+  const brief = buildBrief(title, model, analysis, verification);
+
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>${escape(title)} · 可用度设计报告</title>
 <style>
-body{font:15px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif;color:#101828;max-width:1040px;margin:40px auto;padding:0 24px}
+body{margin:0;font:15px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif;color:#101828}
+.detail{max-width:1040px;margin:40px auto;padding:0 24px}${briefStyles}
 h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:36px 0 8px;padding-top:16px;border-top:1px solid #e4e7ec}
 p{margin:8px 0}small,.muted{color:#344961}.curves{display:grid;grid-template-columns:1fr;gap:16px}.curves svg{width:100%;fill:#142d48}article{break-inside:avoid;margin:24px 0}
 table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}th,td{padding:7px 10px;border-bottom:1px solid #e4e7ec;text-align:left;vertical-align:top}
@@ -118,6 +127,8 @@ th{color:#475467;font-weight:600;background:#f8f9fb}td:not(:first-child){font-va
 .kpis strong{display:block;font-size:26px}.formula{font-family:ui-monospace,Menlo,Consolas,monospace;background:#f8f9fb;padding:8px 12px;border-radius:6px;margin:8px 0}
 @media print{body{margin:0}}
 </style></head><body>
+${briefBody(brief)}
+<div class="detail">
 <h1>${escape(title)}</h1>
 <p class="muted">可用度设计报告 · ${escape(new Date().toLocaleString("zh-CN"))} · ${escape(scale(scenario.cards))} · 窗口 ${scenario.hours} 小时 · 目标 ${percent(scenario.target)}</p>
 <div class="kpis">
@@ -415,7 +426,7 @@ ${table(
     : "<p>尚未对当前参数运行独立验证，以上“设计后”结果仅为解析评估。</p>"
 }
 <p class="muted">说明：置信区间只反映随机抽样误差，不包含故障率与恢复参数本身的不确定性。标为“设计假设”或“已立项待验证”的措施，其参数需由工程实测确认。</p>
-</body></html>`;
+</div>${briefScript}</body></html>`;
 }
 
 export function downloadReport(
@@ -429,4 +440,21 @@ export function downloadReport(
     buildReport(title, model, analysis, verification),
     "text/html;charset=utf-8",
   );
+}
+
+/** 一键导出汇报 PPT：与网页报告开头的汇报页同一份内容，白底 16:9，形状和表格可在 PowerPoint 里继续编辑。 */
+export async function downloadDeck(
+  title: string,
+  model: CoreModel,
+  analysis: Analysis,
+  verification: VerificationResult | null,
+) {
+  const { briefPptx } = await import("./brief-pptx"),
+    pptx = await briefPptx(buildBrief(title, model, analysis, verification));
+  await pptx.writeFile({
+    fileName: (title + "-可用度提升方案汇报.pptx").replace(
+      /[\\/:*?"<>|]/g,
+      "_",
+    ),
+  });
 }

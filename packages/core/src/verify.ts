@@ -304,7 +304,7 @@ export function modelHash(model: CoreModel) {
             .join(",") +
           "}"
         : JSON.stringify(value);
-  // 名称、说明、出处、分层类别和架构图位置不影响数值结果，不计入指纹。
+  // 名称、说明、出处、分层类别、“暂不优化”标记和架构图位置不影响数值结果，不计入指纹。
   const numeric = {
     scenario: model.scenario,
     modules: model.modules.map(
@@ -319,6 +319,7 @@ export function modelHash(model: CoreModel) {
         name: _name,
         source: _source,
         category: _category,
+        hold: _hold,
         ...rest
       }) => rest,
     ),

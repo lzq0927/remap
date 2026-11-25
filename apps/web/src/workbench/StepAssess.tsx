@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Timer, Trash2, TrendingUp } from "lucide-react";
+import { ChevronDown, Plus, Timer, Trash2, TrendingUp } from "lucide-react";
 import {
   diagramSlotNames,
   diagramSlots,
@@ -13,7 +13,6 @@ import {
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
 import ArchitectureDiagram from "./ArchitectureDiagram";
-import { RiskMap } from "./Charts";
 import RecoveryChain, { ComputationTrace, LadderEditor } from "./RecoveryChain";
 import { blankMode, blankModule, dropModes, dropModule } from "./helpers";
 import { duration, fit, frequency, hours, percent, times } from "./format";
@@ -77,9 +76,224 @@ function RankBars({
   );
 }
 
+/**
+ * 差距从哪边补：每个模块三根横条，分别是“只降频次”“只缩短单次损失”“两边都做”
+ * 能把损失从现状压到预算的多少倍。横轴是对数刻度的“损失 ÷ 预算”，1× 就是预算线。
+ */
+function LeverSection({ onSelect }: { onSelect: (id: string) => void }) {
+  const { model, analysis } = useWorkbench(),
+    tooltip = useTooltip(),
+    [all, setAll] = useState(false);
+  const potential = useMemo(() => layerPotential(model), [model]);
+  const rows = analysis.baselineGaps
+    .map((gap) => {
+      const reach = potential.get(gap.id) ?? {
+          component: 0,
+          system: 0,
+          both: 0,
+        },
+        now = gap.usage;
+      return {
+        id: gap.id,
+        name: gap.name,
+        now,
+        component: now * (1 - reach.component),
+        system: now * (1 - reach.system),
+        both: now * (1 - reach.both),
+        cut: reach,
+        budgetHours: gap.budgetHours,
+      };
+    })
+    .filter((row) => Number.isFinite(row.now) && row.now > 0)
+    .sort((a, b) => b.now - a.now);
+  if (!rows.length) return null;
+  const over = rows.filter((row) => row.now > 1),
+    shown = all || !over.length ? rows : over,
+    values = rows.flatMap((r) => [r.now, r.component, r.system, r.both]),
+    floor = 0.01,
+    low = Math.floor(
+      Math.log10(
+        Math.max(floor, Math.min(0.5, ...values.filter((v) => v > 0))),
+      ),
+    ),
+    // 右侧留出写“现状倍数”的位置
+    high = Math.log10(Math.max(2, ...values)) + 0.45,
+    at = (value: number) =>
+      ((Math.log10(Math.max(value, 10 ** low)) - low) / (high - low)) * 100,
+    ticks = Array.from(
+      { length: Math.floor(high) - low + 1 },
+      (_, i) => 10 ** (low + i),
+    ),
+    tickText = (value: number) =>
+      value >= 1
+        ? value.toFixed(0) + "×"
+        : String(Number(value.toPrecision(1))) + "×",
+    multiple = (value: number) =>
+      value >= 100
+        ? value.toFixed(0) + "×"
+        : value >= 10
+          ? value.toFixed(1) + "×"
+          : value.toFixed(2) + "×";
+  const verdict = (row: (typeof rows)[number]): { tone: Tone; text: string } =>
+    row.now <= 1
+      ? { tone: "good", text: "现状已在预算内" }
+      : row.system <= 1 && row.component <= 1
+        ? { tone: "good", text: "任选一边都能达标" }
+        : row.system <= 1
+          ? { tone: "good", text: "缩短单次损失即可达标" }
+          : row.component <= 1
+            ? { tone: "good", text: "降低频次即可达标" }
+            : row.both <= 1
+              ? { tone: "warn", text: "两边都做才达标" }
+              : {
+                  tone: "bad",
+                  text: `两边都做仍是预算的 ${multiple(row.both)}`,
+                };
+  const lanes = [
+    { key: "component", tone: "mtbf", name: "只降频次" },
+    { key: "system", tone: "mttr", name: "只缩短单次损失" },
+    { key: "both", tone: "both", name: "两边都做" },
+  ] as const;
+  const reached = rows.filter((r) => r.now > 1 && r.both <= 1).length,
+    systemFirst = over.filter((r) => r.cut.system >= r.cut.component).length;
+  return (
+    <section className="rw-card" aria-label="差距从哪边补">
+      <div className="rw-card-head">
+        <h2>差距从哪边补：降低频次，还是缩短单次损失</h2>
+        <span className="rw-legend">
+          <span className="rw-key is-tick" />
+          现状
+          <span className="rw-key is-mtbf" />
+          只降频次（组件级措施全做）
+          <span className="rw-key is-mttr" />
+          只缩短单次损失（系统级措施全做）
+          <span className="rw-key is-both" />
+          两边都做
+        </span>
+      </div>
+      <p className="rw-lead">
+        每个模块三根横条，从现状（右端竖线）向左画到“措施库里这一边全部做足”能压到的位置；横条越长，这一边越管用，进入左侧绿色区域就是压到了预算以内。
+        {over.length > 0 && (
+          <>
+            {" "}
+            现状超预算的 {over.length} 个模块里，{systemFirst}{" "}
+            个主要靠缩短单次损失，{over.length - systemFirst}{" "}
+            个主要靠降低频次；两边都做之后 {reached} 个能回到预算以内。
+          </>
+        )}
+      </p>
+      <div
+        className="rw-lever"
+        role="table"
+        aria-label="各模块现状与两个改进方向能达到的损失（以预算的倍数计）"
+      >
+        <div className="rw-lever-row is-axis" role="row">
+          <span role="columnheader">模块</span>
+          <span className="rw-lever-track" role="columnheader">
+            {ticks.map((tick) => (
+              <i
+                key={tick}
+                className={tick === 1 ? "is-budget" : ""}
+                style={{ left: at(tick) + "%" }}
+              >
+                {tick === 1 ? "预算 1×" : tickText(tick)}
+              </i>
+            ))}
+          </span>
+          <span role="columnheader">结论</span>
+        </div>
+        {shown.map((row) => {
+          const result = verdict(row);
+          return (
+            <div key={row.id} className="rw-lever-row" role="row">
+              <button
+                className="rw-lever-name"
+                role="rowheader"
+                onClick={() => onSelect(row.id)}
+                title="查看并修改这个模块的参数"
+              >
+                {row.name}
+              </button>
+              <span
+                className="rw-lever-track"
+                role="cell"
+                tabIndex={0}
+                style={{ ["--rw-budget" as string]: at(1) + "%" }}
+                aria-label={`${row.name}：现状是预算的 ${multiple(row.now)}；只降频次 ${multiple(row.component)}，只缩短单次损失 ${multiple(row.system)}，两边都做 ${multiple(row.both)}`}
+                {...tooltip.bind(
+                  <>
+                    <strong>{multiple(row.now)}</strong>
+                    <span>{row.name} · 现状损失 ÷ 预算</span>
+                    <strong>{multiple(row.component)}</strong>
+                    <span>只降频次（降 {percent(row.cut.component, 0)}）</span>
+                    <strong>{multiple(row.system)}</strong>
+                    <span>
+                      只缩短单次损失（降 {percent(row.cut.system, 0)}）
+                    </span>
+                    <strong>{multiple(row.both)}</strong>
+                    <span>两边都做（降 {percent(row.cut.both, 0)}）</span>
+                    <strong>{hours(row.budgetHours)}</strong>
+                    <span>窗口内的损失预算</span>
+                  </>,
+                )}
+              >
+                {ticks.map((tick) => (
+                  <i
+                    key={tick}
+                    className={
+                      "rw-lever-grid" + (tick === 1 ? " is-budget" : "")
+                    }
+                    style={{ left: at(tick) + "%" }}
+                  />
+                ))}
+                {lanes.map((lane, index) => {
+                  const to = row[lane.key];
+                  return row.now - to < row.now * 0.005 ? null : (
+                    <span
+                      key={lane.key}
+                      className={"rw-lever-bar is-" + lane.tone}
+                      style={{
+                        left: at(to) + "%",
+                        width: Math.max(at(row.now) - at(to), 0.4) + "%",
+                        top: 7 + index * 11,
+                      }}
+                    >
+                      {lane.key === "both" && <em>{multiple(to)}</em>}
+                    </span>
+                  );
+                })}
+                <b style={{ left: at(row.now) + "%" }}>
+                  <em>{multiple(row.now)}</em>
+                </b>
+              </span>
+              <span role="cell">
+                <Status tone={result.tone}>{result.text}</Status>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {over.length > 0 && over.length < rows.length && (
+        <button className="rw-more" onClick={() => setAll(!all)}>
+          <ChevronDown size={15} aria-hidden />
+          {all
+            ? "只显示超预算的模块"
+            : `另有 ${rows.length - over.length} 个模块现状已在预算内，显示全部`}
+        </button>
+      )}
+      <p className="rw-hint">
+        横轴是“损失 ÷ 预算”，对数刻度：每一格相差 10 倍，1×
+        是分配给这个模块的预算。三根横条分别是把措施库里的组件级措施（降低故障频次）、系统级措施（缩短单次损失）、以及两者全部用上之后的位置；某一边没有横条，说明措施库里没有针对它的这类措施。标了“暂不优化”的措施不计入。这里回答“潜力在哪边”，具体启用哪些措施在第
+        3 步定。点模块名可查看和修改它的参数。
+      </p>
+      {tooltip.node}
+    </section>
+  );
+}
+
 export default function StepAssess() {
   const { model, analysis, update } = useWorkbench(),
-    { baseline, design, allocation, baselineGaps, consequences } = analysis,
+    { baseline, design, allocation, baselineGaps } = analysis,
     [selected, setSelected] = useState<string>(),
     tooltip = useTooltip(),
     potential = useMemo(() => layerPotential(model), [model]);
@@ -103,11 +317,6 @@ export default function StepAssess() {
     budgetOf = (id: string) => allocation.modules.find((m) => m.id === id)!;
   const selectedModule = model.modules.find((m) => m.id === selected),
     selectedResult = baseline.modules.find((m) => m.id === selected);
-  const labelled = new Set([
-    ...ranked.slice(0, 4).map((m) => m.id),
-    ...byFit.slice(0, 3).map((m) => m.id),
-    ...consequences.map((c) => c.id),
-  ]);
 
   return (
     <div className="rw-stack">
@@ -380,67 +589,7 @@ export default function StepAssess() {
         </p>
       </section>
 
-      <section className="rw-card" aria-label="频次与单次损失">
-        <div className="rw-card-head">
-          <h2>频次 × 单次损失：差距该从哪边补</h2>
-          <span className="rw-legend">
-            <span className="rw-key is-neutral" />
-            现状
-            <span className="rw-key is-after" />
-            设计后
-          </span>
-        </div>
-        <div className="rw-grid is-chart">
-          <RiskMap
-            label="各模块的故障频次与单次等效损失"
-            onSelect={setSelected}
-            points={baseline.modules.map((m) => {
-              const after = design.modules.find((d) => d.id === m.id)!,
-                budget = budgetOf(m.id);
-              return {
-                id: m.id,
-                name: m.name,
-                x: m.ratePerWeek,
-                y: m.mttrHours,
-                toX: after.ratePerWeek,
-                toY: after.mttrHours,
-                labelled: labelled.has(m.id),
-                tip: (
-                  <>
-                    <strong>{frequency(m.ratePerWeek)}</strong>
-                    <span>{m.name} · 故障频次</span>
-                    <strong>{duration(m.mttrHours)}</strong>
-                    <span>单次等效损失</span>
-                    <strong>{hours(m.lossHoursPerWeek)}</strong>
-                    <span>
-                      每周损失（预算 {hours(budget.lossHoursPerWeek)}）
-                    </span>
-                    <strong>
-                      {frequency(after.ratePerWeek)} ×{" "}
-                      {duration(after.mttrHours)}
-                    </strong>
-                    <span>设计后</span>
-                  </>
-                ),
-              };
-            })}
-          />
-          <div className="rw-explain is-inline">
-            <p>
-              <strong>怎么读这张图。</strong>
-              横轴是故障频次，纵轴是单次等效损失，两者相乘就是每周损失，所以斜虚线上的点损失相同，越往右上损失越大。
-            </p>
-            <p>
-              把一个点往<strong>左</strong>移是降低故障频次（提升
-              MTBF，组件级高可用）；往<strong>下</strong>
-              移是缩短单次损失（降低 MTTR，系统级可靠性机制）。
-            </p>
-            <p>
-              右侧一排频次高、单次损失只有几分钟的模块，靠降频次或普遍缩短恢复时间都有效；左上角频次低、单次损失以小时计的模块，只有缩短单次损失或单独定目标才管用。连线指向启用措施后的位置。
-            </p>
-          </div>
-        </div>
-      </section>
+      <LeverSection onSelect={setSelected} />
 
       <RecoveryChain />
       <ComputationTrace />

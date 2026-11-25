@@ -3,6 +3,7 @@ import {
   isRatioParam,
   measureParams,
   readParam,
+  recoveryLevelNames,
   recoveryLevels,
   type CoreModel,
   type CoreModule,
@@ -653,4 +654,44 @@ export function assess(
     modules,
     groups,
   };
+}
+
+export interface StageShare {
+  id: "detect" | "late" | "rework" | RecoveryLevel;
+  name: string;
+  /** 这一环节的损失负荷（事件率 × 这一环节的期望损失时间），各环节合计等于系统损失负荷。 */
+  load: number;
+  share: number;
+}
+/**
+ * 系统故障损失花在了哪个环节：检测、漏检后发现、恢复链各级的尝试时间、回滚重算。
+ * 按损失负荷从大到小排列；用来判断剩余损失该从哪一级的参数下手。
+ */
+export function loadByStage(result: Assessment): StageShare[] {
+  const totals = new Map<StageShare["id"], number>();
+  const add = (id: StageShare["id"], value: number) =>
+    totals.set(id, (totals.get(id) ?? 0) + value);
+  for (const mode of result.modules.flatMap((module) => module.modes)) {
+    add("detect", mode.rate * mode.stages.detect);
+    add("late", mode.rate * mode.stages.late);
+    for (const level of recoveryLevels)
+      add(level, mode.rate * mode.stages.levels[level]);
+    add("rework", mode.rate * mode.stages.rework);
+  }
+  const load = [...totals.values()].reduce((sum, value) => sum + value, 0),
+    names = {
+      detect: "检测",
+      late: "漏检后发现",
+      rework: "回滚重算",
+      ...recoveryLevelNames,
+    };
+  return [...totals]
+    .map(([id, value]) => ({
+      id,
+      name: names[id],
+      load: value,
+      share: load > 0 ? value / load : 0,
+    }))
+    .filter((stage) => stage.load > 0)
+    .sort((a, b) => b.load - a.load);
 }

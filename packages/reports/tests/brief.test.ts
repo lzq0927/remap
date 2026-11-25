@@ -1,0 +1,82 @@
+import { describe, expect, it } from "vitest";
+import JSZip from "jszip";
+import { analyze, defaultCoreModel } from "../../core/src/index";
+import { buildBrief, briefSize } from "../../../apps/web/src/workbench/brief";
+import { briefHtml } from "../../../apps/web/src/workbench/brief-html";
+import { briefPptx } from "../../../apps/web/src/workbench/brief-pptx";
+import { buildReport } from "../../../apps/web/src/workbench/report";
+
+const seconds = (value: number) => value / 3600;
+/** 达标方案：进程重调度做到设计目标，再补通信与算子重执行、漏检静默故障定期校验。 */
+function reachingModel() {
+  const model = defaultCoreModel(),
+    process = model.measures.find((m) => m.id === "fast-recover")!;
+  process.effects[0].value = 0.95;
+  process.effects[1].value = seconds(60);
+  process.effects[2].value = seconds(60);
+  process.hold = false;
+  for (const m of model.measures)
+    if (["fast-recover", "replay", "sdc-audit"].includes(m.id))
+      m.enabled = true;
+  return model;
+}
+
+describe("汇报导出：同一份页面内容输出 PPT 和网页", () => {
+  it("默认场景未达标时如实给出差距，图元都落在画布内", () => {
+    const model = defaultCoreModel(),
+      brief = buildBrief("默认场景", model, analyze(model), null);
+    expect(brief.slides.length).toBeGreaterThanOrEqual(10);
+    expect(brief.slides[1].title).toContain("距目标还差 18.34 pp");
+    const texts = brief.slides
+      .flatMap((s) => s.prims)
+      .flatMap((p) => (p.t === "text" ? p.runs.map((r) => r.text) : []))
+      .join("");
+    expect(texts).toContain("10.42%");
+    expect(texts).toContain("76.66%");
+    expect(texts).toContain("待运行独立验证");
+    expect(texts).toContain("暂不优化的机制：");
+    for (const slide of brief.slides)
+      for (const prim of slide.prims) {
+        const [x, y, w, h] =
+          prim.t === "line"
+            ? [
+                Math.min(prim.x1, prim.x2),
+                Math.min(prim.y1, prim.y2),
+                Math.abs(prim.x2 - prim.x1),
+                Math.abs(prim.y2 - prim.y1),
+              ]
+            : [prim.x, prim.y, prim.w, prim.t === "table" ? 0 : prim.h];
+        for (const value of [x, y, w, h])
+          expect(Number.isFinite(value)).toBe(true);
+        expect(x, slide.title).toBeGreaterThanOrEqual(-0.01);
+        expect(y, slide.title).toBeGreaterThanOrEqual(-0.01);
+        expect(x + w, slide.title).toBeLessThanOrEqual(briefSize.width + 0.01);
+        expect(y + h, slide.title).toBeLessThanOrEqual(briefSize.height + 0.01);
+      }
+  });
+  it("达标方案：结论页写明达到目标，PPT 每页一张幻灯片，网页与 PPT 页数一致", async () => {
+    const model = reachingModel(),
+      analysis = analyze(model),
+      brief = buildBrief("达标方案", model, analysis, null);
+    expect(analysis.design.system.availability).toBeCloseTo(0.956, 3);
+    expect(brief.slides[1].title).toContain("达到目标");
+    expect(brief.slides.map((s) => s.title).join("|")).toContain("组合收益");
+    const html = briefHtml(brief);
+    expect(html.match(/class="b-slide"/g)).toHaveLength(brief.slides.length);
+    expect(html).toContain("95.60%");
+    const pptx = await briefPptx(brief),
+      zip = await JSZip.loadAsync(
+        (await pptx.write({ outputType: "nodebuffer" })) as Buffer,
+      ),
+      slides = Object.keys(zip.files).filter((name) =>
+        /^ppt\/slides\/slide\d+\.xml$/.test(name),
+      );
+    expect(slides).toHaveLength(brief.slides.length);
+    const first = await zip.file("ppt/slides/slide2.xml")!.async("string");
+    expect(first).toContain("95.60%");
+    // 详细报告开头带同一套汇报页，后面保留全部明细表
+    const report = buildReport("达标方案", model, analysis, null);
+    expect(report.match(/class="b-slide"/g)).toHaveLength(brief.slides.length);
+    expect(report).toContain("1　目标分配");
+  }, 30000);
+});

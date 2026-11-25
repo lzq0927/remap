@@ -60,6 +60,7 @@ const blank = (category: MeasureCategory): Measure => ({
   modeIds: [],
   effects: structuredClone(starter[category]),
   applicability: 1,
+  hold: false,
   enabled: true,
   evidence: "assumed",
   rationale: "",

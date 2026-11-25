@@ -57,7 +57,7 @@ test("固定域工作流：载入、分配、部件周损失、三线收益、�
   await expect(hbmCurve).toContainText("避免的部件损失");
   await expect(hbmCurve).toContainText("MTBF组Shapley");
   const before = await hbmCurve.locator("p").first().innerText();
-  const ratio = page.getByLabel("HBM 纠错增强 · 故障率 FIT");
+  const ratio = page.getByLabel("HBM 纠错增强 · 故障率 FIT的降低比例");
   await ratio.fill("70");
   await ratio.press("Enter");
   await expect(hbmCurve.locator("p").first()).not.toHaveText(before);

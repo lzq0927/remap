@@ -26,6 +26,7 @@
   --rw-series-1: #2a78d6;
   --rw-series-1-light: #9ec5f4;
   --rw-series-2: #eb6834;
+  --rw-series-3: #1baf7a;
   --rw-neutral-mark: #b9bec7;
   --rw-radius: 12px;
   --rw-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
@@ -2257,15 +2258,142 @@ h2.rw-direction {
 .rw-key.is-neutral {
   background: #98a2b3;
 }
-.rw-risk-point {
-  outline: none;
+
+/* ---------- 差距从哪边补：每个模块三根横条 ---------- */
+.rw-key.is-both {
+  background: var(--rw-series-3);
 }
-.rw-risk-point.is-button {
+.rw-lever {
+  display: grid;
+  margin-top: 4px;
+}
+.rw-lever-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) minmax(
+      150px,
+      230px
+    );
+  align-items: center;
+  column-gap: 14px;
+  border-bottom: 1px solid var(--rw-line);
+}
+.rw-lever-row:last-child {
+  border-bottom: 0;
+}
+.rw-lever-row.is-axis {
+  color: var(--rw-ink-3);
+  font-size: 12px;
+  border-bottom: 1px solid var(--rw-line-strong);
+}
+.rw-lever-row.is-axis .rw-lever-track {
+  height: 26px;
+  background: none;
+}
+.rw-lever-row.is-axis i {
+  position: absolute;
+  bottom: 5px;
+  transform: translateX(-50%);
+  font-style: normal;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rw-lever-row.is-axis i.is-budget {
+  color: var(--rw-good);
+  font-weight: 600;
+}
+.rw-lever-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--rw-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
   cursor: pointer;
 }
-.rw-risk-point:hover circle:last-of-type,
-.rw-risk-point:focus-visible circle:last-of-type {
-  stroke: var(--rw-ink);
+.rw-lever-name:hover,
+.rw-lever-name:focus-visible {
+  color: var(--rw-accent);
+  text-decoration: underline;
+}
+.rw-lever-track {
+  position: relative;
+  height: 48px;
+  /* 预算线左侧是“已在预算内”的区域 */
+  background: linear-gradient(
+    to right,
+    var(--rw-good-soft) 0,
+    var(--rw-good-soft) var(--rw-budget, 0%),
+    transparent var(--rw-budget, 0%)
+  );
+  outline: none;
+}
+.rw-lever-track:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--rw-accent);
+}
+.rw-lever-grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--rw-line);
+}
+.rw-lever-grid.is-budget {
+  width: 2px;
+  margin-left: -1px;
+  background: var(--rw-good-mark);
+}
+.rw-lever-bar {
+  position: absolute;
+  height: 8px;
+  border-radius: 4px;
+}
+.rw-lever-bar.is-mtbf {
+  background: var(--rw-series-1);
+}
+.rw-lever-bar.is-mttr {
+  background: var(--rw-series-2);
+}
+.rw-lever-bar.is-both {
+  background: var(--rw-series-3);
+}
+.rw-lever-bar em,
+.rw-lever-track b em {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--rw-ink-2);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rw-lever-bar em {
+  right: calc(100% + 5px);
+}
+.rw-lever-track b {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--rw-ink);
+}
+.rw-lever-track b em {
+  left: 6px;
+  color: var(--rw-ink);
+}
+@media (max-width: 760px) {
+  .rw-lever-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 2px;
+    padding: 6px 0;
+  }
+  .rw-lever-row.is-axis > span:not(.rw-lever-track) {
+    display: none;
+  }
 }
 .rw-chart .rw-cross {
   pointer-events: none;
@@ -2665,4 +2793,340 @@ h2.rw-direction {
 }
 .rw-note b {
   color: var(--rw-ink);
+}
+
+/* ---------- 第 3 步：各措施值多少 ---------- */
+.rw-key.is-headroom {
+  background: #d5dae2;
+}
+.rw-benefit,
+.rw-path {
+  display: grid;
+}
+.rw-benefit-row {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1.15fr) minmax(170px, 1.35fr) minmax(160px, 2.2fr)
+    88px 88px;
+  align-items: center;
+  column-gap: 14px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rw-line);
+  font-size: 13.5px;
+}
+.rw-benefit-row:last-child,
+.rw-path-row:last-child {
+  border-bottom: 0;
+}
+.rw-benefit-row.is-head,
+.rw-path-row.is-head {
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--rw-line-strong);
+  color: var(--rw-ink-3);
+  font-size: 12px;
+}
+.rw-benefit-row .is-num,
+.rw-path-row .is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rw-benefit-row .is-strong,
+.rw-path-row .is-strong {
+  color: var(--rw-ink);
+  font-weight: 600;
+}
+.rw-benefit-row .is-bad {
+  color: var(--rw-bad);
+}
+.rw-benefit-name,
+.rw-path-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rw-benefit-name b,
+.rw-path-name b {
+  color: var(--rw-ink);
+  font-weight: 600;
+}
+.rw-benefit-name small,
+.rw-path-name small,
+.rw-benefit-param small {
+  color: var(--rw-ink-3);
+  font-size: 12px;
+}
+.rw-benefit-row.is-off .rw-benefit-name b {
+  font-weight: 500;
+}
+.rw-benefit-param {
+  color: var(--rw-ink-2);
+  font-size: 13px;
+}
+.rw-benefit-track {
+  position: relative;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--rw-subtle);
+  outline: none;
+}
+.rw-benefit-track:focus-visible,
+.rw-path-track:focus-visible {
+  box-shadow: 0 0 0 2px var(--rw-accent);
+}
+.rw-benefit-track i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 0 3px 3px 0;
+}
+.rw-benefit-track i.is-full {
+  background: #d5dae2;
+}
+.rw-benefit-track i.is-mtbf {
+  background: var(--rw-series-1);
+}
+.rw-benefit-track i.is-mttr {
+  background: var(--rw-series-2);
+}
+.rw-benefit-row.is-off .rw-benefit-track i.is-plan {
+  opacity: 0.55;
+}
+
+/* ---------- 第 3 步：组合收益瀑布 ---------- */
+.rw-path-row {
+  display: grid;
+  grid-template-columns:
+    44px minmax(200px, 1.5fr) minmax(200px, 2.4fr)
+    92px minmax(96px, 150px);
+  align-items: center;
+  column-gap: 14px;
+  border-bottom: 1px solid var(--rw-line);
+  font-size: 13.5px;
+}
+.rw-path-row > .is-num:first-child {
+  color: var(--rw-ink-3);
+}
+.rw-path-name {
+  padding: 7px 0;
+}
+.rw-path-name .rw-path-note {
+  margin-top: 2px;
+  color: var(--rw-ink-2);
+}
+.rw-path-row.is-after .rw-path-name b,
+.rw-path-row.is-rest .rw-path-name b {
+  font-weight: 500;
+}
+.rw-path-track {
+  position: relative;
+  align-self: stretch;
+  min-height: 38px;
+  outline: none;
+}
+.rw-path-track.is-axis {
+  min-height: 24px;
+}
+.rw-path-track.is-axis i {
+  position: absolute;
+  bottom: 6px;
+  transform: translateX(-50%);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rw-path-track.is-axis i:first-child {
+  transform: none;
+}
+.rw-path-track.is-axis i:nth-last-child(2) {
+  display: none;
+}
+.rw-path-track.is-axis i.is-target {
+  transform: translateX(-100%);
+  padding-right: 5px;
+  color: var(--rw-good);
+  font-weight: 600;
+}
+.rw-path-grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--rw-line);
+}
+.rw-path-grid.is-target {
+  width: 2px;
+  margin-left: -1px;
+  background: var(--rw-good-mark);
+}
+.rw-path-bar {
+  position: absolute;
+  top: 50%;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 3px;
+}
+.rw-path-bar.is-base {
+  background: var(--rw-neutral-mark);
+}
+.rw-path-bar.is-mtbf {
+  background: var(--rw-series-1);
+}
+.rw-path-bar.is-mttr {
+  background: var(--rw-series-2);
+}
+.rw-path-bar.is-rest {
+  background: repeating-linear-gradient(135deg, #98a2b3 0 4px, #d5dae2 4px 8px);
+}
+.rw-path-row.is-after .rw-path-bar {
+  opacity: 0.5;
+}
+.rw-path-explain {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rw-line);
+  max-width: 110ch;
+}
+
+/* ---------- 措施卡片：改进前后、逐模式修改、参数—收益曲线 ---------- */
+.rw-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 7px;
+  border: 1px solid var(--rw-line-strong);
+  border-radius: 999px;
+  color: var(--rw-ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.rw-measure.is-open {
+  grid-column: 1 / -1;
+}
+.rw-effect.is-head {
+  color: var(--rw-ink-3);
+  font-size: 12px;
+}
+.rw-effect.is-head .rw-effect-from {
+  color: var(--rw-ink-3);
+}
+.rw-effect {
+  flex-wrap: wrap;
+}
+.rw-effect-from {
+  min-width: 100px;
+}
+.rw-effect-from .rw-duration {
+  width: 150px;
+}
+.rw-effect-from .rw-link {
+  font-size: 12.5px;
+}
+.rw-effect-modes {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 4px 94px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--rw-subtle);
+  list-style: none;
+  font-size: 12.5px;
+}
+.rw-effect-modes li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(90px, auto);
+  align-items: center;
+  gap: 10px;
+}
+.rw-effect-modes li > span:first-child {
+  overflow: hidden;
+  color: var(--rw-ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rw-effect-hint {
+  color: var(--rw-ink-3);
+  font-size: 12px;
+}
+.rw-measure-detail label.rw-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: auto;
+}
+.rw-measure-detail label.rw-check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--rw-accent);
+}
+.rw-curve {
+  padding: 12px 14px;
+  border: 1px solid var(--rw-line);
+  border-radius: 10px;
+  background: var(--rw-surface);
+}
+.rw-curve h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.rw-curve .rw-chart {
+  max-width: 760px;
+}
+.rw-curve-try {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 13px;
+}
+.rw-measure-detail .rw-curve-try label {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 420px);
+  align-items: center;
+  gap: 8px;
+}
+.rw-measure-detail .rw-curve-try input[type="range"] {
+  width: 100%;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: var(--rw-accent);
+}
+.rw-curve-try .rw-link {
+  margin-left: 10px;
+}
+.rw-contrib-range {
+  grid-column: 1 / -1;
+  color: var(--rw-ink-3);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) {
+  .rw-benefit-row,
+  .rw-path-row {
+    grid-template-columns: minmax(0, 1fr) 88px 96px;
+    row-gap: 4px;
+  }
+  .rw-benefit-row.is-head,
+  .rw-path-row.is-head {
+    display: none;
+  }
+  .rw-benefit-name,
+  .rw-benefit-param,
+  .rw-benefit-track,
+  .rw-path-name,
+  .rw-path-track {
+    grid-column: 1 / -1;
+  }
+  .rw-path-row > .is-num:first-child {
+    display: none;
+  }
+  .rw-effect-modes {
+    margin-left: 0;
+  }
 }

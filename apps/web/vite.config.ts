@@ -19,5 +19,7 @@ export default defineConfig({
         `http://127.0.0.1:${process.env.PORT ?? 4178}`,
     },
   },
+  // 导出 PPT 时才按需加载；预先打包，避免开发服务器首次使用时重新优化依赖并刷新页面
+  optimizeDeps: { include: ["pptxgenjs"] },
   build: { outDir: resolve("dist/web"), emptyOutDir: true },
 });

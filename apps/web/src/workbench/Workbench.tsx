@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Database,
   FileDown,
+  Presentation,
   MoreHorizontal,
   ShieldCheck,
   Target,
@@ -37,7 +38,7 @@ import StepAssess from "./StepAssess";
 import StepDesign from "./StepDesign";
 import StepVerify from "./StepVerify";
 import Library from "./Library";
-import { downloadReport } from "./report";
+import { downloadDeck, downloadReport } from "./report";
 
 export type SavedVerification = VerificationResult & {
   id: string;
@@ -94,6 +95,7 @@ export default function Workbench({
     [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved"),
     [verifying, setVerifying] = useState(false),
     [menu, setMenu] = useState(false),
+    [exporting, setExporting] = useState(false),
     [library, setLibrary] = useState(false),
     [step, setStep] = useState(() => {
       const saved = Number(sessionStorage.getItem("remap.step." + task.id));
@@ -300,6 +302,27 @@ export default function Workbench({
           >
             <FileDown size={16} aria-hidden />
             导出报告
+          </button>
+          <button
+            className="rw-button"
+            disabled={exporting}
+            title="导出立项汇报 PPT：白底 16:9，图表可在 PowerPoint 里继续编辑"
+            onClick={async () => {
+              setExporting(true);
+              try {
+                await downloadDeck(
+                  task.name,
+                  model,
+                  analysis,
+                  stale ? null : verification,
+                );
+              } finally {
+                setExporting(false);
+              }
+            }}
+          >
+            <Presentation size={16} aria-hidden />
+            {exporting ? "正在生成…" : "导出 PPT"}
           </button>
           <div className="rw-menu">
             <button

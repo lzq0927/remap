@@ -9,25 +9,32 @@ import {
   TrendingUp,
 } from "lucide-react";
 import {
+  applyMeasures,
+  assess,
   auditLibraryMeasures,
   correctLibraryMeasures,
   createEvaluator,
   doseResponse,
+  effectSweep,
   evidenceStateNames,
   higherIsBetter,
   layerOf,
+  loadByStage,
   measureCategoryNames,
   measureLayerNames,
   measureParamNames,
   minimumDegrees,
   priorityPath,
+  readParam,
   shapley,
   solveEffect,
   type DoseResponse,
   type Measure,
   type MeasureCategory,
   type MeasureContribution,
+  type MeasureEffect,
   type MeasureLayer,
+  type MeasureParam,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
 import { usageText } from "./StepAssess";
@@ -42,6 +49,7 @@ import {
   formatParam,
   isRatio,
   targetText,
+  writeBase,
 } from "./helpers";
 import { hours, percent, points } from "./format";
 import {
@@ -132,6 +140,15 @@ export default function StepDesign() {
     // 早期措施库把阶段节省写成了整段恢复时间，需要显式修正
     legacyIssues = auditLibraryMeasures(model),
     [scalesOpen, setScalesOpen] = useState(false);
+  // 推荐的组合做完之后，剩余故障损失花在了哪个环节：不达标时指出该从哪一级下手
+  const residual = useMemo(() => {
+    if (recommendation.kind !== "short") return [];
+    const ids = new Set([
+      ...model.measures.filter((m) => m.enabled).map((m) => m.id),
+      ...recommendation.add,
+    ]);
+    return loadByStage(assess(model, applyMeasures(model, ids))).slice(0, 2);
+  }, [model, recommendation]);
   const enable = (ids: string[]) =>
     update((d) => {
       for (const measure of d.measures)
@@ -232,8 +249,29 @@ export default function StepDesign() {
               </strong>
               <p>
                 仅按系统均值估算，还需把所有故障率或所有单次损失再降低{" "}
-                <b>{percent(recommendation.furtherReduction, 0)}</b>
-                。可以加大现有措施的参数，或新增措施。
+                <b>{percent(recommendation.furtherReduction, 0)}</b>。
+                {residual.length > 0 && (
+                  <>
+                    这组措施做完之后，剩余故障损失主要花在{" "}
+                    <b>
+                      {residual
+                        .map((s) => `${s.name}（${percent(s.share, 0)}）`)
+                        .join("和")}
+                    </b>
+                    ，要达标得从这{residual.length > 1 ? "两" : "一"}
+                    级的参数下手。
+                  </>
+                )}
+                {recommendation.held.length > 0 && (
+                  <>
+                    {" "}
+                    标为“暂不优化”的{" "}
+                    <b>{recommendation.held.map(nameOf).join("、")}</b> 没有计入
+                    {recommendation.heldGain > 0.0005
+                      ? `，按它现在的参数也做，可再提升 ${points(recommendation.heldGain)}。`
+                      : "；展开它可以看参数做到多少值多少。"}
+                  </>
+                )}
               </p>
             </div>
             {recommendation.add.length > 0 && (
@@ -295,8 +333,9 @@ export default function StepDesign() {
                   const group = items.filter((m) => m.category === category),
                     on = group.filter((m) => m.enabled),
                     off = group
-                      .filter((m) => !m.enabled)
+                      .filter((m) => !m.enabled && !m.hold)
                       .sort((a, b) => gainOf(b).marginal - gainOf(a).marginal),
+                    held = group.filter((m) => !m.enabled && m.hold),
                     card = (measure: Measure) => (
                       <MeasureCard
                         key={measure.id}
@@ -321,6 +360,15 @@ export default function StepDesign() {
                       )}
                       {on.length > 0 && (
                         <div className="rw-measures">{on.map(card)}</div>
+                      )}
+                      {held.length > 0 && (
+                        <>
+                          <h4 className="rw-candidate-head">
+                            暂不优化 {held.length} 项
+                            <small>保持现状，不进入推荐方案和组合排序</small>
+                          </h4>
+                          <div className="rw-candidates">{held.map(card)}</div>
+                        </>
                       )}
                       <Candidates
                         items={off}
@@ -351,11 +399,12 @@ export default function StepDesign() {
               ，与措施的排列顺序无关。
               {!contributions.exact && "（措施较多，采用固定种子的抽样估计。）"}
             </p>
+            <OrderNote />
           </section>
         </aside>
       </div>
 
-      <DoseSection />
+      <BenefitSection />
       <PathSection />
       <FocusSection />
 
@@ -499,23 +548,24 @@ export default function StepDesign() {
             </li>
             <li>
               <p>
-                <strong>改进程度与收益。</strong>
-                把一项措施从不做（0）逐步推到主要参数的理想极限（100%：故障率降到
+                <strong>各措施值多少、参数做到多少值多少。</strong>
+                一项措施的收益 =
+                有它和没有它时系统可用度之差，其余措施保持当前的启用状态。“做到极限”是把它的主要参数推到理想极限（故障率降到
                 0、成功率或检出率到 100%、时间缩到
-                0），其余措施保持不变，逐点重新评估系统可用度。计划点之前，这项措施的全部参数按同一比例打折；计划点之后，主要参数继续加码。曲线的高度回答“这项措施最多值多少”，计划点的位置回答“现在的计划拿到了其中多少”。
+                0）时的收益，回答“这项措施最多值多少”；计划收益占其中多少，就是现在的计划拿到了几成。展开任一措施，可以逐个参数看“取值—系统可用度”曲线：这一个参数从不改一路扫到理想极限，其余参数和其余措施都不动。
               </p>
             </li>
             <li>
               <p>
                 <strong>组合收益。</strong>
-                措施之间有重叠：故障率降低后，再缩短恢复时间能省下的损失也变少；两项都缩短同一段时间时只有更好的一项起作用。所以单项收益不能直接相加。组合路径从现状出发，每一步加入“在已选措施基础上提升最大”的一项，排在前面的就是扣除重叠之后最值得先做的。
+                措施之间有重叠：故障率降低后，再缩短恢复时间能省下的损失也变少；两项都缩短同一段时间时只有更好的一项起作用。所以单项收益不能直接相加。组合路径从现状出发，每一步加入“在已选措施基础上提升最大”的一项，排在前面的就是扣除重叠之后最值得先做的。某一步的收益和“单独做”差得明显时，会指出是前面哪一项造成的：把那一项从前序措施里拿掉，看这一步的收益往回变多少，变得最多的就是它。标为“暂不优化”的措施不参与排序和推荐。
               </p>
             </li>
             <li>
               <p>
                 <strong>贡献为什么用 Shapley 值。</strong>
                 逐个“去掉看看”得到的收益加起来不等于总提升。Shapley
-                值对所有启用顺序求平均边际收益，满足“相加等于总提升”“作用相同的措施贡献相同”“没有作用的措施贡献为零”和可加性这四项公理。
+                值对所有启用顺序求平均边际收益，满足“相加等于总提升”“作用相同的措施贡献相同”“没有作用的措施贡献为零”和可加性这四项公理。所以同一项措施会有三个不同的数：单独做（只上它一项）、组合路径里的增量（前面的都做了再加它）、分摊值（总提升里算它多少，介于前两者之间）。三个数都对，回答的问题不同。
               </p>
               <Formula>
                 φᵢ = Σ_S |S|!·(n−|S|−1)! / n! · [ A(S ∪ {"{i}"}) − A(S) ]
@@ -550,303 +600,492 @@ export default function StepDesign() {
   );
 }
 
-/** 改进程度—收益：每项措施从现状做到理想极限，系统可用度能提升多少。 */
-function DoseSection() {
-  const { model } = useWorkbench();
-  const curves = useMemo(
+/** 主要参数的计划写法：按比例降低写“降低 x%”，设为新值写“现值 → 计划值”。 */
+function planText(measure: Measure, start: number) {
+  const effect = measure.effects[0],
+    name = measureParamNames[effect.param];
+  if (effect.op === "reduce" || effect.op === "subtract")
+    return name + " " + valueText(measure, effect.value);
+  const text = (value: number) =>
+    isRatio(effect.param)
+      ? Number((value * 100).toFixed(2)) + "%"
+      : formatParam(effect.param, value);
+  return Math.abs(effect.value - start) < 1e-12
+    ? `${name} 保持 ${text(start)}`
+    : `${name} ${text(start)} → ${text(effect.value)}`;
+}
+
+/** 各措施值多少：按计划做到的收益，以及主要参数做到理想极限的收益。 */
+function BenefitSection() {
+  const { model } = useWorkbench(),
+    tooltip = useTooltip(),
+    [all, setAll] = useState(false);
+  const rows = useMemo(
     () =>
       model.measures
         .map((measure) => doseResponse(model, measure.id))
         .filter((curve): curve is DoseResponse => curve !== null)
+        .map((curve) => ({
+          curve,
+          measure: model.measures.find((m) => m.id === curve.id)!,
+          full: curve.points[curve.points.length - 1].gain,
+        }))
         .sort(
           (a, b) =>
-            b.points[b.points.length - 1].gain -
-            a.points[a.points.length - 1].gain,
+            Math.max(b.full, b.curve.plannedGain) -
+            Math.max(a.full, a.curve.plannedGain),
         ),
     [model],
   );
-  const top = curves.slice(0, seriesColors.length),
-    measureOf = (id: string) => model.measures.find((m) => m.id === id)!,
-    pp = (value: number) => (value * 100).toFixed(1) + " pp";
-  if (!top.length) return null;
-  const rest = curves[top.length];
+  if (!rows.length) return null;
+  const limit = 10,
+    shown = all ? rows : rows.slice(0, limit),
+    max = Math.max(
+      ...rows.map((r) => Math.max(r.full, r.curve.plannedGain)),
+      1e-9,
+    ),
+    width = (value: number) => (Math.max(0, value) / max) * 100 + "%",
+    enabled = rows.filter((r) => r.measure.enabled),
+    best = [...enabled].sort(
+      (a, b) => b.curve.plannedGain - a.curve.plannedGain,
+    )[0],
+    // 计划之外还能多拿最多的一项：加码的首选
+    headroom = [...rows].sort(
+      (a, b) => b.full - b.curve.plannedGain - (a.full - a.curve.plannedGain),
+    )[0];
   return (
-    <section className="rw-card" aria-label="改进程度与收益">
+    <section className="rw-card" aria-label="各措施值多少">
       <div className="rw-card-head">
-        <h2>改进程度与收益：每项措施做到什么程度值多少</h2>
-        <span className="rw-muted">
-          极限收益最大的 {top.length} 项，其余措施保持当前启用状态
+        <h2>各措施值多少：按计划做到的收益，和做到极限的收益</h2>
+        <span className="rw-legend">
+          <span className="rw-key is-mtbf" />
+          组件级
+          <span className="rw-key is-mttr" />
+          系统级
+          <span className="rw-key is-headroom" />
+          做到极限还能多拿
         </span>
       </div>
-      <div className="rw-grid is-chart">
-        <LineChart
-          label="各措施的改进程度与系统可用度提升"
-          xLabel="改进程度（0 = 不做，100% = 主要参数做到理想极限）"
-          yLabel="系统可用度提升（百分点）"
-          xTicks={[0, 0.2, 0.4, 0.6, 0.8, 1]}
-          formatX={(v) => percent(v, 0)}
-          formatY={pp}
-          yMin={0}
-          height={340}
-          series={top.map((curve, index) => {
-            const measure = measureOf(curve.id);
-            return {
-              name: curve.name,
-              color: seriesColors[index],
-              points: curve.points.map((p) => ({ x: p.degree, y: p.gain })),
-              marks: [{ x: curve.planned, y: curve.plannedGain }],
-              detail: (x: number) => {
-                const point = curve.points.find((p) => p.degree === x);
-                return point ? valueText(measure, point.value) : "";
-              },
-            };
-          })}
-        />
-        <div className="rw-explain is-inline">
-          <p>
-            <strong>怎么读这张图。</strong>
-            横轴是每项措施的“改进程度”：0 是不做，100%
-            是主要参数做到理想极限（故障率降到 0、成功率或检出率到
-            100%、时间缩到
-            0）。纵轴是这项措施单独变化时系统可用度提升多少个百分点。
-          </p>
-          <p>
-            线越高，这项措施的上限越大；圆点是当前计划的位置，圆点右边的那段就是把计划再加码还能拿到的收益。线向上弯，说明越做到后面收益越大（剩下的损失越少，同样一段损失折算成的可用度越多）；线平缓的措施，再加码意义不大。
-          </p>
-        </div>
-      </div>
-      <div className="rw-table-wrap">
-        <table className="rw-table">
-          <thead>
-            <tr>
-              <th>措施</th>
-              <th>层级</th>
-              <th>主要参数</th>
-              <th className="is-num">现状</th>
-              <th className="is-num">计划</th>
-              <th className="is-num">计划的改进程度</th>
-              <th className="is-num">计划收益</th>
-              <th className="is-num">做到极限的收益</th>
-              <th className="is-num">计划已拿到</th>
-            </tr>
-          </thead>
-          <tbody>
-            {top.map((curve, index) => {
-              const measure = measureOf(curve.id),
-                effect = measure.effects[0],
-                full = curve.points[curve.points.length - 1].gain;
-              return (
-                <tr key={curve.id}>
-                  <td>
-                    <span className="rw-series-name">
-                      <i style={{ background: seriesColors[index] }} />
-                      {curve.name}
-                      {!measure.enabled && (
-                        <small className="rw-muted">候选</small>
-                      )}
-                    </span>
-                  </td>
-                  <td>
-                    <LayerChip category={measure.category} />
-                  </td>
-                  <td>{measureParamNames[effect.param]}</td>
-                  <td className="is-num">
-                    {effect.op === "reduce"
-                      ? "不降低"
-                      : effect.op === "subtract"
-                        ? "不减少"
-                        : formatParam(effect.param, curve.points[0].value)}
-                  </td>
-                  <td className="is-num is-strong">
-                    {valueText(measure, effect.value)}
-                  </td>
-                  <td className="is-num">{percent(curve.planned, 0)}</td>
-                  <td className="is-num is-strong">
-                    {points(curve.plannedGain)}
-                  </td>
-                  <td className="is-num">{points(full)}</td>
-                  <td className="is-num">
-                    {full > 1e-9 ? percent(curve.plannedGain / full, 0) : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="rw-hint">
-        收益是在“其余措施保持当前启用状态”下算的：已启用的措施是去掉它会损失多少，候选措施是加上它还能提升多少。主要参数是措施的第一项参数变化。
-        {rest &&
-          `未列出的措施做到极限的收益都不超过 ${points(rest.points[rest.points.length - 1].gain)}。`}
+      <p className="rw-lead">
+        实心条是按计划参数做到的收益：有这项措施和没有它，系统可用度差多少。后面的浅色条是把主要参数做到理想极限还能多拿的部分。
+        {best && (
+          <>
+            {" "}
+            已启用的措施里“{best.measure.name}”最值钱，去掉它会损失{" "}
+            <b>{points(best.curve.plannedGain)}</b>。
+          </>
+        )}
+        {headroom && headroom.full - headroom.curve.plannedGain > 0.005 && (
+          <>
+            {" "}
+            加码空间最大的是“{
+              headroom.measure.name
+            }”，主要参数做到极限还能再拿{" "}
+            <b>{points(headroom.full - headroom.curve.plannedGain)}</b>。
+          </>
+        )}
       </p>
+      <div
+        className="rw-benefit"
+        role="table"
+        aria-label="各措施的计划收益与极限收益"
+      >
+        <div className="rw-benefit-row is-head" role="row">
+          <span role="columnheader">措施</span>
+          <span role="columnheader">主要参数：现状 → 计划</span>
+          <span role="columnheader">系统可用度提升</span>
+          <span role="columnheader" className="is-num">
+            计划
+          </span>
+          <span role="columnheader" className="is-num">
+            做到极限
+          </span>
+        </div>
+        {shown.map(({ curve, measure, full }) => {
+          const tone = layerTone(measure.category),
+            state = measure.enabled
+              ? "已启用"
+              : measure.hold
+                ? "暂不优化"
+                : "候选";
+          return (
+            <div
+              key={curve.id}
+              className={"rw-benefit-row" + (measure.enabled ? "" : " is-off")}
+              role="row"
+            >
+              <span role="rowheader" className="rw-benefit-name">
+                <b>{curve.name}</b>
+                <small>
+                  {layerOf(measure.category) === "component"
+                    ? "组件级"
+                    : "系统级 · " + measureCategoryNames[measure.category]}
+                  {" · "}
+                  {state}
+                </small>
+              </span>
+              <span role="cell" className="rw-benefit-param">
+                {planText(measure, curve.points[0].value)}
+                {measure.effects.length > 1 && (
+                  <small> 等 {measure.effects.length} 项</small>
+                )}
+              </span>
+              <span
+                role="cell"
+                className="rw-benefit-track"
+                tabIndex={0}
+                aria-label={`${curve.name}：计划 ${points(curve.plannedGain)}，做到极限 ${points(full)}`}
+                {...tooltip.bind(
+                  <>
+                    <strong>{points(curve.plannedGain)}</strong>
+                    <span>
+                      {curve.name} · 按计划（
+                      {measure.enabled ? "去掉它会损失" : "启用后可再提升"}）
+                    </span>
+                    <strong>{points(full)}</strong>
+                    <span>
+                      主要参数做到极限（
+                      {valueText(
+                        measure,
+                        curve.points[curve.points.length - 1].value,
+                      )}
+                      ）
+                    </span>
+                    <strong>
+                      {full > 1e-9 ? percent(curve.plannedGain / full, 0) : "—"}
+                    </strong>
+                    <span>计划已拿到极限收益的比例</span>
+                  </>,
+                )}
+              >
+                <i className="is-full" style={{ width: width(full) }} />
+                <i
+                  className={"is-plan is-" + tone}
+                  style={{ width: width(curve.plannedGain) }}
+                />
+              </span>
+              <span
+                role="cell"
+                className={
+                  "is-num is-strong" + (curve.plannedGain < 0 ? " is-bad" : "")
+                }
+              >
+                {points(curve.plannedGain)}
+              </span>
+              <span role="cell" className="is-num">
+                {points(full)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {rows.length > limit && (
+        <button className="rw-more" onClick={() => setAll(!all)}>
+          <ChevronDown size={15} aria-hidden />
+          {all
+            ? `只显示前 ${limit} 项`
+            : `显示全部 ${rows.length} 项（其余每项做到极限不超过 ${points(rows[limit].full)}）`}
+        </button>
+      )}
+      <p className="rw-hint">
+        按“计划收益和极限收益里较大的一个”从大到小排列。收益是在其余措施保持当前启用状态下算的：已启用的措施是去掉它会损失多少，候选和暂不优化的措施是加上它还能提升多少，所以各项不能直接相加（相加的结果见下面的组合收益）。“做到极限”只把主要参数（第一项）推到理想极限：故障率降到
+        0、成功率或检出率到 100%、时间缩到
+        0。想看某个参数取不同值各值多少，展开上面对应的措施卡片。
+      </p>
+      {tooltip.node}
     </section>
   );
 }
 
-/** 组合收益路径：扣除相互重叠后，按收益从大到小逐项叠加。 */
+/** 组合收益路径：扣除相互重叠后，按收益从大到小逐项叠加，画成瀑布。 */
 function PathSection() {
   const { model, analysis, update } = useWorkbench(),
+    tooltip = useTooltip(),
     [all, setAll] = useState(false);
   const path = useMemo(() => priorityPath(model), [model]);
   const target = model.scenario.target,
-    standalone = (id: string) =>
-      analysis.contributions.items.find((c) => c.id === id)?.standalone ?? 0,
     reached = path.reachedAt,
-    visible = all
-      ? path.steps
-      : path.steps.slice(0, Math.min(path.steps.length, (reached ?? 8) + 2)),
-    count = path.steps.length,
-    step = count > 16 ? 4 : count > 8 ? 2 : 1,
-    ticks = Array.from({ length: count + 1 }, (_, i) => i).filter(
-      (i) => i % step === 0,
-    ),
-    last = path.steps[count - 1];
+    count = path.steps.length;
   if (!count) return null;
+  const last = path.steps[count - 1],
+    // 主要步骤：达标之前的每一步，以及提升不小于 0.5 个百分点的步骤
+    major = path.steps.filter(
+      (step, index) =>
+        all || step.gain >= 0.005 || (reached !== null && index < reached),
+    ),
+    minor = path.steps.filter((step) => !major.includes(step)),
+    minorGain = minor.reduce((sum, step) => sum + step.gain, 0),
+    top = path.steps.slice(0, Math.min(3, count)),
+    topGain = top[top.length - 1].availability - path.base,
+    total = last.availability - path.base,
+    shares = new Map(
+      analysis.contributions.items.map((c) => [c.id, c] as const),
+    ),
+    // 先后顺序影响最大的一项，用来说明这里的增量为什么和“各措施的贡献”不同
+    example = [...path.steps]
+      .filter((s) => s.partner?.kind === "overlap" && s.enabled)
+      .sort((a, b) => b.standalone - b.gain - (a.standalone - a.gain))[0];
   const adopt = (n: number) =>
     update((d) => {
       const chosen = new Set(path.steps.slice(0, n).map((s) => s.id));
       for (const measure of d.measures)
         measure.enabled = chosen.has(measure.id);
     });
+  const ticks = [0, 0.2, 0.4, 0.6, 0.8, 1];
+  const track = (bars: ReactNode, props: object = {}) => (
+    <span
+      className="rw-path-track"
+      role="cell"
+      style={{ ["--rw-target" as string]: target * 100 + "%" }}
+      {...props}
+    >
+      {ticks.map((tick) => (
+        <i
+          key={tick}
+          className="rw-path-grid"
+          style={{ left: tick * 100 + "%" }}
+        />
+      ))}
+      <i
+        className="rw-path-grid is-target"
+        style={{ left: target * 100 + "%" }}
+      />
+      {bars}
+    </span>
+  );
   return (
     <section className="rw-card" aria-label="组合收益路径">
       <div className="rw-card-head">
-        <h2>组合收益：先做哪几项，做到第几项达标</h2>
+        <h2>组合收益：按什么顺序做，每加一项到多少</h2>
         {reached !== null && (
           <button className="rw-button" onClick={() => adopt(reached)}>
             只启用前 {reached} 项
           </button>
         )}
       </div>
-      <div className="rw-grid is-chart">
-        <LineChart
-          label="按优先顺序逐项叠加措施后的系统可用度"
-          xLabel="按优先顺序累计启用的措施数量"
-          yLabel="系统可用度"
-          xTicks={ticks}
-          formatX={(v) => (v === 0 ? "现状" : String(v))}
-          formatY={(v) => percent(v, 0)}
-          height={340}
-          horizontal={[
-            { y: target, label: "目标 " + percent(target), align: "start" },
-          ]}
-          vertical={
-            reached === null
-              ? undefined
-              : [{ x: reached, label: `第 ${reached} 项达标` }]
-          }
-          series={[
-            {
-              name: "累计可用度",
-              color: seriesColors[0],
-              points: [
-                { x: 0, y: path.base },
-                ...path.steps.map((s, i) => ({ x: i + 1, y: s.availability })),
-              ],
-              marks:
-                reached === null
-                  ? undefined
-                  : [{ x: reached, y: path.steps[reached - 1].availability }],
-              detail: (x: number) =>
-                x === 0
-                  ? "不做任何措施"
-                  : `加入 ${path.steps[x - 1].name}（${points(path.steps[x - 1].gain)}）`,
-            },
-          ]}
-        />
-        <div className="rw-explain is-inline">
-          <p>
-            <strong>怎么读这张图。</strong>
-            从现状出发，每一步都加入“在已选措施基础上提升最大”的那一项。曲线前段陡、后段平：前几项拿走了大部分收益，后面的措施与前面重叠，再加收益越来越小。
-          </p>
-          <p>
-            {reached === null ? (
-              <>
-                措施库里有提升的 {count} 项全部做完，可到{" "}
-                <b>{percent(last.availability)}</b>
-                ，仍低于目标，需要加码参数或新增措施。
-              </>
-            ) : (
-              <>
-                按这个顺序做到第 <b>{reached}</b> 项即可达标（
-                {percent(path.steps[reached - 1].availability)}
-                ）；全部 {count} 项做完的上限是{" "}
-                <b>{percent(last.availability)}</b>。前 3 项合计{" "}
-                <b>
-                  {points(
-                    path.steps[Math.min(2, count - 1)].availability - path.base,
-                  )}
-                </b>
-                ，占达标所需提升的{" "}
-                {percent(
-                  (path.steps[Math.min(2, count - 1)].availability -
-                    path.base) /
-                    Math.max(target - path.base, 1e-9),
-                  0,
-                )}
-                。
-              </>
-            )}
-          </p>
-        </div>
-      </div>
-      <div className="rw-table-wrap">
-        <table className="rw-table">
-          <thead>
-            <tr>
-              <th className="is-num">顺序</th>
-              <th>措施</th>
-              <th>层级</th>
-              <th className="is-num">单独做</th>
-              <th className="is-num">排在这一步再提升</th>
-              <th className="is-num">累计可用度</th>
-              <th>当前设计</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((item, index) => (
-              <tr
-                key={item.id}
-                className={
-                  reached !== null && index >= reached ? "rw-row-muted" : ""
-                }
-              >
-                <td className="is-num">{index + 1}</td>
-                <td>{item.name}</td>
-                <td>
-                  <LayerChip category={item.category} />
-                </td>
-                <td className="is-num">{points(standalone(item.id))}</td>
-                <td className="is-num is-strong">{points(item.gain)}</td>
-                <td className="is-num">
-                  {reached === index + 1 && (
-                    <>
-                      <Status tone="good">达标</Status>{" "}
-                    </>
-                  )}
-                  {percent(item.availability)}
-                </td>
-                <td>
-                  {item.enabled ? (
-                    "已启用"
-                  ) : (
-                    <span className="rw-muted">未启用</span>
-                  )}
-                </td>
-              </tr>
+      <p className="rw-lead">
+        从现状 {percent(path.base)}{" "}
+        出发，每一步加入“在已选措施基础上提升最大”的一项。前 {top.length} 项（
+        {top.map((s) => s.name).join("、")}）合计 <b>{points(topGain)}</b>
+        ，占全部可得提升的 {percent(topGain / Math.max(total, 1e-9), 0)}
+        ——这几项是必须做的。
+        {reached === null ? (
+          <>
+            {" "}
+            有提升的 {count} 项全部做完到 <b>{percent(last.availability)}</b>
+            ，距目标 {percent(target)} 还差{" "}
+            <b>{((target - last.availability) * 100).toFixed(2)} pp</b>
+            ，需要加码参数或新增措施。
+          </>
+        ) : (
+          <>
+            {" "}
+            做到第 <b>{reached}</b> 项达标（
+            {percent(path.steps[reached - 1].availability)}），全部 {count}{" "}
+            项做完的上限是 <b>{percent(last.availability)}</b>。
+          </>
+        )}
+      </p>
+      <div
+        className="rw-path"
+        role="table"
+        aria-label="按优先顺序逐项叠加措施后的系统可用度"
+      >
+        <div className="rw-path-row is-head" role="row">
+          <span role="columnheader" className="is-num">
+            顺序
+          </span>
+          <span role="columnheader">加入的措施</span>
+          <span className="rw-path-track is-axis" role="columnheader">
+            {ticks.map((tick) => (
+              <i key={tick} style={{ left: tick * 100 + "%" }}>
+                {percent(tick, 0)}
+              </i>
             ))}
-          </tbody>
-        </table>
+            <i className="is-target" style={{ left: target * 100 + "%" }}>
+              目标 {percent(target, 0)}
+            </i>
+          </span>
+          <span role="columnheader" className="is-num">
+            这一步
+          </span>
+          <span role="columnheader" className="is-num">
+            累计可用度
+          </span>
+        </div>
+        <div className="rw-path-row is-base" role="row">
+          <span role="cell" className="is-num">
+            0
+          </span>
+          <span role="rowheader" className="rw-path-name">
+            <b>现状</b>
+            <small>不做任何措施</small>
+          </span>
+          {track(
+            <i
+              className="rw-path-bar is-base"
+              style={{ left: 0, width: path.base * 100 + "%" }}
+            />,
+          )}
+          <span role="cell" className="is-num" />
+          <span role="cell" className="is-num is-strong">
+            {percent(path.base)}
+          </span>
+        </div>
+        {major.map((step) => {
+          const index = path.steps.indexOf(step),
+            before = step.availability - step.gain,
+            after = reached !== null && index >= reached,
+            shifted =
+              step.partner && Math.abs(step.gain - step.standalone) >= 0.005;
+          return (
+            <div
+              key={step.id}
+              className={"rw-path-row" + (after ? " is-after" : "")}
+              role="row"
+            >
+              <span role="cell" className="is-num">
+                {index + 1}
+              </span>
+              <span role="rowheader" className="rw-path-name">
+                <b>{step.name}</b>
+                <small>
+                  {layerOf(step.category) === "component"
+                    ? "组件级"
+                    : "系统级 · " + measureCategoryNames[step.category]}
+                  {" · "}
+                  {step.enabled ? "已启用" : "候选，未启用"}
+                </small>
+                {shifted && (
+                  <small className="rw-path-note">
+                    {step.partner!.kind === "overlap"
+                      ? `单独做 ${points(step.standalone)}；排在“${step.partner!.name}”之后只剩 ${points(step.gain)}，两者省的是同一段损失`
+                      : `单独做 ${points(step.standalone)}；有“${step.partner!.name}”在前，升到 ${points(step.gain)}`}
+                  </small>
+                )}
+              </span>
+              {track(
+                <i
+                  className={"rw-path-bar is-" + layerTone(step.category)}
+                  style={{
+                    left: before * 100 + "%",
+                    width: `max(3px, ${step.gain * 100}%)`,
+                  }}
+                />,
+                {
+                  tabIndex: 0,
+                  "aria-label": `第 ${index + 1} 步加入 ${step.name}：${percent(before)} 到 ${percent(step.availability)}`,
+                  ...tooltip.bind(
+                    <>
+                      <strong>{points(step.gain)}</strong>
+                      <span>
+                        {step.name} · 排在第 {index + 1} 步的提升
+                      </span>
+                      <strong>{points(step.standalone)}</strong>
+                      <span>单独做（其余都不做）</span>
+                      {shares.get(step.id)?.enabled && (
+                        <>
+                          <strong>
+                            {points(shares.get(step.id)!.shapley)}
+                          </strong>
+                          <span>当前设计里的分摊贡献</span>
+                        </>
+                      )}
+                      <strong>
+                        {percent(before)} → {percent(step.availability)}
+                      </strong>
+                      <span>累计可用度</span>
+                    </>,
+                  ),
+                },
+              )}
+              <span role="cell" className="is-num is-strong">
+                {points(step.gain)}
+              </span>
+              <span role="cell" className="is-num">
+                {percent(step.availability)}
+                {reached === index + 1 && (
+                  <>
+                    {" "}
+                    <Status tone="good">达标</Status>
+                  </>
+                )}
+              </span>
+            </div>
+          );
+        })}
+        {minor.length > 0 && (
+          <div className="rw-path-row is-rest" role="row">
+            <span role="cell" className="is-num">
+              {count - minor.length + 1}–{count}
+            </span>
+            <span role="rowheader" className="rw-path-name">
+              <b>其余 {minor.length} 项</b>
+              <small>
+                每项不到 +0.50 pp：{minor.map((s) => s.name).join("、")}
+              </small>
+            </span>
+            {track(
+              <i
+                className="rw-path-bar is-rest"
+                style={{
+                  left: (last.availability - minorGain) * 100 + "%",
+                  width: `max(3px, ${minorGain * 100}%)`,
+                }}
+              />,
+            )}
+            <span role="cell" className="is-num is-strong">
+              {points(minorGain)}
+            </span>
+            <span role="cell" className="is-num">
+              {percent(last.availability)}
+            </span>
+          </div>
+        )}
       </div>
-      {path.steps.length > visible.length || all ? (
+      {(minor.length > 0 || all) && (
         <button className="rw-more" onClick={() => setAll(!all)}>
           <ChevronDown size={15} aria-hidden />
-          {all ? "收起" : `显示全部 ${count} 步`}
+          {all ? "收起小项" : `逐项显示全部 ${count} 步`}
         </button>
-      ) : null}
-      <p className="rw-hint">
-        “单独做”是只启用这一项时的提升，“排在这一步再提升”是在前面各项已启用的基础上再加它的提升。两者的差来自措施之间的相互作用：多数是重叠，排得越靠后，被前面的措施抢走的收益越多；少数反而更大，因为现状损失很大时，同样一段损失在其他损失被削掉之后折算成的可用度更多。这条路径是逐步选取的结果，用来排优先级；数量最少的达标组合见页面顶部的建议。
-      </p>
+      )}
+      {path.held.length > 0 && (
+        <p className="rw-hint">
+          标为“暂不优化”的{" "}
+          {path.held
+            .map((id) => model.measures.find((m) => m.id === id)?.name ?? id)
+            .join("、")}{" "}
+          不参与排序。
+        </p>
+      )}
+      <div className="rw-explain is-inline rw-path-explain">
+        <p>
+          <strong>为什么和右上“各措施的贡献”对不上。</strong>
+          两边回答的问题不同。这里是<b>按最优顺序逐项加入的增量</b>
+          ：前面的措施已经做了，再加这一项还值多少；右上是把已启用措施的总提升按
+          Shapley 值<b>分摊</b>
+          ，等于对所有先后顺序取平均。措施之间有重叠时，同一项排在前面值得多、排在后面值得少。
+          {example && (
+            <>
+              {" "}
+              例如“{example.name}”：单独做 <b>{points(example.standalone)}</b>
+              ；排在“{example.partner!.name}”之后只剩{" "}
+              <b>{points(example.gain)}</b>
+              {shares.get(example.id)?.enabled && (
+                <>
+                  ；右上的分摊值{" "}
+                  <b>{points(shares.get(example.id)!.shapley)}</b> 介于两者之间
+                </>
+              )}
+              。
+            </>
+          )}
+        </p>
+        <p>
+          排优先级看这里的顺序和增量；讲“这组措施里每一项功劳多大”看分摊值。这条路径是逐步选取的结果，数量最少的达标组合见页面顶部的建议。
+        </p>
+      </div>
+      {tooltip.node}
     </section>
   );
 }
@@ -1045,7 +1284,47 @@ function Candidates({
   );
 }
 
-/** 措施卡片：已启用时显示参数；候选措施默认只显示一行，展开后可调参数。 */
+/** 按参数类型选输入框：比例用百分数，故障率用 FIT，其余是时长。 */
+function ParamField({
+  param,
+  label,
+  value,
+  onCommit,
+}: {
+  param: MeasureParam;
+  label: string;
+  value: number;
+  onCommit: (value: number) => void;
+}) {
+  return isRatio(param) ? (
+    <NumberField
+      label={label}
+      value={value}
+      factor={100}
+      min={0}
+      max={param === "overhead" ? 0.5 : 1}
+      digits={3}
+      suffix="%"
+      width={100}
+      onCommit={onCommit}
+    />
+  ) : param === "fit" ? (
+    <NumberField
+      label={label}
+      value={value}
+      min={0}
+      max={1e7}
+      digits={2}
+      suffix="FIT"
+      width={112}
+      onCommit={onCommit}
+    />
+  ) : (
+    <DurationField label={label} value={value} onCommit={onCommit} />
+  );
+}
+
+/** 措施卡片：已启用时显示参数；候选措施默认只显示一行，展开后可调参数、看参数—收益曲线。 */
 function MeasureCard({
   measure,
   contribution,
@@ -1056,11 +1335,17 @@ function MeasureCard({
   onEdit: () => void;
 }) {
   const { model, analysis, update } = useWorkbench(),
-    [open, setOpen] = useState(false);
+    [open, setOpen] = useState(false),
+    // 改进前各模式取值不同时，逐个模式修改的那一项参数
+    [each, setEach] = useState<number | null>(null);
   const patch = (mutate: (m: Measure) => void) =>
     update((d) => mutate(d.measures.find((m) => m.id === measure.id)!));
   const gain = measure.enabled ? contribution.shapley : contribution.marginal,
-    showEffects = measure.enabled || open;
+    held = measure.hold && !measure.enabled,
+    showEffects = measure.enabled || open,
+    modes = model.modes.filter((mode) => measure.modeIds.includes(mode.id)),
+    moduleName = (id: string) =>
+      model.modules.find((m) => m.id === id)?.name ?? "";
 
   return (
     <article
@@ -1074,10 +1359,19 @@ function MeasureCard({
         <Toggle
           label={(measure.enabled ? "停用 " : "启用 ") + measure.name}
           checked={measure.enabled}
-          onChange={(enabled) => patch((m) => void (m.enabled = enabled))}
+          onChange={(enabled) =>
+            patch((m) => {
+              m.enabled = enabled;
+              // 启用即纳入设计，不再算“暂不优化”
+              if (enabled) m.hold = false;
+            })
+          }
         />
         <div className="rw-measure-title">
-          <strong>{measure.name}</strong>
+          <strong>
+            {measure.name}
+            {held && <span className="rw-tag">暂不优化</span>}
+          </strong>
           <small>
             作用于：{targetText(model, measure)}
             {measure.applicability < 1 &&
@@ -1086,13 +1380,19 @@ function MeasureCard({
         </div>
         <div className="rw-measure-gain">
           <strong className={gain < 0 ? "is-bad" : ""}>{points(gain)}</strong>
-          <small>{measure.enabled ? "贡献" : "启用后可再提升"}</small>
+          <small>
+            {measure.enabled
+              ? "贡献"
+              : held
+                ? "按现在的参数"
+                : "启用后可再提升"}
+          </small>
         </div>
         <button
           className="rw-icon-button"
           aria-expanded={open}
           aria-label={(open ? "收起 " : "展开 ") + measure.name}
-          title={open ? "收起" : "参数、依据与参数反推"}
+          title={open ? "收起" : "调参数、看参数—收益曲线"}
           onClick={() => setOpen(!open)}
         >
           <ChevronDown size={16} />
@@ -1100,78 +1400,138 @@ function MeasureCard({
       </header>
       {showEffects && (
         <div className="rw-effects">
+          <div className="rw-effect is-head" aria-hidden>
+            <span className="rw-effect-name">参数</span>
+            <span className="rw-effect-from">改进前</span>
+            <span className="rw-effect-arrow" />
+            <span>改进后</span>
+          </div>
           {measure.effects.map((effect, index) => {
             const base = baseValue(model, measure, effect.param),
               label = `${measure.name} · ${measureParamNames[effect.param]}`,
               commit = (value: number) =>
-                patch((m) => void (m.effects[index].value = value));
+                patch((m) => void (m.effects[index].value = value)),
+              same =
+                effect.op === "set" &&
+                base !== null &&
+                Math.abs(effect.value - base) < 1e-12;
             return (
-              <div key={index} className="rw-effect">
-                <span className="rw-effect-name">
-                  {measureParamNames[effect.param]}
-                </span>
-                <span className="rw-effect-from">
-                  {base === null
-                    ? "各模式不同"
-                    : formatParam(effect.param, base)}
-                </span>
-                <span className="rw-effect-arrow" aria-hidden>
-                  →
-                </span>
-                {effect.op !== "set" && (
-                  <span className="rw-effect-op">
-                    {effect.op === "add"
-                      ? "增加"
-                      : effect.op === "subtract"
-                        ? "从现状减少"
-                        : effect.param === "coverage"
-                          ? "漏检率降低"
-                          : "降低"}
+              <div key={index} className="rw-effect-block">
+                <div className="rw-effect">
+                  <span className="rw-effect-name">
+                    {measureParamNames[effect.param]}
                   </span>
-                )}
-                {effect.op === "reduce" || isRatio(effect.param) ? (
-                  <NumberField
-                    label={label + (effect.op === "reduce" ? "的降低比例" : "")}
-                    value={effect.value}
-                    factor={100}
-                    min={0}
-                    max={1}
-                    digits={3}
-                    suffix="%"
-                    width={100}
-                    onCommit={commit}
-                  />
-                ) : effect.param === "fit" ? (
-                  <NumberField
-                    label={label}
-                    value={effect.value}
-                    min={0}
-                    max={1e7}
-                    digits={2}
-                    suffix="FIT"
-                    width={112}
-                    onCommit={commit}
-                  />
-                ) : (
-                  <DurationField
-                    label={label}
-                    value={effect.value}
-                    onCommit={commit}
-                  />
-                )}
-                {base !== null &&
-                  (effect.op !== "set" || measure.applicability < 1) && (
-                    <span className="rw-effect-to">
-                      ={" "}
-                      {formatParam(
-                        effect.param,
-                        applyEffect(effect, base, measure.applicability),
-                      )}
+                  <span className="rw-effect-from">
+                    {base === null ? (
+                      <button
+                        className="rw-link"
+                        aria-expanded={each === index}
+                        onClick={() => setEach(each === index ? null : index)}
+                        title="各故障模式的现状取值不同，逐个修改"
+                      >
+                        各模式不同 · {each === index ? "收起" : "逐项修改"}
+                      </button>
+                    ) : (
+                      <ParamField
+                        param={effect.param}
+                        label={label + "（改进前）"}
+                        value={base}
+                        onCommit={(value) =>
+                          update((d) =>
+                            writeBase(d, measure.modeIds, effect.param, value),
+                          )
+                        }
+                      />
+                    )}
+                  </span>
+                  <span className="rw-effect-arrow" aria-hidden>
+                    →
+                  </span>
+                  {effect.op !== "set" && (
+                    <span className="rw-effect-op">
+                      {effect.op === "add"
+                        ? "增加"
+                        : effect.op === "subtract"
+                          ? "从现状减少"
+                          : effect.param === "coverage"
+                            ? "漏检率降低"
+                            : "降低"}
                     </span>
                   )}
+                  {effect.op === "reduce" ? (
+                    <NumberField
+                      label={label + "的降低比例"}
+                      value={effect.value}
+                      factor={100}
+                      min={0}
+                      max={1}
+                      digits={3}
+                      suffix="%"
+                      width={100}
+                      onCommit={commit}
+                    />
+                  ) : (
+                    <ParamField
+                      param={effect.param}
+                      label={label}
+                      value={effect.value}
+                      onCommit={commit}
+                    />
+                  )}
+                  {same ? (
+                    <span className="rw-effect-to">与改进前一致</span>
+                  ) : (
+                    base !== null &&
+                    (effect.op !== "set" || measure.applicability < 1) && (
+                      <span className="rw-effect-to">
+                        ={" "}
+                        {formatParam(
+                          effect.param,
+                          applyEffect(effect, base, measure.applicability),
+                        )}
+                      </span>
+                    )
+                  )}
+                </div>
+                {each === index && base === null && (
+                  <ul className="rw-effect-modes">
+                    {modes.map((mode) => (
+                      <li key={mode.id}>
+                        <span>
+                          {moduleName(mode.moduleId)} · {mode.name}
+                        </span>
+                        <ParamField
+                          param={effect.param}
+                          label={`${mode.name} · ${measureParamNames[effect.param]}（改进前）`}
+                          value={readParam(mode, effect.param)}
+                          onCommit={(value) =>
+                            update((d) =>
+                              writeBase(d, [mode.id], effect.param, value),
+                            )
+                          }
+                        />
+                        <span className="rw-effect-to">
+                          →{" "}
+                          {formatParam(
+                            effect.param,
+                            applyEffect(
+                              effect,
+                              readParam(mode, effect.param),
+                              measure.applicability,
+                            ),
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             );
           })}
+          <p className="rw-effect-hint">
+            “改进前”就是第 2
+            步的现状参数，在这里改会同步到现状评估；“改进后”是这项措施要做到的值。
+          </p>
         </div>
       )}
       {open && (
@@ -1190,9 +1550,22 @@ function MeasureCard({
               onCommit={(v) => patch((m) => void (m.applicability = v))}
             />
           </label>
+          {!measure.enabled && (
+            <label className="rw-check">
+              <input
+                type="checkbox"
+                checked={measure.hold}
+                onChange={(e) => patch((m) => void (m.hold = e.target.checked))}
+              />
+              <span>
+                暂不优化：保持现状，不进入推荐方案和组合排序（仍可在这里调参数看收益）
+              </span>
+            </label>
+          )}
           {measure.rationale && (
             <p className="rw-measure-why">{measure.rationale}</p>
           )}
+          <EffectCurve measure={measure} />
           <dl className="rw-measure-numbers">
             <div>
               <dt>单独启用</dt>
@@ -1202,6 +1575,12 @@ function MeasureCard({
               <dt>{measure.enabled ? "去掉后损失" : "加入后提升"}</dt>
               <dd>{points(contribution.marginal)}</dd>
             </div>
+            {measure.enabled && (
+              <div>
+                <dt>分摊贡献</dt>
+                <dd>{points(contribution.shapley)}</dd>
+              </div>
+            )}
             <div>
               <dt>证据</dt>
               <dd>{evidenceStateNames[measure.evidence]}</dd>
@@ -1241,6 +1620,200 @@ function MeasureCard({
         </div>
       )}
     </article>
+  );
+}
+
+/** 一个参数取值的写法：按比例降低写百分数，其余按参数类型。 */
+const effectValueText = (effect: MeasureEffect, value: number) =>
+  effect.op === "reduce"
+    ? percent(value, 0)
+    : isRatio(effect.param)
+      ? Number((value * 100).toFixed(1)) + "%"
+      : formatParam(effect.param, value);
+
+/**
+ * 参数—收益曲线：措施的某一个参数从“不改”一路扫到理想极限，系统可用度怎么变。
+ * 拖动滑块可以试算任意取值，满意后再采用。
+ */
+function EffectCurve({ measure }: { measure: Measure }) {
+  const { model, update } = useWorkbench(),
+    [picked, setPicked] = useState(0),
+    [trial, setTrial] = useState<number | null>(null);
+  const index = Math.min(picked, measure.effects.length - 1),
+    effect = measure.effects[index],
+    steps = 24;
+  const sweep = useMemo(
+    () => effectSweep(model, measure.id, index, steps),
+    [model, measure.id, index],
+  );
+  const tabs = measure.effects.length > 1 && (
+    <div className="rw-tabs" role="tablist" aria-label="选择参数">
+      {measure.effects.map((e, i) => (
+        <button
+          key={i}
+          role="tab"
+          aria-selected={i === index}
+          className={i === index ? "is-active" : ""}
+          onClick={() => {
+            setPicked(i);
+            setTrial(null);
+          }}
+        >
+          {measureParamNames[e.param]}
+        </button>
+      ))}
+    </div>
+  );
+  if (!sweep)
+    return (
+      <div className="rw-curve">
+        <div className="rw-card-head">
+          <h4>参数取多少值多少</h4>
+          {tabs}
+        </div>
+        <p className="rw-muted">
+          这个参数的现状已经在理想极限，没有可调的范围。
+        </p>
+      </div>
+    );
+  const { start, limit } = sweep,
+    span = limit - start,
+    inside = (value: number) =>
+      (value - start) / span >= -1e-9 && (value - start) / span <= 1 + 1e-9,
+    // 两个扫描点之间线性插值，拖动时不必重新评估
+    at = (value: number) => {
+      const position = Math.min(
+          steps,
+          Math.max(0, ((value - start) / span) * steps),
+        ),
+        low = Math.min(steps - 1, Math.floor(position)),
+        share = position - low;
+      return (
+        sweep.points[low].availability * (1 - share) +
+        sweep.points[low + 1].availability * share
+      );
+    },
+    value = trial ?? sweep.planned,
+    current = trial === null ? sweep.plannedAvailability : at(trial),
+    target = model.scenario.target,
+    name = measureParamNames[effect.param],
+    text = (v: number) => effectValueText(effect, v),
+    unit =
+      effect.op === "reduce"
+        ? "降低比例"
+        : effect.op === "subtract"
+          ? "减少量"
+          : effect.op === "add"
+            ? "增加量"
+            : "取值",
+    samePlan = Math.abs(sweep.planned - start) < Math.abs(span) * 1e-6,
+    best = sweep.points[steps].availability;
+  return (
+    <div className="rw-curve">
+      <div className="rw-card-head">
+        <h4>参数取多少值多少</h4>
+        {tabs}
+      </div>
+      <LineChart
+        label={`${measure.name}：${name}取不同值时的系统可用度`}
+        xLabel={`${name}的${unit}（其余参数和其余措施不变）`}
+        yLabel="系统可用度"
+        xTicks={[0, 0.25, 0.5, 0.75, 1].map((t) => start + t * span)}
+        formatX={text}
+        formatY={(v) => percent(v, 1)}
+        height={250}
+        horizontal={[
+          {
+            y: target,
+            label: "目标 " + percent(target),
+            // 目标标注放在“改进前”标注的另一侧，避免重叠
+            align: start < limit ? "end" : "start",
+          },
+        ]}
+        vertical={[
+          ...(effect.op === "set" && !samePlan
+            ? [{ x: start, label: "改进前" }]
+            : []),
+          ...(inside(sweep.planned)
+            ? [{ x: sweep.planned, label: samePlan ? "改进前 = 计划" : "计划" }]
+            : []),
+          ...(trial !== null ? [{ x: trial, label: "试算" }] : []),
+        ]}
+        series={[
+          {
+            name: "系统可用度",
+            color:
+              seriesColors[layerOf(measure.category) === "component" ? 0 : 1],
+            points: sweep.points.map((p) => ({
+              x: p.value,
+              y: p.availability,
+            })),
+            marks: inside(sweep.planned)
+              ? [{ x: sweep.planned, y: sweep.plannedAvailability }]
+              : undefined,
+            detail: (x: number) => `${name} ${text(x)}`,
+          },
+        ]}
+      />
+      <div className="rw-curve-try">
+        <label>
+          <span>拖动试算</span>
+          <input
+            type="range"
+            min={0}
+            max={200}
+            value={Math.round(
+              Math.min(1, Math.max(0, (value - start) / span)) * 200,
+            )}
+            aria-label={`${measure.name} · ${name}试算取值`}
+            aria-valuetext={text(value)}
+            onChange={(e) =>
+              setTrial(start + (Number(e.target.value) / 200) * span)
+            }
+          />
+        </label>
+        <p>
+          {name}
+          {unit === "取值" ? "取" : unit} <b>{text(value)}</b> 时，系统可用度{" "}
+          <b>{percent(current)}</b>
+          {trial !== null && (
+            <>，比计划 {points(current - sweep.plannedAvailability)}</>
+          )}
+          ，比不做这项措施 {points(current - sweep.without)}
+          {current >= target ? "，已达到目标" : ""}。
+          {trial !== null && (
+            <>
+              <button
+                className="rw-link"
+                onClick={() => {
+                  update((d) => {
+                    d.measures.find((m) => m.id === measure.id)!.effects[
+                      index
+                    ].value = trial;
+                  });
+                  setTrial(null);
+                }}
+              >
+                采用此值
+              </button>
+              <button className="rw-link" onClick={() => setTrial(null)}>
+                回到计划
+              </button>
+            </>
+          )}
+        </p>
+      </div>
+      <p className="rw-hint">
+        曲线是把这一个参数从
+        {effect.op === "set" ? "改进前的现值" : " 0（不改）"}
+        一路推到理想极限（{text(limit)}
+        ），其余参数停在计划值、其余措施保持当前启用状态。做到极限是{" "}
+        {percent(best)}
+        {best < target ? "，单靠这一个参数到不了目标" : ""}
+        。曲线越陡，这个参数越值得加码。
+        {!measure.enabled && "这项措施现在没有启用，曲线按“启用它”来算。"}
+      </p>
+    </div>
   );
 }
 
@@ -1349,11 +1922,37 @@ function ContributionChart({ items }: { items: MeasureContribution[] }) {
                   }}
                 />
               </span>
+              <small className="rw-contrib-range">
+                单独做 {points(item.standalone)} · 最后加{" "}
+                {points(item.marginal)}
+              </small>
             </li>
           );
         })}
       </ul>
       {tooltip.node}
     </div>
+  );
+}
+
+/** 说明分摊值和“单独做”“最后加”的关系，用先后顺序影响最大的一项举例。 */
+function OrderNote() {
+  const { analysis } = useWorkbench(),
+    items = analysis.contributions.items.filter((c) => c.enabled),
+    example = [...items].sort(
+      (a, b) =>
+        Math.abs(b.standalone - b.marginal) -
+        Math.abs(a.standalone - a.marginal),
+    )[0];
+  if (!example || Math.abs(example.standalone - example.marginal) < 0.005)
+    return null;
+  return (
+    <p className="rw-hint">
+      每项下面的两个数是它的收益范围：<b>单独做</b>是只上这一项，<b>最后加</b>
+      是其余都已启用后再加它。两者差得多，说明它和别的措施省的是同一段损失，先做后做差别大。例如“
+      {example.name}”单独做 {points(example.standalone)}、最后加{" "}
+      {points(example.marginal)}，分摊值 {points(example.shapley)}{" "}
+      介于两者之间。下面“组合收益”按最优顺序逐项加入，那里的增量因此和分摊值不同。
+    </p>
   );
 }

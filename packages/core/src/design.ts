@@ -13,6 +13,8 @@ import { goalEvaluator, targetAtScale } from "./requirements";
 
 const enabledIds = (model: CoreModel) =>
   model.measures.filter((m) => m.enabled).map((m) => m.id);
+/** 标了“暂不优化”且没有启用的措施：不进入推荐、组合路径和潜力估算。 */
+export const isHeld = (measure: Measure) => measure.hold && !measure.enabled;
 
 /** Shapley 精确枚举的上限：2^14 个子集，每个只需一次解析评估。 */
 export const exactSubsetLimit = 14;
@@ -146,6 +148,10 @@ export interface Recommendation {
   removable: string[];
   /** 推荐的补充措施是否经穷举确认为数量最少；否则为逐步选取的结果。 */
   minimal: boolean;
+  /** 标了“暂不优化”、没有参与搜索的措施。 */
+  held: string[];
+  /** 在上面这组结果之上，把暂不优化的措施也都做了还能再提升多少。 */
+  heldGain: number;
 }
 
 /**
@@ -159,9 +165,17 @@ export function recommend(model: CoreModel): Recommendation {
     score = goalEvaluator(model),
     active = new Set(enabledIds(model)),
     current = availabilityOf(active),
-    all = new Set(model.measures.map((m) => m.id)),
+    held = model.measures.filter(isHeld).map((m) => m.id),
+    all = new Set(model.measures.filter((m) => !isHeld(m)).map((m) => m.id)),
     ceiling = availabilityOf(all),
-    candidates = model.measures.filter((m) => !m.enabled);
+    candidates = model.measures.filter((m) => !m.enabled && !m.hold),
+    // 暂不优化的措施如果也做，在某一组措施之上还能再提升多少
+    heldGainOver = (ids: Iterable<string>) => {
+      const set = new Set(ids);
+      return held.length
+        ? availabilityOf(new Set([...set, ...held])) - availabilityOf(set)
+        : 0;
+    };
   const removable =
     score(active) >= 1
       ? model.measures
@@ -183,6 +197,8 @@ export function recommend(model: CoreModel): Recommendation {
       furtherReduction: 0,
       removable,
       minimal: true,
+      held,
+      heldGain: heldGainOver(active),
     };
   const withAdded = (picked: Measure[]) =>
     availabilityOf(new Set([...active, ...picked.map((m) => m.id)]));
@@ -260,6 +276,8 @@ export function recommend(model: CoreModel): Recommendation {
       furtherReduction: 0,
       removable: [],
       minimal,
+      held,
+      heldGain: heldGainOver([...active, ...best.ids]),
     };
   const reachIds = new Set([...active, ...reach.map((m) => m.id)]),
     full = assess(model, applyMeasures(model, reachIds)).system,
@@ -274,6 +292,8 @@ export function recommend(model: CoreModel): Recommendation {
       full.load > 0 ? Math.min(1, Math.max(0, 1 - allowed / full.load)) : 0,
     removable: [],
     minimal: false,
+    held,
+    heldGain: heldGainOver(reachIds),
   };
 }
 
@@ -446,30 +466,135 @@ export function doseResponse(
   };
 }
 
+export interface EffectSweep {
+  param: Measure["effects"][number]["param"];
+  op: Measure["effects"][number]["op"];
+  /** 扫描起点（不改这个参数时的取值）与理想极限。 */
+  start: number;
+  limit: number;
+  /** 计划取值，以及计划取值下的系统可用度。 */
+  planned: number;
+  plannedAvailability: number;
+  /** 不做这项措施时的系统可用度。 */
+  without: number;
+  points: Array<{ value: number; availability: number }>;
+}
+/**
+ * 单个参数的取值—收益曲线：措施的其余参数停在计划值、其余措施保持当前启用状态，
+ * 把这一个参数从“不改”一路推到理想极限，逐点给出系统可用度。
+ * “增加”类的代价项没有极限，扫到计划值的两倍。
+ */
+export function effectSweep(
+  model: CoreModel,
+  measureId: string,
+  effectIndex = 0,
+  steps = 20,
+): EffectSweep | null {
+  const measure = model.measures.find((m) => m.id === measureId),
+    effect = measure?.effects[effectIndex];
+  if (!measure || !effect) return null;
+  const { param, op } = effect,
+    values =
+      param === "overhead"
+        ? [model.scenario.overhead]
+        : model.modes
+            .filter((mode) => measure.modeIds.includes(mode.id))
+            .map((mode) => readParam(mode, param)),
+    start =
+      op !== "set" || !values.length
+        ? op === "set"
+          ? effect.value
+          : 0
+        : higherIsBetter(param)
+          ? Math.min(...values)
+          : Math.max(...values),
+    limit =
+      op === "add"
+        ? Math.max(effect.value * 2, 1e-6)
+        : op === "subtract"
+          ? largestBase(model, measure, param)
+          : op === "reduce" || higherIsBetter(param)
+            ? 1
+            : 0;
+  if (Math.abs(limit - start) < 1e-15) return null;
+  const others = model.measures
+      .filter((m) => m.enabled && m.id !== measureId)
+      .map((m) => m.id),
+    active = new Set([...others, measureId]),
+    at = (value: number) =>
+      createEvaluator({
+        ...model,
+        measures: model.measures.map((m) =>
+          m.id === measureId
+            ? {
+                ...m,
+                effects: m.effects.map((e, i) =>
+                  i === effectIndex ? { ...e, value } : e,
+                ),
+              }
+            : m,
+        ),
+      })(active);
+  return {
+    param,
+    op,
+    start,
+    limit,
+    planned: effect.value,
+    plannedAvailability: at(effect.value),
+    without: createEvaluator(model)(new Set(others)),
+    points: Array.from({ length: steps + 1 }, (_, i) => {
+      const value = start + (i / steps) * (limit - start);
+      return { value, availability: at(value) };
+    }),
+  };
+}
+
 export interface PathStep {
   id: string;
   name: string;
   category: MeasureCategory;
   /** 加入这一项带来的提升。 */
   gain: number;
+  /** 只做这一项（其余都不做）时的提升。 */
+  standalone: number;
   /** 加入后的系统可用度。 */
   availability: number;
   /** 当前设计里是否已启用。 */
   enabled: boolean;
+  /**
+   * 与这一步的收益关系最大的前序措施。
+   * overlap：有它在，这一步的收益变小（两者省的是同一段损失）；
+   * boost：有它在，这一步的收益变大（它让更多故障走到这一步改进的环节，或削掉了别的损失）。
+   * gainWithout 是把它从前序措施里拿掉后，这一步能带来的提升。
+   */
+  partner: {
+    id: string;
+    name: string;
+    kind: "overlap" | "boost";
+    gainWithout: number;
+  } | null;
 }
 /**
  * 组合收益路径：从现状出发，每一步加入“在已选措施基础上提升最大”的那一项。
  * 排在前面的就是考虑了相互重叠之后最值得先做的措施；没有提升的不再加入。
+ * 标了“暂不优化”的措施不参与排序。
  */
-export function priorityPath(model: CoreModel, limit = 30) {
+export function priorityPath(
+  model: CoreModel,
+  limit = 30,
+  /** 只在这些措施里排序（如只看已启用的措施）；不给则用措施库里全部参与设计的措施。 */
+  only?: ReadonlySet<string>,
+) {
   const evaluate = createEvaluator(model),
     chosen = new Set<string>(),
     base = evaluate(chosen),
-    steps: PathStep[] = [];
+    steps: PathStep[] = [],
+    pool = model.measures.filter((m) => (only ? only.has(m.id) : !isHeld(m)));
   let current = base;
   while (steps.length < limit) {
     let pick: { measure: Measure; value: number } | null = null;
-    for (const measure of model.measures) {
+    for (const measure of pool) {
       if (chosen.has(measure.id)) continue;
       chosen.add(measure.id);
       const value = evaluate(chosen);
@@ -477,14 +602,46 @@ export function priorityPath(model: CoreModel, limit = 30) {
       if (!pick || value > pick.value) pick = { measure, value };
     }
     if (!pick || pick.value <= current + 1e-9) break;
+    const gain = pick.value - current,
+      standalone = evaluate(new Set([pick.measure.id])) - base;
+    // 单独做与排在这一步的收益差得明显时，找出造成差别最大的那项前序措施
+    let partner: PathStep["partner"] = null;
+    const shift = gain - standalone;
+    if (Math.abs(shift) > Math.max(0.001, 0.1 * Math.abs(standalone))) {
+      for (const earlier of steps) {
+        const rest = new Set(chosen);
+        rest.delete(earlier.id);
+        const before = evaluate(rest);
+        rest.add(pick.measure.id);
+        const gainWithout = evaluate(rest) - before,
+          // 拿掉它之后收益往“单独做”的方向回去多少
+          explained = shift < 0 ? gainWithout - gain : gain - gainWithout;
+        if (
+          explained > 1e-9 &&
+          (!partner ||
+            explained >
+              (shift < 0
+                ? partner.gainWithout - gain
+                : gain - partner.gainWithout))
+        )
+          partner = {
+            id: earlier.id,
+            name: earlier.name,
+            kind: shift < 0 ? "overlap" : "boost",
+            gainWithout,
+          };
+      }
+    }
     chosen.add(pick.measure.id);
     steps.push({
       id: pick.measure.id,
       name: pick.measure.name,
       category: pick.measure.category,
-      gain: pick.value - current,
+      gain,
+      standalone,
       availability: pick.value,
       enabled: pick.measure.enabled,
+      partner,
     });
     current = pick.value;
   }
@@ -495,7 +652,12 @@ export function priorityPath(model: CoreModel, limit = 30) {
       picked.add(step.id);
       return score(picked) >= 1;
     });
-  return { base, steps, reachedAt: reached < 0 ? null : reached + 1 };
+  return {
+    base,
+    steps,
+    reachedAt: reached < 0 ? null : reached + 1,
+    held: model.measures.filter(isHeld).map((m) => m.id),
+  };
 }
 
 /**
@@ -538,8 +700,9 @@ export function minimumDegrees(model: CoreModel, ids: string[]) {
 }
 
 /**
- * 两个方向各能补多少：只启用措施库里全部组件级措施、或只启用全部系统级措施时，
+ * 两个方向各能补多少：只启用措施库里全部组件级措施、只启用全部系统级措施、或两边都启用时，
  * 每个模块的损失负荷相对现状能降低多少（0–1）。用来判断差距该优先从哪边补。
+ * 标了“暂不优化”的措施不计入。
  */
 export function layerPotential(model: CoreModel) {
   const loadsWith = (ids: string[]) =>
@@ -551,11 +714,12 @@ export function layerPotential(model: CoreModel) {
       ),
     idsOf = (layer: MeasureLayer) =>
       model.measures
-        .filter((m) => layerOf(m.category) === layer)
+        .filter((m) => layerOf(m.category) === layer && !isHeld(m))
         .map((m) => m.id),
     base = loadsWith([]),
     component = loadsWith(idsOf("component")),
     system = loadsWith(idsOf("system")),
+    both = loadsWith([...idsOf("component"), ...idsOf("system")]),
     cut = (after: number | undefined, before: number) =>
       before > 0 ? Math.max(0, 1 - (after ?? before) / before) : 0;
   return new Map(
@@ -564,6 +728,7 @@ export function layerPotential(model: CoreModel) {
       {
         component: cut(component.get(id), load),
         system: cut(system.get(id), load),
+        both: cut(both.get(id), load),
       },
     ]),
   );

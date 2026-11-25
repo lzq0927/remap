@@ -11,9 +11,12 @@ import {
   defaultCoreModel,
   diagramSlots,
   doseResponse,
+  effectSweep,
   eventPaths,
   gaps,
   ladderOutcomes,
+  layerPotential,
+  loadByStage,
   loadPerTenThousand,
   lossPerEvent,
   makeLadder,
@@ -47,6 +50,7 @@ const measure = (
   effects,
   applicability: 1,
   enabled: true,
+  hold: false,
   evidence: "assumed",
   rationale: "",
   source: "",
@@ -725,19 +729,52 @@ describe("设计：贡献分摊、推荐与参数反推", () => {
     ]);
     expect(result.baseline.system.availability).toBeCloseTo(0.1042, 3);
     expect(result.design.system.availability).toBeCloseTo(0.7666, 3);
-    expect(result.recommendation.kind).toBe("add");
-    expect(result.recommendation.add.length).toBeGreaterThan(0);
+    // 进程重调度默认“暂不优化”，改进前后保持 0.3 / 240 秒；其余措施全做也到不了目标
+    const process = model.measures.find((m) => m.id === "fast-recover")!;
+    expect(model.measures.filter((m) => m.hold)).toEqual([process]);
+    expect(process.effects.map((e) => e.value)).toEqual([
+      0.3,
+      seconds(240),
+      seconds(240),
+    ]);
+    expect(result.recommendation.kind).toBe("short");
+    expect(result.recommendation.held).toEqual(["fast-recover"]);
+    expect(result.recommendation.add).not.toContain("fast-recover");
+    expect(result.recommendation.ceiling).toBeCloseTo(0.8754, 3);
+    expect(result.recommendation.heldGain).toBeCloseTo(0, 12);
+    expect(priorityPath(model).steps.map((s) => s.id)).not.toContain(
+      "fast-recover",
+    );
+    // 剩余损失最大的一级正是进程重调度：这一级不动，到不了目标
+    const all = new Set(priorityPath(model).steps.map((s) => s.id)),
+      stages = loadByStage(assess(model, applyMeasures(model, all)));
+    expect(stages[0].id).toBe("process");
+    expect(stages.reduce((sum, s) => sum + s.share, 0)).toBeCloseTo(1, 12);
+    expect(stages.reduce((sum, s) => sum + s.load, 0)).toBeCloseTo(
+      assess(model, applyMeasures(model, all)).system.load,
+      12,
+    );
+    // 把进程重调度做到设计目标（成功率 0.95、60 秒）并纳入设计后，推荐的补充措施可以达标
+    process.effects[0].value = 0.95;
+    process.effects[1].value = seconds(60);
+    process.effects[2].value = seconds(60);
+    process.hold = false;
+    const released = analyze(model).recommendation;
+    expect(released.kind).toBe("add");
+    expect(released.add).toContain("fast-recover");
+    expect(released.held).toEqual([]);
+    expect(released.availability).toBeCloseTo(0.956, 3);
     const adopted = structuredClone(model);
     for (const m of adopted.measures)
-      if (result.recommendation.add.includes(m.id)) m.enabled = true;
+      if (released.add.includes(m.id)) m.enabled = true;
     const after = analyze(adopted);
     expect(after.recommendation.kind).toBe("met");
     expect(after.design.system.availability).toBeCloseTo(
-      result.recommendation.availability,
+      released.availability,
       12,
     );
     // 推荐的每一项都不可少：去掉任何一项都会低于目标
-    for (const id of result.recommendation.add) {
+    for (const id of released.add) {
       const without = structuredClone(adopted);
       without.measures.find((m) => m.id === id)!.enabled = false;
       expect(analyze(without).design.system.availability, id).toBeLessThan(
@@ -805,8 +842,96 @@ describe("设计：贡献分摊、推荐与参数反推", () => {
     expect(path.steps[1].availability).toBeCloseTo(1 / 1.125, 12);
     expect(path.steps[1].gain).toBeCloseTo(1 / 1.125 - 1 / 1.175, 12);
     expect(path.reachedAt).toBeNull();
+    // 第二步的收益比单独做大：前一步削掉了别的损失，同一段损失折算成的可用度更多
+    expect(path.steps[0].standalone).toBeCloseTo(path.steps[0].gain, 12);
+    expect(path.steps[0].partner).toBeNull();
+    expect(path.steps[1].standalone).toBeCloseTo(1 / 1.2 - 1 / 1.25, 12);
+    expect(path.steps[1].partner).toMatchObject({ id: "m-cov", kind: "boost" });
+    expect(path.steps[1].partner!.gainWithout).toBeCloseTo(
+      path.steps[1].standalone,
+      12,
+    );
     model.scenario.target = 0.85;
     expect(priorityPath(model).reachedAt).toBe(1);
+  });
+  it("两项措施省同一段损失时，后做的一项收益变小并指出与谁重叠", () => {
+    const model = tiny();
+    // 两项都缩短 A1 的 CKPT 回滚时间：0.5 h → 0.1 h 与 0.5 h → 0.2 h，只有更好的一项起作用
+    model.measures = [
+      measure(
+        "big",
+        "recover",
+        ["a1"],
+        [{ param: "restart.hours", op: "set", value: 0.1 }],
+      ),
+      measure(
+        "small",
+        "recover",
+        ["a1"],
+        [{ param: "restart.hours", op: "set", value: 0.2 }],
+      ),
+      measure(
+        "other",
+        "detect",
+        ["b1"],
+        [{ param: "coverage", op: "set", value: 0.81 }],
+      ),
+    ];
+    const path = priorityPath(model);
+    expect(path.steps[0].id).toBe("big");
+    // small 排在 big 之后没有任何提升，不进入路径
+    expect(path.steps.map((s) => s.id)).toEqual(["big", "other"]);
+    model.measures[1].effects.push({
+      param: "detectHours",
+      op: "set",
+      value: 0.1,
+    });
+    const again = priorityPath(model),
+      small = again.steps.find((s) => s.id === "small")!;
+    expect(small.gain).toBeLessThan(small.standalone);
+    expect(small.partner).toMatchObject({ id: "big", kind: "overlap" });
+    expect(small.partner!.gainWithout).toBeGreaterThan(small.gain);
+  });
+  it("暂不优化的措施不进入推荐、组合路径和潜力估算，启用后恢复参与", () => {
+    const model = tiny();
+    model.scenario.target = 0.85;
+    expect(recommend(model).kind).toBe("add");
+    expect(layerPotential(model).get("b")!.system).toBeCloseTo(0.5, 12);
+    model.measures[1].hold = true;
+    const held = recommend(model);
+    expect(held.kind).toBe("short");
+    expect(held.add).toEqual([]);
+    expect(held.held).toEqual(["m-cov"]);
+    expect(held.ceiling).toBeCloseTo(1 / 1.2, 12);
+    expect(held.heldGain).toBeCloseTo(1 / 1.125 - 1 / 1.2, 12);
+    const path = priorityPath(model);
+    expect(path.steps.map((s) => s.id)).toEqual(["m-fit"]);
+    expect(path.held).toEqual(["m-cov"]);
+    expect(layerPotential(model).get("b")!.system).toBe(0);
+    // 已经启用的措施不再算“暂不优化”
+    model.measures[1].enabled = true;
+    expect(recommend(model).kind).toBe("met");
+    expect(priorityPath(model).steps).toHaveLength(2);
+  });
+  it("单个参数的取值—收益曲线：其余不变，从不改扫到理想极限", () => {
+    const model = tiny(),
+      coverage = effectSweep(model, "m-cov", 0, 2)!;
+    // m-fit 已启用（ρ_A = 0.05）；检出率 0.8 / 0.9 / 1 → ρ_B = 0.15 / 0.1 / 0.05
+    expect(coverage).toMatchObject({ start: 0.8, limit: 1, planned: 0.95 });
+    expect(coverage.points.map((p) => p.value)).toEqual([0.8, 0.9, 1]);
+    expect(coverage.points[0].availability).toBeCloseTo(1 / 1.2, 12);
+    expect(coverage.points[1].availability).toBeCloseTo(1 / 1.15, 12);
+    expect(coverage.points[2].availability).toBeCloseTo(1 / 1.1, 12);
+    expect(coverage.plannedAvailability).toBeCloseTo(1 / 1.125, 12);
+    expect(coverage.without).toBeCloseTo(1 / 1.2, 12);
+    // 按比例降低：0 即不降，1 即降到 0；这里 m-cov 没有启用（ρ_B = 0.15）
+    const rate = effectSweep(model, "m-fit", 0, 2)!;
+    expect(rate).toMatchObject({ start: 0, limit: 1, planned: 0.5 });
+    expect(rate.points[0].availability).toBeCloseTo(1 / 1.25, 12);
+    expect(rate.points[2].availability).toBeCloseTo(1 / 1.15, 12);
+    expect(rate.without).toBeCloseTo(1 / 1.25, 12);
+    expect(effectSweep(model, "m-fit", 3)).toBeNull();
+    expect(effectSweep(model, "missing")).toBeNull();
   });
   it("给出每项措施至少要做到计划的几成", () => {
     const model = tiny();
@@ -872,7 +997,12 @@ describe("验证：独立仿真", () => {
   });
   it("达标设计通过均值与一致性判定，未实测的措施只给出提醒", () => {
     const model = defaultCoreModel(),
-      add = recommend(model).add;
+      process = model.measures.find((m) => m.id === "fast-recover")!;
+    process.effects[0].value = 0.95;
+    process.effects[1].value = seconds(60);
+    process.effects[2].value = seconds(60);
+    process.hold = false;
+    const add = recommend(model).add;
     for (const m of model.measures) m.enabled = m.enabled || add.includes(m.id);
     model.allocation.method = "arinc";
     const result = verify(model, { trials: 1500, seed: 99 });
@@ -893,6 +1023,7 @@ describe("验证：独立仿真", () => {
     model.modules[0].anchor = "";
     model.measures[0].rationale = "只改说明";
     model.measures[0].category = "recover";
+    model.measures[0].hold = !model.measures[0].hold;
     expect(modelHash(model)).toBe(before);
     model.modes[0].ladder.restart.hours += 0.001;
     expect(modelHash(model)).not.toBe(before);

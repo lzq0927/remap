@@ -175,7 +175,7 @@ const measure = (
   effects: MeasureEffect[],
   rationale: string,
   options: Partial<
-    Pick<Measure, "enabled" | "evidence" | "applicability" | "source">
+    Pick<Measure, "enabled" | "hold" | "evidence" | "applicability" | "source">
   > = {},
 ): Measure => ({
   id,
@@ -185,6 +185,7 @@ const measure = (
   effects,
   applicability: options.applicability ?? 1,
   enabled: options.enabled ?? false,
+  hold: options.hold ?? false,
   evidence: options.evidence ?? "assumed",
   rationale,
   source: options.source ?? "",
@@ -370,16 +371,20 @@ export function defaultMeasures(): Measure[] {
     // 进程重调度
     measure(
       "fast-recover",
-      "进程重调度增强",
+      "进程重调度",
       "recover",
       HARD,
       [
-        effect("process.success", "set", 0.95),
-        effect("process.hours", "set", seconds(60)),
-        effect("process.failHours", "set", seconds(60)),
+        effect("process.success", "set", PROCESS.success),
+        effect("process.hours", "set", PROCESS.hours),
+        effect("process.failHours", "set", PROCESS.hours),
       ],
-      "把进程重调度的成功率从 0.3 提到 0.95、耗时从 240 秒压到 60 秒。取值来自基础机制的设计目标，用户方案里没有这一项，用来看“提高进程重调度成功率”值多少。",
-      { source: "基础机制 R-PROCESS（设计目标）" },
+      "现有机制，改进前后保持一致：成功率 0.3、耗时 240 秒，用户方案里暂不优化。标为“暂不优化”后不进入推荐方案和组合路径；展开可以看成功率、耗时各做到多少值多少，再决定要不要纳入。基础机制的设计目标是成功率 0.95、耗时 60 秒。",
+      {
+        source: "用户方案（2026-11-25）；设计目标见基础机制 R-PROCESS",
+        hold: true,
+        evidence: "planned",
+      },
     ),
     // 弹性恢复
     measure(

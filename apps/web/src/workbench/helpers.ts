@@ -10,6 +10,7 @@ import {
   type Measure,
   type MeasureEffect,
   type MeasureParam,
+  type RecoveryLevel,
 } from "../../../../packages/core/src/index";
 import { duration, fit, percent } from "./format";
 
@@ -80,6 +81,28 @@ export function baseValue(
   return values.length && values.every((v) => Math.abs(v - values[0]) < 1e-12)
     ? values[0]
     : null;
+}
+
+/** 改写现状参数：把一组故障模式的某个参数（或公共开销）设为新值。 */
+export function writeBase(
+  draft: CoreModel,
+  modeIds: string[],
+  param: MeasureParam,
+  value: number,
+) {
+  if (param === "overhead") {
+    draft.scenario.overhead = value;
+    return;
+  }
+  const [level, field] = param.split(".") as [
+    RecoveryLevel,
+    "success" | "hours" | "failHours" | "impact" | undefined,
+  ];
+  for (const mode of draft.modes) {
+    if (!modeIds.includes(mode.id)) continue;
+    if (field) mode.ladder[level][field] = value;
+    else mode[param as "fit"] = value;
+  }
 }
 
 export const effectText = (effect: MeasureEffect) =>
