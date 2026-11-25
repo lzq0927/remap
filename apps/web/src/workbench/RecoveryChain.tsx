@@ -740,7 +740,7 @@ function StageTimes({
 
 /** 恢复链与计算过程：选一个故障模式，对比措施前后的每一环。 */
 export default function RecoveryChain() {
-  const { model, analysis, update } = useWorkbench(),
+  const { model, analysis } = useWorkbench(),
     designModes = useMemo(() => applyMeasures(model).modes, [model]),
     results = analysis.baseline.modules.flatMap((m) => m.modes),
     designResults = analysis.design.modules.flatMap((m) => m.modes),
@@ -762,15 +762,6 @@ export default function RecoveryChain() {
     afterLadder = ladderOutcomes(after),
     benefit = levelBenefit(after),
     changed = JSON.stringify(before) !== JSON.stringify(after);
-  // 成功后还要走下一级的环节（如弹性恢复）：不具备时是转人工，还是跳过它直接走下一级
-  const gated = model.modes.filter((m) =>
-      recoveryLevels.some((level) => m.ladder[level].then === "next"),
-    ),
-    gateOn = gated.some((m) =>
-      recoveryLevels.some(
-        (level) => m.ladder[level].then === "next" && m.ladder[level].gate,
-      ),
-    );
   const cell = (value: number) => (value > 0 ? duration(value) : "—");
   const levelText = (
     mode: FaultMode,
@@ -892,35 +883,10 @@ export default function RecoveryChain() {
       </div>
       <p className="rw-hint">
         故障发生后先被检出，或漏检后被兜底手段发现；然后沿恢复链从小到大走：进程重调度成功即恢复，失败走弹性恢复；弹性恢复成功后再走
-        CKPT 回滚，失败转人工；CKPT 回滚失败也转人工。每一环的“概率 ×
+        CKPT 回滚，失败转人工；CKPT 回滚失败也转人工。弹性恢复还不具备时成功率为
+        0，进程重调度失败的故障只能转人工。每一环的“概率 ×
         时间”相加就是单次等效损失，再乘故障频次和运行时间占比得到每周损失。
       </p>
-      {gated.length > 0 && (
-        <p className="rw-chain-option">
-          <label className="rw-inline-select">
-            <span>还不具备弹性恢复时，进程重调度失败后</span>
-            <select
-              aria-label="不具备弹性恢复时的走法"
-              value={gateOn ? "manual" : "skip"}
-              onChange={(e) =>
-                update((d) => {
-                  for (const mode of d.modes)
-                    for (const level of recoveryLevels)
-                      if (mode.ladder[level].then === "next")
-                        mode.ladder[level].gate = e.target.value === "manual";
-                })
-              }
-            >
-              <option value="manual">只能转人工（弹性恢复是必经环节）</option>
-              <option value="skip">跳过它，直接走 CKPT 回滚</option>
-            </select>
-          </label>
-          <span className="rw-muted">
-            这决定“现状”怎么算，对全部 {gated.length}{" "}
-            个故障模式生效；弹性恢复具备之后两种走法结果相同。
-          </span>
-        </p>
-      )}
       <div className="rw-chain-figures">
         <ChainFigure
           mode={before}

@@ -129,11 +129,6 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
   await expect(
     chain.getByRole("row", { name: /^恢复 1 · 进程重调度/ }),
   ).toContainText("每次反而多花 1.6 分钟");
-  // 没有弹性恢复时的走法可以切换：跳过它直接走 CKPT 回滚，现状随之改变
-  await chain.getByLabel("不具备弹性恢复时的走法").selectOption("skip");
-  await expect(summary).toContainText("50.43%");
-  await chain.getByLabel("不具备弹性恢复时的走法").selectOption("manual");
-  await expect(summary).toContainText("10.42%");
   await expect(
     page.getByRole("region", { name: "可用度计算过程" }),
   ).toContainText("= 10.42%");

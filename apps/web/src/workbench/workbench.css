@@ -2570,14 +2570,6 @@ h2.rw-direction {
 .rw-paths .rw-timebar-labels {
   display: none;
 }
-.rw-chain-option {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  margin: 0 0 14px;
-  font-size: 13px;
-}
 .rw-warn-text {
   color: var(--rw-warn);
   font-weight: 600;
