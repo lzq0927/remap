@@ -383,7 +383,8 @@ export function defaultMeasures(): Measure[] {
       {
         source: "用户方案（2026-11-25）；设计目标见基础机制 R-PROCESS",
         hold: true,
-        evidence: "planned",
+        // 优化它还没有立项：改进后的取值一旦调高，只能算设计假设
+        evidence: "assumed",
       },
     ),
     // 弹性恢复

@@ -1,6 +1,8 @@
 import {
   applyMeasures,
+  assess,
   createEvaluator,
+  effectSweep,
   evidenceStateNames,
   higherIsBetter,
   layerOf,
@@ -172,8 +174,17 @@ const text = (
 
 /** 每页的公共部分：标题、一句话结论、页脚。 */
 function frame(title: string, lead: string, footer: string, page: number) {
+  // 标题太长时缩小字号，保证一行放得下
+  const size = Math.min(
+    26,
+    Math.max(18, Math.floor((26 * WIDTH) / (textWidth(title, 26) * 1.08))),
+  );
   return [
-    text(LEFT, 0.42, WIDTH, 0.62, title, 26, { bold: true, color: C.ink }),
+    text(LEFT, 0.42, WIDTH, 0.62, title, size, {
+      bold: true,
+      color: C.ink,
+      valign: "middle",
+    }),
     text(LEFT, 1.08, WIDTH, 0.72, lead, 14.5, { color: C.ink2 }),
     line(LEFT, 7.02, RIGHT, 7.02, C.line),
     text(LEFT, 7.08, 8, 0.28, footer, 10, { color: C.muted }),
@@ -727,6 +738,61 @@ const stagePalette = [
   "8C99A8",
 ];
 
+/** 参数名里的字段部分：“进程重调度 · 成功率”取“成功率”。 */
+const fieldName = (param: Measure["effects"][number]["param"]) =>
+  measureParamNames[param].split(" · ").pop()!.replace(" FIT", "");
+/** 把扫描点取整到便于阅读的值：比例按 5% 或 1%，时长按 30 秒、1 分钟等。 */
+function niceValue(
+  effect: Measure["effects"][number],
+  value: number,
+  span: number,
+) {
+  if (effect.op === "reduce" || isRatio(effect.param)) {
+    const step =
+      Math.abs(span) >= 0.3 ? 0.05 : Math.abs(span) >= 0.06 ? 0.01 : 0.001;
+    return Number((Math.round(value / step) * step).toFixed(6));
+  }
+  if (effect.param === "fit") return Number(value.toPrecision(2));
+  const range = Math.abs(span) * 3600,
+    step =
+      range >= 6 * 3600
+        ? 1800
+        : range >= 1200
+          ? 60
+          : range >= 120
+            ? 30
+            : range >= 20
+              ? 5
+              : 1;
+  return (Math.round((value * 3600) / step) * step) / 3600;
+}
+const effectText = (effect: Measure["effects"][number], value: number) =>
+  effect.op === "reduce"
+    ? "降低 " + percent(value, 0)
+    : effect.op === "subtract"
+      ? "减少 " + paramText(effect.param, value)
+      : paramText(effect.param, value);
+
+/** 在一组候选里找数量最少、能把可用度推到目标的补充组合；找不到返回 null。 */
+function smallestReaching(
+  evaluate: (ids: Set<string>) => number,
+  base: string[],
+  pool: Measure[],
+  target: number,
+) {
+  if (pool.length > 12) return null;
+  let best: { picked: Measure[]; value: number } | null = null;
+  for (let mask = 1; mask < 1 << pool.length; mask++) {
+    const picked = pool.filter((_, i) => mask & (1 << i));
+    if (best && picked.length > best.picked.length) continue;
+    const value = evaluate(new Set([...base, ...picked.map((m) => m.id)]));
+    if (value < target) continue;
+    if (!best || picked.length < best.picked.length || value > best.value)
+      best = { picked, value };
+  }
+  return best;
+}
+
 /** 画汇报页用的图元工具：定制或追加页面时复用，保证与内置页面同一套版式。 */
 export const briefKit = {
   frame,
@@ -959,6 +1025,532 @@ export function buildBrief(
         ...bullets(LEFT, TOP + 1.95, WIDTH, items, 14.5).prims,
       ],
     );
+  }
+
+  // ---------- 路线与关键措施：先算公共量 ----------
+  const evaluate = createEvaluator(model),
+    idSet = (list: Measure[]) => new Set(list.map((m) => m.id)),
+    heldList = model.measures.filter((m) => m.hold && !m.enabled),
+    // 关键措施：有“暂不优化”的机制时看它（做了值多少）；否则看去掉后跌得最多的那一项
+    keyMeasure: Measure | undefined = heldList.length
+      ? [...heldList].sort((a, b) => {
+          const top = (m: Measure) =>
+            effectSweep(model, m.id, 0, 1)?.points[1].availability ?? 0;
+          return top(b) - top(a);
+        })[0]
+      : [...enabled].sort(
+          (a, b) => share.get(b.id)!.marginal - share.get(a.id)!.marginal,
+        )[0],
+    // 关键措施保持现状、措施库其余参与设计的措施全部做足能到多少
+    restIds = keyMeasure
+      ? new Set(
+          model.measures
+            .filter((m) => m.id !== keyMeasure.id && !(m.hold && !m.enabled))
+            .map((m) => m.id),
+        )
+      : new Set<string>(),
+    restPath = keyMeasure ? priorityPath(model, 40, restIds) : null,
+    restCeiling = restPath
+      ? (restPath.steps[restPath.steps.length - 1]?.availability ??
+        restPath.base)
+      : before.availability,
+    restStages = restPath
+      ? loadByStage(
+          assess(
+            model,
+            applyMeasures(model, new Set(restPath.steps.map((s) => s.id))),
+          ),
+        )
+      : [];
+
+  // ---------- 路线：分几步走到目标 ----------
+  {
+    const firm = enabled.filter((m) => m.evidence !== "assumed"),
+      soft = enabled.filter((m) => m.evidence === "assumed"),
+      split = firm.length > 0 && soft.length > 0,
+      firmValue = split ? evaluate(idSet(firm)) : null,
+      reaches = after.availability >= target,
+      minimal =
+        reaches && split && firmValue! < target
+          ? smallestReaching(
+              evaluate,
+              firm.map((m) => m.id),
+              soft,
+              target,
+            )
+          : null,
+      showMinimal = minimal !== null && minimal.picked.length < soft.length,
+      keyNeeded =
+        reaches && keyMeasure?.enabled === true && restCeiling < target,
+      rows: (BarRow & { note: string })[] = [
+        {
+          name: "现状",
+          value: before.availability,
+          color: C.grey,
+          note: "",
+          label: "",
+        },
+      ],
+      notes: { head: string; text: string }[] = [],
+      gap = (value: number) =>
+        value >= target
+          ? `高于目标 ${((value - target) * 100).toFixed(2)} pp`
+          : `距目标还差 ${((target - value) * 100).toFixed(2)} pp`;
+    if (split) {
+      rows.push({
+        name: `已有证据或已立项的 ${firm.length} 项`,
+        value: firmValue!,
+        color: C.blue,
+        note: firmValue! >= target ? "已达标" : "",
+        label: "",
+      });
+      notes.push({
+        head: `已有证据或已立项的 ${firm.length} 项：`,
+        text: `把可用度从 ${percent(before.availability)} 提到 ${percent(firmValue!)}，${gap(firmValue!)}。`,
+      });
+    }
+    if (keyNeeded) {
+      rows.push({
+        name: `措施库其余全做，${clip(keyMeasure!.name, 8)}不动`,
+        value: restCeiling,
+        color: C.warn,
+        note: "上限",
+        label: "",
+      });
+      notes.push({
+        head: `“${keyMeasure!.name}”不能不做：`,
+        text: `它保持现状时，措施库里其余 ${restPath!.steps.length} 项有提升的措施全部做足也只到 ${percent(restCeiling)}，${gap(restCeiling)}。`,
+      });
+    }
+    if (showMinimal) {
+      rows.push({
+        name: `＋${minimal!.picked.length} 项（共 ${firm.length + minimal!.picked.length} 项）`,
+        value: minimal!.value,
+        color: C.green,
+        note: "刚好达标",
+        label: "",
+      });
+      notes.push({
+        head: `再加 ${minimal!.picked.length} 项达标：`,
+        text: `${minimal!.picked.map((m) => m.name).join("、")}，到 ${percent(minimal!.value)}，余量只有 ${((minimal!.value - target) * 100).toFixed(2)} pp；均值刚过线时，窗口波动会让一部分周不达标。`,
+      });
+    }
+    rows.push({
+      name: reaches
+        ? `全部方案 ${enabled.length} 项`
+        : `当前方案 ${enabled.length} 项`,
+      value: after.availability,
+      color: reaches ? C.green : C.orange,
+      note: reaches ? "达标" : "",
+      label: "",
+    });
+    notes.push({
+      head: reaches
+        ? `全部 ${enabled.length} 项：`
+        : `当前方案 ${enabled.length} 项：`,
+      text:
+        `到 ${percent(after.availability)}，${gap(after.availability)}` +
+        (verification
+          ? `；独立仿真里 ${percent(verification.design.passRatio, 1)} 的窗口达到目标。`
+          : "。"),
+    });
+    if (!reaches && recommendation.kind === "add") {
+      rows.push({
+        name: `＋推荐的 ${recommendation.add.length} 项`,
+        value: recommendation.availability,
+        color: C.green,
+        note: "达标",
+        label: "",
+      });
+      notes.push({
+        head: `再启用 ${recommendation.add.length} 项达标：`,
+        text: `${recommendation.add.map(nameOf).join("、")}，到 ${percent(recommendation.availability)}。`,
+      });
+    }
+    if (!reaches && recommendation.kind === "short") {
+      rows.push({
+        name: "措施库里参与设计的全部做足",
+        value: recommendation.ceiling,
+        color: C.warn,
+        note: "上限",
+        label: "",
+      });
+      notes.push({
+        head: "措施库的上限：",
+        text:
+          `参与设计的措施全部做足也只到 ${percent(recommendation.ceiling)}，${gap(recommendation.ceiling)}` +
+          (heldList.length
+            ? `；“${heldList.map((m) => m.name).join("、")}”标为暂不优化，没有计入。`
+            : "，需要加码参数或新增措施。"),
+      });
+    }
+    for (const row of rows)
+      row.label = `${percent(row.value)}${row.note ? "　" + row.note : ""}`;
+    if (rows.length >= 3)
+      add(
+        reaches && split && firmValue! < target
+          ? `路线：已有证据或已立项的 ${firm.length} 项只到 ${percent(firmValue!, 1)}，补上 ${soft.length} 项后达到 ${percent(after.availability, 1)}`
+          : reaches
+            ? `路线：${enabled.length} 项措施把可用度从 ${percent(before.availability, 1)} 带到 ${percent(after.availability, 1)}`
+            : recommendation.kind === "add"
+              ? `路线：当前方案到 ${percent(after.availability, 1)}，再启用 ${recommendation.add.length} 项可达标`
+              : `路线：当前方案到 ${percent(after.availability, 1)}，措施库全做也只到 ${percent(recommendation.ceiling, 1)}`,
+        "横条是系统可用度，虚线是目标。按措施参数的把握程度分步：先看已有实测证据或已立项的措施能到哪里，再看还要补什么、补到什么程度才稳。",
+        [
+          ...hbars(LEFT, TOP + 0.55, WIDTH * 0.62, 4.2, rows, {
+            nameW: 3.6,
+            labelW: 2.3,
+            rowH: 0.8,
+            max: 1,
+            target,
+            targetLabel: "目标 " + percent(target),
+          }).prims,
+          ...bullets(LEFT + WIDTH * 0.66, TOP + 0.2, WIDTH * 0.34, notes, 12.5)
+            .prims,
+        ],
+      );
+  }
+
+  // ---------- 关键措施的指标要求：两个参数 × 系统可用度 ----------
+  if (keyMeasure) {
+    const key = keyMeasure,
+      active = new Set([...enabledIds, key.id]),
+      ranges = key.effects.map((effect, index) => {
+        const sweep = effectSweep(model, key.id, index, 1);
+        if (!sweep) return null;
+        const moved = Math.abs(sweep.planned - sweep.start) > 1e-12,
+          hi = moved ? sweep.planned : sweep.limit;
+        return {
+          effect,
+          index,
+          lo: sweep.start,
+          hi,
+          limit: sweep.limit,
+          moved,
+        };
+      }),
+      a = ranges[0],
+      // 第二个轴：下一个有调整范围的参数；与它同级、同取值的“失败耗时”跟着一起变
+      b = ranges.find((r, i) => i > 0 && r !== null) ?? null,
+      level = (param: string) => param.split(".")[0],
+      tied = b
+        ? key.effects
+            .map((effect, index) => ({ effect, index }))
+            .filter(
+              ({ effect, index }) =>
+                index !== a?.index &&
+                index !== b.index &&
+                effect.op === b.effect.op &&
+                effect.value === b.effect.value &&
+                effect.param.includes(".") &&
+                level(effect.param) === level(b.effect.param) &&
+                /hours$/i.test(effect.param) &&
+                /hours$/i.test(b.effect.param),
+            )
+            .map(({ index }) => index)
+        : [],
+      at = (va: number, vb: number | null) =>
+        createEvaluator({
+          ...model,
+          measures: model.measures.map((m) =>
+            m.id !== key.id
+              ? m
+              : {
+                  ...m,
+                  effects: m.effects.map((effect, index) =>
+                    index === a?.index
+                      ? { ...effect, value: va }
+                      : vb !== null &&
+                          (index === b?.index || tied.includes(index))
+                        ? { ...effect, value: vb }
+                        : effect,
+                  ),
+                },
+          ),
+        })(active);
+    if (a) {
+      const values = (
+          range: NonNullable<typeof a>,
+          fractions: number[],
+          beyond: boolean,
+        ) => {
+          const span = range.hi - range.lo,
+            list = fractions.map((f) =>
+              f === 0
+                ? range.lo
+                : f === 1
+                  ? range.hi
+                  : niceValue(range.effect, range.lo + f * span, span),
+            );
+          if (beyond && range.moved && Math.abs(range.limit - range.hi) > 1e-12)
+            list.push(
+              niceValue(
+                range.effect,
+                range.hi + 0.5 * (range.limit - range.hi),
+                range.limit - range.hi,
+              ),
+            );
+          return list.filter(
+            (v, i) => list.findIndex((w) => Math.abs(w - v) < 1e-9) === i,
+          );
+        },
+        rowValues = values(a, [0, 0.3, 0.6, 0.8, 0.9, 1], false),
+        colValues = b ? values(b, [0, 1 / 3, 2 / 3, 1], true) : [],
+        planA = a.moved ? a.hi : a.lo,
+        planB = b ? (b.moved ? b.hi : b.lo) : null,
+        // 另一个参数按计划时，这个参数最少要做到多少才达标
+        threshold = (
+          range: NonNullable<typeof a>,
+          value: (v: number) => number,
+        ): { kind: "none" | "free" | "value"; value: number } => {
+          if (value(range.hi) < target)
+            return { kind: "none", value: range.hi };
+          if (value(range.lo) >= target)
+            return { kind: "free", value: range.lo };
+          let bad = range.lo,
+            good = range.hi;
+          for (let i = 0; i < 30; i++) {
+            const middle = (bad + good) / 2;
+            if (value(middle) >= target) good = middle;
+            else bad = middle;
+          }
+          return { kind: "value", value: good };
+        },
+        needA = threshold(a, (v) => at(v, planB)),
+        needB = b ? threshold(b, (v) => at(planA, v)) : null,
+        planValue = at(planA, planB),
+        bestValue = at(a.hi, b ? b.hi : null),
+        nameA = fieldName(a.effect.param),
+        nameB = b ? fieldName(b.effect.param) : "",
+        bound = (range: NonNullable<typeof a>) =>
+          range.effect.op === "reduce" || higherIsBetter(range.effect.param)
+            ? "不低于"
+            : "不超过",
+        // 达标线往计划一侧取整（比例取 0.1%，时长取 1 秒），写出来的数一定够用
+        toward = (range: NonNullable<typeof a>, value: number) => {
+          const step =
+              range.effect.op === "reduce" || isRatio(range.effect.param)
+                ? 0.001
+                : range.effect.param === "fit"
+                  ? 1
+                  : 1 / 3600,
+            scaled = value / step;
+          return (
+            (range.hi > range.lo
+              ? Math.ceil(scaled - 1e-9)
+              : Math.floor(scaled + 1e-9)) * step
+          );
+        },
+        needText = (
+          range: NonNullable<typeof a>,
+          need: typeof needA,
+          name: string,
+        ) =>
+          need.kind === "free"
+            ? `${name}保持现状即可`
+            : need.kind === "none"
+              ? `${name}做到 ${effectText(range.effect, range.hi)} 也不够`
+              : `${name}${bound(range)} ${effectText(range.effect, toward(range, need.value))}`,
+        prims: Prim[] = [],
+        gx = LEFT,
+        headW = 1.9,
+        gridW = 7.3,
+        colW = b ? Math.min(1.18, (gridW - headW) / colValues.length) : 0,
+        rowH = 0.5,
+        gy = TOP + 0.95,
+        cellStyle = (value: number, current: boolean) => {
+          const ok = value >= target,
+            edge = !ok && value >= target - 0.0005;
+          return {
+            fill: ok
+              ? C.green
+              : edge
+                ? C.greenSoft
+                : current
+                  ? C.greyLight
+                  : C.soft,
+            line: edge ? C.green : undefined,
+            color: ok ? C.white : edge ? C.green : C.ink,
+            bold: ok || edge || current,
+          };
+        };
+      if (b) {
+        prims.push(
+          text(
+            gx,
+            TOP - 0.02,
+            gridW,
+            0.3,
+            `${key.name}：${nameA} × ${nameB} → 系统可用度（其余措施按当前方案）`,
+            12.5,
+            { bold: true, color: C.ink },
+          ),
+          text(gx + headW, gy - 0.72, colW * colValues.length, 0.3, nameB, 11, {
+            color: C.muted,
+            align: "center",
+          }),
+        );
+        colValues.forEach((vb, j) =>
+          prims.push(
+            text(
+              gx + headW + j * colW,
+              gy - 0.42,
+              colW,
+              0.36,
+              effectText(b.effect, vb),
+              12,
+              { bold: true, color: C.ink, align: "center", valign: "middle" },
+            ),
+          ),
+        );
+        rowValues.forEach((va, i) => {
+          prims.push(
+            text(
+              gx,
+              gy + i * rowH,
+              headW - 0.12,
+              rowH,
+              `${nameA} ${effectText(a.effect, va)}`,
+              12,
+              { bold: true, color: C.ink, align: "right", valign: "middle" },
+            ),
+          );
+          colValues.forEach((vb, j) => {
+            const value = at(va, vb),
+              style = cellStyle(
+                value,
+                Math.abs(va - a.lo) < 1e-9 && Math.abs(vb - b.lo) < 1e-9,
+              ),
+              planned =
+                Math.abs(va - planA) < 1e-9 && Math.abs(vb - planB!) < 1e-9;
+            prims.push(
+              rect(
+                gx + headW + j * colW + 0.03,
+                gy + i * rowH + 0.03,
+                colW - 0.06,
+                rowH - 0.06,
+                style.fill,
+                planned ? C.ink : style.line,
+                0.04,
+              ),
+              text(
+                gx + headW + j * colW,
+                gy + i * rowH,
+                colW,
+                rowH,
+                percent(value),
+                12,
+                {
+                  bold: style.bold,
+                  color: style.color,
+                  align: "center",
+                  valign: "middle",
+                },
+              ),
+            );
+          });
+        });
+        prims.push(
+          ...legend(gx + headW, gy + rowValues.length * rowH + 0.15, [
+            [C.green, "达到目标"],
+            [C.greenSoft, "刚好压线"],
+            [C.greyLight, "现状参数"],
+          ]),
+          text(
+            gx + headW,
+            gy + rowValues.length * rowH + 0.5,
+            gridW - headW,
+            0.3,
+            "黑框是计划取值。",
+            10.5,
+            { color: C.muted },
+          ),
+        );
+      } else {
+        prims.push(
+          text(
+            gx,
+            TOP - 0.02,
+            gridW,
+            0.3,
+            `${key.name}：${nameA}取不同值时的系统可用度（其余措施按当前方案）`,
+            12.5,
+            { bold: true, color: C.ink },
+          ),
+          ...hbars(
+            gx,
+            TOP + 0.75,
+            gridW,
+            4,
+            rowValues.map((va) => {
+              const value = at(va, null);
+              return {
+                name: `${nameA} ${effectText(a.effect, va)}`,
+                value,
+                label: percent(value),
+                color: value >= target ? C.green : C.orange,
+              };
+            }),
+            {
+              nameW: 2.6,
+              labelW: 1.2,
+              rowH: 0.6,
+              max: 1,
+              target,
+              targetLabel: "目标 " + percent(target),
+            },
+          ).prims,
+        );
+      }
+      const reachable =
+          needA.kind !== "none" && (!needB || needB.kind !== "none"),
+        spare = at(a.lo, b ? b.lo : null) >= target,
+        stageLead = restStages
+          .slice(0, 2)
+          .map((s) => `${percent(s.share, 0)} 在${s.name}`)
+          .join("、");
+      add(
+        spare
+          ? `关键措施：“${key.name}”保持现状也能达标，优化它提供的是余量`
+          : reachable
+            ? `关键立项点：“${key.name}”` +
+              (b ? `${nameB} ${effectText(b.effect, planB!)}时，` : "的") +
+              needText(a, needA, nameA)
+            : `关键立项点：只把“${key.name}”做到头也只到 ${percent(bestValue, 1)}，还要配合其他措施`,
+        `“${key.name}”保持现状时，措施库里其余措施全部做足只到 ${percent(restCeiling)}${stageLead ? `；那时剩余故障损失的 ${stageLead}` : ""}。`,
+        [
+          ...prims,
+          ...bullets(
+            LEFT + 7.9,
+            TOP + 0.1,
+            WIDTH - 7.9,
+            [
+              {
+                head: "不优化的上限：",
+                text: `其余 ${restPath?.steps.length ?? 0} 项有提升的措施全部做足，系统可用度到 ${percent(restCeiling)}，${restCeiling >= target ? "已经达标，这一项是余量" : "到不了目标"}。`,
+              },
+              {
+                head: "指标要求：",
+                text: b
+                  ? `${nameB}按计划（${effectText(b.effect, planB!)}）时，${needText(a, needA, nameA)}；${nameA}按计划（${effectText(a.effect, planA)}）时，${needText(b, needB!, nameB)}。`
+                  : `${needText(a, needA, nameA)}。`,
+              },
+              {
+                head: "按计划做到：",
+                text: `系统可用度 ${percent(planValue)}，${planValue >= target ? `比目标高 ${((planValue - target) * 100).toFixed(2)} pp` : `距目标还差 ${((target - planValue) * 100).toFixed(2)} pp`}${key.enabled ? "" : "（这项措施目前没有启用，表里按启用它来算）"}。`,
+              },
+              {
+                head: "怎么读这张表：",
+                text: b
+                  ? `每一格是${nameA}和${nameB}取这组值时的系统可用度，其余措施按当前方案。绿色是达到目标的组合；只动一个参数往往不够，要两个一起做。`
+                  : `每一行是${nameA}取这个值时的系统可用度，其余措施按当前方案；越过虚线即达到目标。`,
+              },
+            ],
+            12.5,
+          ).prims,
+        ],
+      );
+    }
   }
 
   // ---------- 3 现状与差距 ----------
@@ -1367,8 +1959,7 @@ export function buildBrief(
 
   // ---------- 两个方向各自能到多少 ----------
   if (component.length && system.length) {
-    const evaluate = createEvaluator(model),
-      onlyComponent = evaluate(new Set(component.map((m) => m.id))),
+    const onlyComponent = evaluate(new Set(component.map((m) => m.id))),
       onlySystem = evaluate(new Set(system.map((m) => m.id))),
       rows = [
         { name: "现状", value: before.availability, color: C.grey },
