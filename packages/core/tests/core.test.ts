@@ -25,6 +25,7 @@ import {
   parseCoreModel,
   priorityPath,
   recommend,
+  recoveryRoute,
   shapley,
   simulate,
   solveEffect,
@@ -714,21 +715,63 @@ describe("设计：贡献分摊、推荐与参数反推", () => {
   it("默认场景：用户给出的措施不足，采用推荐的补充措施后达标", () => {
     const model = defaultCoreModel(),
       result = analyze(model);
-    expect(model.measures.length).toBeGreaterThanOrEqual(30);
+    expect(model.measures.length).toBeGreaterThanOrEqual(29);
     expect(model.measures.filter((m) => m.enabled).map((m) => m.id)).toEqual([
-      "aicore-screening",
       "hbm-ecc",
       "optical-reliability",
-      "online-screen",
       "sdc-detection",
       "slow-detect",
-      "fast-detect",
       "elastic-recover",
       "fault-agent",
       "fast-checkpoint",
     ]);
-    expect(result.baseline.system.availability).toBeCloseTo(0.1042, 3);
-    expect(result.design.system.availability).toBeCloseTo(0.7666, 3);
+    // 用户 2026-11-26 给定：现状 MTBF 17 分钟（50 万卡，每卡 7059 FIT），HBM、NPU 其他模块各占 15%；
+    // 只改进光模块（做到每卡 50 FIT）后 MTBF 为 36 分钟，由此反推光模块现状 3775 FIT，占 53.5%
+    const fitAt = (minutes: number) => 1e9 / ((minutes / 60) * 500000),
+      total = fitAt(17),
+      fitOf = (id: string, state = result.baseline) =>
+        state.modules.find((m) => m.id === id)!.fitPerCard;
+    expect(result.baseline.system.mtbfHours * 60).toBeCloseTo(17, 2);
+    expect(result.baseline.system.fitPerCard).toBeCloseTo(total, 0);
+    expect(fitOf("hbm")).toBeCloseTo(total * 0.15, 9);
+    expect(fitOf("npu")).toBeCloseTo(total * 0.15, 9);
+    expect(fitOf("optical")).toBeCloseTo(total - fitAt(36) + 50, 9);
+    expect(fitOf("optical") / result.baseline.system.fitPerCard).toBeCloseTo(
+      0.535,
+      3,
+    );
+    const opticalOnly = structuredClone(model);
+    for (const m of opticalOnly.measures)
+      m.enabled = m.id === "optical-reliability";
+    expect(analyze(opticalOnly).design.system.mtbfHours * 60).toBeCloseTo(
+      36,
+      2,
+    );
+    // 再做 HBM 纠错（降低 60%，1059 → 424 FIT）：每卡 2698 FIT，MTBF 44.48 分钟
+    expect(fitOf("hbm", result.design)).toBeCloseTo(total * 0.15 * 0.4, 9);
+    expect(fitOf("optical", result.design)).toBeCloseTo(50, 9);
+    expect(result.design.system.fitPerCard).toBeCloseTo(2698.1, 0);
+    expect(result.design.system.mtbfHours * 60).toBeCloseTo(44.48, 2);
+    // 中断类故障的检出率按 100% 计，不再有“故障检测”措施
+    for (const mode of model.modes.filter((m) => m.kind === "hard"))
+      expect(mode.coverage, mode.id).toBe(1);
+    expect(model.measures.map((m) => m.id)).not.toContain("fast-detect");
+    // 现状没有弹性恢复：进程重调度失败后直接走 CKPT 回滚，不是全部转人工
+    expect(
+      recoveryRoute(model.modes.find((m) => m.id === "hbm-uce")!.ladder).map(
+        (step) => step.level,
+      ),
+    ).toEqual(["process", "restart", "manual"]);
+    expect(result.baseline.system.availability).toBeCloseTo(0.4513, 3);
+    expect(result.baseline.system.mttrHours * 60).toBeCloseTo(20.42, 1);
+    expect(result.design.system.availability).toBeCloseTo(0.7458, 3);
+    expect(result.design.system.mttrHours * 60).toBeCloseTo(15.11, 1);
+    // 到 95% 允许的单次等效损失：(（1 − 开销）/ 0.95 − 1) × MTBF ≈ 2.30 分钟
+    expect(
+      ((1 - result.design.system.overhead) / 0.95 - 1) *
+        result.design.system.mtbfHours *
+        60,
+    ).toBeCloseTo(2.3, 2);
     // 进程重调度默认“暂不优化”，改进前后保持 0.3 / 240 秒；其余措施全做也到不了目标
     const process = model.measures.find((m) => m.id === "fast-recover")!;
     expect(model.measures.filter((m) => m.hold)).toEqual([process]);
@@ -740,7 +783,7 @@ describe("设计：贡献分摊、推荐与参数反推", () => {
     expect(result.recommendation.kind).toBe("short");
     expect(result.recommendation.held).toEqual(["fast-recover"]);
     expect(result.recommendation.add).not.toContain("fast-recover");
-    expect(result.recommendation.ceiling).toBeCloseTo(0.8754, 3);
+    expect(result.recommendation.ceiling).toBeCloseTo(0.9161, 3);
     expect(result.recommendation.heldGain).toBeCloseTo(0, 12);
     expect(priorityPath(model).steps.map((s) => s.id)).not.toContain(
       "fast-recover",
@@ -763,7 +806,7 @@ describe("设计：贡献分摊、推荐与参数反推", () => {
     expect(released.kind).toBe("add");
     expect(released.add).toContain("fast-recover");
     expect(released.held).toEqual([]);
-    expect(released.availability).toBeCloseTo(0.956, 3);
+    expect(released.availability).toBeCloseTo(0.9512, 3);
     const adopted = structuredClone(model);
     for (const m of adopted.measures)
       if (released.add.includes(m.id)) m.enabled = true;
@@ -1002,7 +1045,8 @@ describe("验证：独立仿真", () => {
     process.effects[1].value = seconds(60);
     process.effects[2].value = seconds(60);
     process.hold = false;
-    const add = recommend(model).add;
+    // 把有提升的措施都用上，留出约 1 个百分点的余量，均值判定才稳定
+    const add = priorityPath(model).steps.map((step) => step.id);
     for (const m of model.measures) m.enabled = m.enabled || add.includes(m.id);
     model.allocation.method = "arinc";
     const result = verify(model, { trials: 1500, seed: 99 });
@@ -1013,7 +1057,8 @@ describe("验证：独立仿真", () => {
       "pass",
     );
     expect(result.checks.find((c) => c.id === "evidence")!.state).toBe("warn");
-    expect(result.baseline.mean).toBeLessThan(0.75);
+    expect(result.baseline.mean).toBeLessThan(0.55);
+    expect(result.baseline.mean).toBeGreaterThan(0.35);
     expect(result.seed).toBe(99);
   });
   it("指纹只随数值参数变化", () => {

@@ -400,7 +400,9 @@ const paramText = (
 /** 措施主要参数“现状 → 计划”的写法。 */
 export function effectSummary(model: CoreModel, measure: Measure) {
   const effect = measure.effects[0],
-    name = measureParamNames[effect.param].replace(" · ", "");
+    name = measureParamNames[effect.param]
+      .replace(" · ", "")
+      .replace(" FIT", "");
   if (effect.op === "reduce")
     return `${effect.param === "coverage" ? "漏检率" : name.replace(" FIT", "")}降低 ${percent(effect.value, 0)}`;
   if (effect.op === "subtract")

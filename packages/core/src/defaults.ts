@@ -11,17 +11,31 @@ const seconds = (value: number) => value / 3600;
 
 /**
  * 默认场景的来源：
- * - 故障率：2026-11-12 周度用户场景（每卡 HBM＋NPU 合计 1700 FIT，各占全部故障 15%；
- *   光模块占 35%；静默故障占 1.4%，其中 AICore 占 85%）。
- * - 其余 35% 的模块拆分：按 2026-10-14 基线故障库各对象的相对构成折算，属先验。
- * - 检测与恢复链：2026-11-24 用户给出的现有措施与预计改进（见下方常量）。
- * - 措施库：用户给出的 10 项默认启用；其余取自现有基础机制和扩展机制库，作为候选。
+ * - 故障率：用户 2026-11-26 给定，50 万卡现状 MTBF 17 分钟，折合每卡 7059 FIT；
+ *   HBM 占现状 15%（1059 FIT）、NPU 其他模块占现状 15%（1059 FIT）。
+ *   光模块由“只改进光模块（做到每卡 50 FIT）后 MTBF 为 36 分钟”反推：3775 FIT，占现状 53.5%。
+ *   其余 16.5%（1166 FIT）。静默故障占全部故障 1.4%、其中 AICore 占 85%（2026-11-12 周度用户场景），计在其余部分里。
+ * - 其余部分的模块拆分：按 2026-10-14 基线故障库各对象的相对构成折算，属先验。
+ * - 检测与恢复链：2026-11-24 用户给出的现有措施与预计改进（见下方常量）；
+ *   中断类故障的检出率按 100% 计（用户 2026-11-26 确认），不设“故障检测”措施。
+ * - 措施库：用户给出的措施默认启用；其余取自现有基础机制和扩展机制库，作为候选。
  * 所有数值都是可编辑的场景输入，不代表厂商实测器件失效率。
  */
-const TOTAL_FIT = 1700 / 0.3;
+const REFERENCE_CARDS = 500000;
+/** 全系统 MTBF（小时）折合的每卡 FIT。 */
+const fitAtMtbf = (hours: number) => 1e9 / (hours * REFERENCE_CARDS);
+// 现状 MTBF 17 分钟。
+const TOTAL_FIT = fitAtMtbf(17 / 60);
+const HBM_FIT = TOTAL_FIT * 0.15;
+const NPU_FIT = TOTAL_FIT * 0.15;
+// 光模块按每卡等效 FIT 计，不再乘只数。下一代光模块为每卡 50 FIT，
+// 只做这一项后 MTBF 为 36 分钟，由此反推光模块的现状 FIT。
+const OPTICAL_NEXT_FIT = 50;
+const OPTICAL_FIT = TOTAL_FIT - fitAtMtbf(36 / 60) + OPTICAL_NEXT_FIT;
 const AICORE_SDC_FIT = TOTAL_FIT * 0.014 * 0.85;
 const OTHER_SDC_FIT = TOTAL_FIT * 0.014 * 0.15;
-const REST_FIT = TOTAL_FIT * 0.35;
+// 其余部分（约 16.5%），扣除 AICore 静默分支后按基线故障库的相对构成拆到各模块。
+const REST_FIT = TOTAL_FIT - OPTICAL_FIT - HBM_FIT - NPU_FIT - AICORE_SDC_FIT;
 // 2026-10-14 基线故障库：各对象 FIT 的分组合计，以及其中亚健康的部分。
 const restBasis = {
   iod: { total: 213.03, slow: 0 }, // IO Die / D2D
@@ -51,8 +65,9 @@ const REWORK = CKPT_INTERVAL / 2;
 const MANUAL = 4;
 /**
  * 恢复链：进程重调度成功即恢复，失败走弹性恢复；弹性恢复成功再走 CKPT 回滚，失败转人工；
- * CKPT 回滚失败也转人工（走法由用户 2026-11-25 确认）。现状没有弹性恢复：它是必经环节，
- * 成功率为 0，所以进程重调度失败后只能转人工，CKPT 回滚要等弹性恢复具备后才走得到。
+ * CKPT 回滚失败也转人工（走法由用户 2026-11-25 确认）。
+ * 现状没有弹性恢复（成功率为 0，不在链上）：进程重调度失败后直接走 CKPT 回滚，
+ * 回滚失败再转人工（用户 2026-11-26 确认）。弹性恢复具备后才插到进程重调度和 CKPT 回滚之间。
  * 假设：每一级的尝试时间不论成败都要花掉；进程重调度的 240 秒已含重新加载，不另计回滚重算。
  */
 const chain = (withProcess: boolean) =>
@@ -66,7 +81,7 @@ const chain = (withProcess: boolean) =>
           },
         }
       : {}),
-    elastic: { success: 0, gate: true, then: "next", onFail: "manual" },
+    elastic: { success: 0, then: "next", onFail: "manual" },
     restart: { success: 0.99, hours: CKPT_RESTORE, failHours: CKPT_RESTORE },
     manual: { success: 1, hours: MANUAL },
   });
@@ -82,8 +97,8 @@ const hard = (
   name,
   kind: "hard",
   fit,
-  // 95% 在 10 秒内检出，其余由 60 秒超时兜底发现（超时时间为沿用的假设）。
-  coverage: 0.95,
+  // 中断类故障一定会被发现：检出率按 100% 计（用户 2026-11-26 确认），10 秒内检出。
+  coverage: 1,
   detectHours: seconds(10),
   lateDetectHours: seconds(60),
   reworkHours: REWORK,
@@ -141,8 +156,10 @@ const slow = (
 });
 
 const userScenario = "2026-11-12 周度用户场景";
+const userRates =
+  "用户 2026-11-26 给定：50 万卡现状 MTBF 17 分钟（每卡 7059 FIT）";
 const priorSplit =
-  "其余 35% 故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准";
+  "其余约 16.5% 的故障按 2026-10-14 基线故障库相对构成折算，属先验，待实测校准";
 
 // 措施作用范围
 const HARD = [
@@ -206,8 +223,8 @@ export function defaultMeasures(): Measure[] {
       "prevent",
       ["aicore-sdc"],
       [effect("fit", "reduce", 0.6)],
-      "上线前与在网周期压测筛除易产生静默错误的核，AICore 静默故障消减 60%。",
-      user,
+      "上线前与在网周期压测筛除易产生静默错误的核，AICore 静默故障消减 60%。用户 2026-11-24 的方案里有这一项；2026-11-26 核算 MTBF 时只计 HBM 纠错和下一代光模块，这里默认不启用。",
+      { ...user, enabled: false },
     ),
     measure(
       "hbm-ecc",
@@ -215,7 +232,7 @@ export function defaultMeasures(): Measure[] {
       "prevent",
       ["hbm-uce"],
       [effect("fit", "reduce", 0.6)],
-      "新的纠错技术把一部分不可纠正错误变为可纠正，HBM 不可纠正错误消减 60%。",
+      "新的纠错技术把一部分不可纠正错误变为可纠正，HBM 不可纠正错误消减 60%（每卡 1059 FIT → 424 FIT）。",
       user,
     ),
     measure(
@@ -223,8 +240,8 @@ export function defaultMeasures(): Measure[] {
       "Hi-One 下一代光模块",
       "prevent",
       ["optical-fault"],
-      [effect("fit", "reduce", 0.9)],
-      "下一代光模块把单只失效率消减 90%（500 FIT → 50 FIT）。",
+      [effect("fit", "set", OPTICAL_NEXT_FIT)],
+      `下一代光模块把光模块的每卡等效失效率降到 ${OPTICAL_NEXT_FIT} FIT（现状 ${OPTICAL_FIT.toFixed(0)} FIT，下降 ${((1 - OPTICAL_NEXT_FIT / OPTICAL_FIT) * 100).toFixed(1)}%）；只做这一项，MTBF 从 17 分钟提高到 36 分钟。`,
       user,
     ),
     measure(
@@ -233,8 +250,8 @@ export function defaultMeasures(): Measure[] {
       "prevent",
       ["node-fault", "npu-fault", "hbm-uce", "aicore-sdc"],
       [effect("fit", "reduce", 0.1)],
-      "运行中周期压测并筛除异常资源，主要对 CPU、DDR、SSD 和 NPU 模组，失效率消减 10%。压测占用的时间未计入。",
-      user,
+      "运行中周期压测并筛除异常资源，主要对 CPU、DDR、SSD 和 NPU 模组，失效率消减 10%。压测占用的时间未计入。用户 2026-11-24 的方案里有这一项；2026-11-26 核算 MTBF 时只计 HBM 纠错和下一代光模块，这里默认不启用。",
+      { ...user, enabled: false },
     ),
     measure(
       "memory-predict",
@@ -281,15 +298,6 @@ export function defaultMeasures(): Measure[] {
       SLOW,
       [effect("coverage", "set", 0.9)],
       "针对亚健康类故障：检出率从 0.8 提到 0.9；检出后快照 / 降载 300 秒，性能损耗系数 0.1。需要区分真实亚健康与负载变化。",
-      user,
-    ),
-    measure(
-      "fast-detect",
-      "故障检测",
-      "detect",
-      HARD,
-      [effect("coverage", "set", 0.99)],
-      "针对中断类故障：检出率从 95% 提到 99%，其余仍由超时兜底。",
       user,
     ),
     measure(
@@ -598,8 +606,8 @@ export function defaultCoreModel(): CoreModel {
         "optical",
         "network",
         "光模块",
-        "按每卡约 4 只折算，使其占全部故障约 35%；数量待 BOM 确认",
-        { unitsPerCard: 4, anchor: "optical" },
+        "按每卡等效 FIT 计（占现状故障 53.5%，每卡 3775 FIT），不再乘光模块只数",
+        { anchor: "optical" },
       ),
       module(
         "l2-fabric",
@@ -633,15 +641,15 @@ export function defaultCoreModel(): CoreModel {
         "npu-fault",
         "npu",
         "运行中断",
-        TOTAL_FIT * 0.15 - AICORE_SDC_FIT,
-        userScenario + "：NPU 占 15%，扣除 AICore 静默分支",
+        NPU_FIT,
+        userRates + "，NPU 其他模块占 15%",
       ),
       hard(
         "hbm-uce",
         "hbm",
         "不可纠正错误",
-        TOTAL_FIT * 0.15,
-        userScenario + "：HBM 占 15%",
+        HBM_FIT,
+        userRates + "，HBM 占 15%",
       ),
       hard(
         "node-fault",
@@ -656,8 +664,9 @@ export function defaultCoreModel(): CoreModel {
         "optical-fault",
         "optical",
         "光模块失效",
-        500,
-        "用户给定单只 500 FIT；" + userScenario + "：光模块占 35%",
+        OPTICAL_FIT,
+        userRates +
+          "；只改进光模块（做到每卡 50 FIT）后 MTBF 为 36 分钟，反推现状 3775 FIT，占 53.5%",
       ),
       hard(
         "fabric-fault",
@@ -723,6 +732,6 @@ export function defaultCoreModel(): CoreModel {
     measures: defaultMeasures(),
     allocation: { method: "agree", complexityBasis: "fit", customWeights: {} },
     source:
-      "故障率取自 2026-11-12 周度用户场景，其余模块拆分取自现有基线故障库，属先验。检测与恢复链取自 2026-11-24 用户给出的现有措施与预计改进。措施库取自用户方案、现有基础机制和扩展机制库。",
+      "故障率按用户 2026-11-26 给定的现状 MTBF 17 分钟（50 万卡，每卡 7059 FIT）及 HBM 15%、NPU 其他模块 15% 的占比设定，光模块由“改进后 MTBF 36 分钟”反推为 53.5%，其余模块拆分取自现有基线故障库，属先验。恢复链取自 2026-11-24 用户给出的现有措施与预计改进，中断类故障检出率按 100% 计。措施库取自用户方案、现有基础机制和扩展机制库。",
   };
 }

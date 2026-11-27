@@ -142,7 +142,7 @@ export const blankMode = (moduleId: string) => ({
   name: "新故障模式",
   kind: "hard" as const,
   fit: 100,
-  coverage: 0.95,
+  coverage: 1,
   detectHours: 10 / 3600,
   lateDetectHours: 60 / 3600,
   reworkHours: 300 / 3600,

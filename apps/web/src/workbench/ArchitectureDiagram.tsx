@@ -440,7 +440,16 @@ export default function ArchitectureDiagram({
     assessed = active === "design" ? analysis.design : analysis.baseline,
     { allocation } = analysis,
     system = assessed.system,
-    target = model.scenario.target;
+    target = model.scenario.target,
+    // 光模块每卡折合的只数取自放在这个位置的模块，不写死
+    opticalCount = model.modules
+      .filter((m) => m.anchor === "optical" && m.scaling === "per-card")
+      .reduce((sum, m) => sum + m.unitsPerCard, 0),
+    // 数量为 1 表示按每卡等效 FIT 计，不标只数
+    opticalUnits =
+      opticalCount > 0 && Math.abs(opticalCount - 1) > 1e-9
+        ? ` · 每卡约 ${Number(opticalCount.toFixed(1))} 只`
+        : "";
 
   const infoOf = (ids: string[], name: string): SlotInfo | null => {
     if (!ids.length) return null;
@@ -996,7 +1005,7 @@ export default function ArchitectureDiagram({
             <Hit slot="optical">
               <Box x={760} y={470} w={492} h={118} stroke="#cbd6e6" />
               <T x={776} y={492} size={13} weight={650} fill={network}>
-                光模块 · 每卡约 4 只
+                光模块{opticalUnits}
               </T>
               <rect
                 x={776}
