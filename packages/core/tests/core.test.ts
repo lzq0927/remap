@@ -897,6 +897,41 @@ describe("设计：贡献分摊、推荐与参数反推", () => {
     model.scenario.target = 0.85;
     expect(priorityPath(model).reachedAt).toBe(1);
   });
+  it("按层排序：先排组件级措施（升 MTBF），再排系统级措施（降 MTTR）", () => {
+    const model = tiny(),
+      path = priorityPath(model, 30, undefined, "layer");
+    // 按提升大小是先 m-cov 后 m-fit；按层排序时组件级的 m-fit 在前
+    expect(path.steps.map((s) => s.id)).toEqual(["m-fit", "m-cov"]);
+    expect(path.steps[0].availability).toBeCloseTo(1 / 1.2, 12);
+    expect(path.steps[1].availability).toBeCloseTo(1 / 1.125, 12);
+    // 两种顺序的终点相同
+    expect(path.steps[1].availability).toBeCloseTo(
+      priorityPath(model).steps[1].availability,
+      12,
+    );
+    // 默认场景：先做两项组件级措施，MTBF 从 17 分钟到 44.48 分钟
+    const real = defaultCoreModel(),
+      enabled = new Set(
+        real.measures.filter((m) => m.enabled).map((m) => m.id),
+      ),
+      staged = priorityPath(real, 30, enabled, "layer"),
+      layers = staged.steps.map((s) => (s.category === "prevent" ? 0 : 1));
+    expect(layers).toEqual([...layers].sort());
+    const component = staged.steps.filter((s) => s.category === "prevent");
+    expect(component.map((s) => s.id)).toEqual([
+      "optical-reliability",
+      "hbm-ecc",
+    ]);
+    const afterComponent = assess(
+      real,
+      applyMeasures(real, new Set(component.map((s) => s.id))),
+    ).system;
+    expect(afterComponent.mtbfHours * 60).toBeCloseTo(44.48, 2);
+    expect(component[1].availability).toBeCloseTo(
+      afterComponent.availability,
+      12,
+    );
+  });
   it("两项措施省同一段损失时，后做的一项收益变小并指出与谁重叠", () => {
     const model = tiny();
     // 两项都缩短 A1 的 CKPT 回滚时间：0.5 h → 0.1 h 与 0.5 h → 0.2 h，只有更好的一项起作用

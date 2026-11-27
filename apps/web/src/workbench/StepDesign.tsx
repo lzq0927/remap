@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   Lightbulb,
@@ -35,6 +35,7 @@ import {
   type MeasureEffect,
   type MeasureLayer,
   type MeasureParam,
+  type PathOrder,
 } from "../../../../packages/core/src/index";
 import { useWorkbench } from "./Workbench";
 import { usageText } from "./StepAssess";
@@ -51,7 +52,7 @@ import {
   targetText,
   writeBase,
 } from "./helpers";
-import { hours, percent, points } from "./format";
+import { duration, hours, percent, points } from "./format";
 import {
   Disclosure,
   DurationField,
@@ -801,17 +802,40 @@ function BenefitSection() {
 function PathSection() {
   const { model, analysis, update } = useWorkbench(),
     tooltip = useTooltip(),
-    [all, setAll] = useState(false);
-  const path = useMemo(() => priorityPath(model), [model]);
+    [all, setAll] = useState(false),
+    // 默认先排组件级措施（升 MTBF），再排系统级措施（降 MTTR）
+    [order, setOrder] = useState<PathOrder>("layer");
+  const path = useMemo(
+    () => priorityPath(model, 30, undefined, order),
+    [model, order],
+  );
+  // 两段各自的起止：组件级措施做完时的 MTBF、单次损失和可用度，以及全部做完时的
+  const stages = useMemo(() => {
+    const state = (ids: string[]) =>
+        assess(model, applyMeasures(model, new Set(ids))).system,
+      component = path.steps
+        .filter((s) => layerOf(s.category) === "component")
+        .map((s) => s.id);
+    return {
+      base: state([]),
+      component: state(component),
+      all: state(path.steps.map((s) => s.id)),
+      componentCount: component.length,
+    };
+  }, [model, path]);
   const target = model.scenario.target,
     reached = path.reachedAt,
     count = path.steps.length;
   if (!count) return null;
   const last = path.steps[count - 1],
-    // 主要步骤：达标之前的每一步，以及提升不小于 0.5 个百分点的步骤
+    staged = order === "layer",
+    // 主要步骤：达标之前的每一步、提升不小于 0.5 个百分点的步骤；分两段时组件级措施全部列出
     major = path.steps.filter(
       (step, index) =>
-        all || step.gain >= 0.005 || (reached !== null && index < reached),
+        all ||
+        step.gain >= 0.005 ||
+        (reached !== null && index < reached) ||
+        (staged && layerOf(step.category) === "component"),
     ),
     minor = path.steps.filter((step) => !major.includes(step)),
     minorGain = minor.reduce((sum, step) => sum + step.gain, 0),
@@ -857,15 +881,51 @@ function PathSection() {
     <section className="rw-card" aria-label="组合收益路径">
       <div className="rw-card-head">
         <h2>组合收益：按什么顺序做，每加一项到多少</h2>
+        <div className="rw-tabs" role="tablist" aria-label="排列顺序">
+          {(
+            [
+              ["layer", "先组件级，后系统级"],
+              ["gain", "按提升大小"],
+            ] as const
+          ).map(([id, name]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={order === id}
+              className={order === id ? "is-active" : ""}
+              onClick={() => setOrder(id)}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
         {reached !== null && (
           <button className="rw-button" onClick={() => adopt(reached)}>
             只启用前 {reached} 项
           </button>
         )}
       </div>
+      {staged && (
+        <p className="rw-lead">
+          <b>先做组件级措施（升 MTBF）</b>：{stages.componentCount} 项把 MTBF 从{" "}
+          {duration(stages.base.mtbfHours)} 提到{" "}
+          <b>{duration(stages.component.mtbfHours)}</b>，可用度{" "}
+          {percent(stages.base.availability)} →{" "}
+          <b>{percent(stages.component.availability)}</b>（
+          {points(stages.component.availability - stages.base.availability)}）。
+          <b>再做系统级措施（降 MTTR）</b>：{count - stages.componentCount}{" "}
+          项把单次等效损失从 {duration(stages.component.mttrHours)} 缩到{" "}
+          <b>{duration(stages.all.mttrHours)}</b>，可用度到{" "}
+          <b>{percent(stages.all.availability)}</b>（
+          {points(stages.all.availability - stages.component.availability)}）。
+        </p>
+      )}
       <p className="rw-lead">
-        从现状 {percent(path.base)}{" "}
-        出发，每一步加入“在已选措施基础上提升最大”的一项。前 {top.length} 项（
+        从现状 {percent(path.base)} 出发，
+        {staged
+          ? "每一段内每一步加入“在已选措施基础上提升最大”的一项。"
+          : "每一步加入“在已选措施基础上提升最大”的一项。"}
+        前 {top.length} 项（
         {top.map((s) => s.name).join("、")}）合计 <b>{points(topGain)}</b>
         ，占全部可得提升的 {percent(topGain / Math.max(total, 1e-9), 0)}
         ——这几项是必须做的。
@@ -938,80 +998,121 @@ function PathSection() {
             after = reached !== null && index >= reached,
             shifted =
               step.partner && Math.abs(step.gain - step.standalone) >= 0.005;
+          // 分两段时，在每一段的第一项前面加一行小计
+          const layer = layerOf(step.category),
+            opens =
+              staged &&
+              (index === 0 ||
+                layerOf(path.steps[index - 1].category) !== layer);
           return (
-            <div
-              key={step.id}
-              className={"rw-path-row" + (after ? " is-after" : "")}
-              role="row"
-            >
-              <span role="cell" className="is-num">
-                {index + 1}
-              </span>
-              <span role="rowheader" className="rw-path-name">
-                <b>{step.name}</b>
-                <small>
-                  {layerOf(step.category) === "component"
-                    ? "组件级"
-                    : "系统级 · " + measureCategoryNames[step.category]}
-                  {" · "}
-                  {step.enabled ? "已启用" : "候选，未启用"}
-                </small>
-                {shifted && (
-                  <small className="rw-path-note">
-                    {step.partner!.kind === "overlap"
-                      ? `单独做 ${points(step.standalone)}；排在“${step.partner!.name}”之后只剩 ${points(step.gain)}，两者省的是同一段损失`
-                      : `单独做 ${points(step.standalone)}；有“${step.partner!.name}”在前，升到 ${points(step.gain)}`}
-                  </small>
-                )}
-              </span>
-              {track(
-                <i
-                  className={"rw-path-bar is-" + layerTone(step.category)}
-                  style={{
-                    left: before * 100 + "%",
-                    width: `max(3px, ${step.gain * 100}%)`,
-                  }}
-                />,
-                {
-                  tabIndex: 0,
-                  "aria-label": `第 ${index + 1} 步加入 ${step.name}：${percent(before)} 到 ${percent(step.availability)}`,
-                  ...tooltip.bind(
-                    <>
-                      <strong>{points(step.gain)}</strong>
-                      <span>
-                        {step.name} · 排在第 {index + 1} 步的提升
-                      </span>
-                      <strong>{points(step.standalone)}</strong>
-                      <span>单独做（其余都不做）</span>
-                      {shares.get(step.id)?.enabled && (
-                        <>
-                          <strong>
-                            {points(shares.get(step.id)!.shapley)}
-                          </strong>
-                          <span>当前设计里的分摊贡献</span>
-                        </>
-                      )}
-                      <strong>
-                        {percent(before)} → {percent(step.availability)}
-                      </strong>
-                      <span>累计可用度</span>
-                    </>,
-                  ),
-                },
+            <Fragment key={step.id}>
+              {opens && (
+                <div className="rw-path-row is-stage" role="row">
+                  <span role="cell">
+                    {layer === "component" ? (
+                      <>
+                        <b>第一段 · 组件级高可用（升 MTBF）</b>　MTBF{" "}
+                        {duration(stages.base.mtbfHours)} →{" "}
+                        {duration(stages.component.mtbfHours)}，可用度{" "}
+                        {percent(stages.base.availability)} →{" "}
+                        {percent(stages.component.availability)}（
+                        {points(
+                          stages.component.availability -
+                            stages.base.availability,
+                        )}
+                        ）
+                      </>
+                    ) : (
+                      <>
+                        <b>第二段 · 系统级可靠性机制（降 MTTR）</b>
+                        　单次等效损失 {duration(
+                          stages.component.mttrHours,
+                        )} → {duration(stages.all.mttrHours)}，可用度{" "}
+                        {percent(stages.component.availability)} →{" "}
+                        {percent(stages.all.availability)}（
+                        {points(
+                          stages.all.availability -
+                            stages.component.availability,
+                        )}
+                        ）
+                      </>
+                    )}
+                  </span>
+                </div>
               )}
-              <span role="cell" className="is-num is-strong">
-                {points(step.gain)}
-              </span>
-              <span role="cell" className="is-num">
-                {percent(step.availability)}
-                {reached === index + 1 && (
-                  <>
-                    {" "}
-                    <Status tone="good">达标</Status>
-                  </>
+              <div
+                className={"rw-path-row" + (after ? " is-after" : "")}
+                role="row"
+              >
+                <span role="cell" className="is-num">
+                  {index + 1}
+                </span>
+                <span role="rowheader" className="rw-path-name">
+                  <b>{step.name}</b>
+                  <small>
+                    {layerOf(step.category) === "component"
+                      ? "组件级"
+                      : "系统级 · " + measureCategoryNames[step.category]}
+                    {" · "}
+                    {step.enabled ? "已启用" : "候选，未启用"}
+                  </small>
+                  {shifted && (
+                    <small className="rw-path-note">
+                      {step.partner!.kind === "overlap"
+                        ? `单独做 ${points(step.standalone)}；排在“${step.partner!.name}”之后只剩 ${points(step.gain)}，两者省的是同一段损失`
+                        : `单独做 ${points(step.standalone)}；有“${step.partner!.name}”在前，升到 ${points(step.gain)}`}
+                    </small>
+                  )}
+                </span>
+                {track(
+                  <i
+                    className={"rw-path-bar is-" + layerTone(step.category)}
+                    style={{
+                      left: before * 100 + "%",
+                      width: `max(3px, ${step.gain * 100}%)`,
+                    }}
+                  />,
+                  {
+                    tabIndex: 0,
+                    "aria-label": `第 ${index + 1} 步加入 ${step.name}：${percent(before)} 到 ${percent(step.availability)}`,
+                    ...tooltip.bind(
+                      <>
+                        <strong>{points(step.gain)}</strong>
+                        <span>
+                          {step.name} · 排在第 {index + 1} 步的提升
+                        </span>
+                        <strong>{points(step.standalone)}</strong>
+                        <span>单独做（其余都不做）</span>
+                        {shares.get(step.id)?.enabled && (
+                          <>
+                            <strong>
+                              {points(shares.get(step.id)!.shapley)}
+                            </strong>
+                            <span>当前设计里的分摊贡献</span>
+                          </>
+                        )}
+                        <strong>
+                          {percent(before)} → {percent(step.availability)}
+                        </strong>
+                        <span>累计可用度</span>
+                      </>,
+                    ),
+                  },
                 )}
-              </span>
-            </div>
+                <span role="cell" className="is-num is-strong">
+                  {points(step.gain)}
+                </span>
+                <span role="cell" className="is-num">
+                  {percent(step.availability)}
+                  {reached === index + 1 && (
+                    <>
+                      {" "}
+                      <Status tone="good">达标</Status>
+                    </>
+                  )}
+                </span>
+              </div>
+            </Fragment>
           );
         })}
         {minor.length > 0 && (
@@ -1109,6 +1210,21 @@ function FocusSection() {
       exact: share.exact,
       minimum: minimumDegrees(model, ids),
       availability: createEvaluator(model)(new Set(ids)),
+      // 先做这组里的组件级措施（升 MTBF）时的状态，以及全部做完时的状态
+      component: assess(
+        model,
+        applyMeasures(
+          model,
+          new Set(
+            ids.filter(
+              (id) =>
+                layerOf(model.measures.find((m) => m.id === id)!.category) ===
+                "component",
+            ),
+          ),
+        ),
+      ).system,
+      all: assess(model, applyMeasures(model, new Set(ids))).system,
     };
   }, [model, ids]);
   if (!ids.length) return null;
@@ -1118,10 +1234,6 @@ function FocusSection() {
       .map((id) => model.measures.find((m) => m.id === id)!)
       .sort((a, b) => result.share.get(b.id)! - result.share.get(a.id)!),
     total = result.availability - baseline.system.availability,
-    layerGain = (layer: MeasureLayer) =>
-      rows
-        .filter((m) => layerOf(m.category) === layer)
-        .reduce((sum, m) => sum + result.share.get(m.id)!, 0),
     layerCount = (layer: MeasureLayer) =>
       rows.filter((m) => layerOf(m.category) === layer).length,
     top = rows.slice(0, 3),
@@ -1142,10 +1254,17 @@ function FocusSection() {
           : `当前启用的 ${rows.length} 项`}
         ，把可用度从 {percent(baseline.system.availability)} 提到{" "}
         <b>{percent(result.availability)}</b>（目标 {percent(target)}
-        ）。其中{measureLayerNames.component} {layerCount("component")} 项贡献{" "}
-        <b>{points(layerGain("component"))}</b>，{measureLayerNames.system}{" "}
-        {layerCount("system")} 项贡献 <b>{points(layerGain("system"))}</b>
-        。贡献最大的 {top.length} 项是
+        ）。先做{measureLayerNames.component} {layerCount("component")} 项：MTBF{" "}
+        {duration(baseline.system.mtbfHours)} →{" "}
+        {duration(result.component.mtbfHours)}，可用度{" "}
+        <b>
+          {points(result.component.availability - baseline.system.availability)}
+        </b>
+        ；再做{measureLayerNames.system} {layerCount("system")} 项：单次等效损失{" "}
+        {duration(result.component.mttrHours)} →{" "}
+        {duration(result.all.mttrHours)}，可用度{" "}
+        <b>{points(result.availability - result.component.availability)}</b>
+        。按分摊贡献最大的 {top.length} 项是
         {top.map((m) => `“${m.name}”`).join("、")}，合计占总提升的{" "}
         {total > 1e-9 ? percent(topGain / total, 0) : "—"}。
       </p>

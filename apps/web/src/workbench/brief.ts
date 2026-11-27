@@ -220,7 +220,7 @@ function kpi(
         30,
         Math.max(
           16,
-          Math.floor((30 * (w - 0.5)) / (textWidth(value, 30) * 1.2)),
+          Math.floor((30 * (w - 0.5)) / (textWidth(value, 30) * 1.3)),
         ),
       ),
       { bold: true, color, valign: "middle" },
@@ -396,6 +396,14 @@ const paramText = (
   param: Measure["effects"][number]["param"],
   value: number,
 ) => (isRatio(param) ? ratioText(value) : formatParam(param, value));
+
+/** “a → b”：两边单位相同时只在后面写一次单位。 */
+function fromTo(a: string, b: string) {
+  const unit = (text: string) => text.replace(/^[\d.,\s]+/, "");
+  return unit(a) && unit(a) === unit(b)
+    ? `${a.slice(0, a.length - unit(a).length).trim()} → ${b}`
+    : `${a} → ${b}`;
+}
 
 /** 措施主要参数“现状 → 计划”的写法。 */
 export function effectSummary(model: CoreModel, measure: Measure) {
@@ -840,9 +848,36 @@ export function buildBrief(
     byShare = [...enabled].sort(
       (a, b) => share.get(b.id)!.shapley - share.get(a.id)!.shapley,
     ),
-    layerGain = (list: Measure[]) =>
-      list.reduce((sum, m) => sum + share.get(m.id)!.shapley, 0),
-    path = priorityPath(model, 30, enabledIds),
+    // 先算组件级措施（升 MTBF），再算系统级措施（降 MTTR）：各段内部按提升大小逐项加入
+    path = priorityPath(model, 30, enabledIds, "layer"),
+    evaluateIds = createEvaluator(model),
+    // 每项措施按这个顺序加入时带来的提升；在这组里没有提升的措施接在最后
+    sequence = (() => {
+      const chosen = new Set<string>(),
+        gains = new Map<string, number>();
+      for (const step of path.steps) {
+        gains.set(step.id, step.gain);
+        chosen.add(step.id);
+      }
+      for (const m of enabled) {
+        if (chosen.has(m.id)) continue;
+        const start = evaluateIds(chosen);
+        chosen.add(m.id);
+        gains.set(m.id, evaluateIds(chosen) - start);
+      }
+      return gains;
+    })(),
+    seqGain = (list: Measure[]) =>
+      list.reduce((sum, m) => sum + (sequence.get(m.id) ?? 0), 0),
+    // 组件级措施做完时的状态：两段的分界
+    afterComponent = assess(
+      model,
+      applyMeasures(model, new Set(component.map((m) => m.id))),
+    ).system,
+    stageGain = {
+      component: afterComponent.availability - before.availability,
+      system: after.availability - afterComponent.availability,
+    },
     minimum = minimumDegrees(model, [...enabledIds]),
     potential = layerPotential(model),
     nameOf = (id: string) =>
@@ -857,8 +892,6 @@ export function buildBrief(
   const gapText = met
       ? `高于目标 ${points(after.availability - target).replace("+", "")}`
       : `距目标还差 ${((target - after.availability) * 100).toFixed(2)} pp`,
-    top3 = byShare.slice(0, 3),
-    top3Gain = layerGain(top3),
     totalGain = after.availability - before.availability,
     worst = [...baseline.modules].sort(
       (a, b) => b.lossHoursPerWeek - a.lossHoursPerWeek,
@@ -953,11 +986,15 @@ export function buildBrief(
         head: "方案：",
         text: `${enabled.length} 项措施（${measureLayerNames.component} ${component.length} 项、${measureLayerNames.system} ${system.length} 项），把可用度从 ${percent(before.availability)} 提到 ${percent(after.availability)}，${gapText}。`,
       },
-      ...(top3.length
+      ...(component.length && system.length
         ? [
             {
-              head: "重点：",
-              text: `${top3.map((m) => `“${m.name}”`).join("、")}贡献 ${points(top3Gain)}，占总提升的 ${percent(top3Gain / Math.max(totalGain, 1e-9), 0)}；${measureLayerNames.system}合计 ${points(layerGain(system))}，${measureLayerNames.component}合计 ${points(layerGain(component))}。`,
+              head: "先升 MTBF：",
+              text: `${measureLayerNames.component} ${component.length} 项把 MTBF 从 ${duration(before.mtbfHours)} 提到 ${duration(afterComponent.mtbfHours)}，可用度到 ${percent(afterComponent.availability)}（${points(stageGain.component)}）。`,
+            },
+            {
+              head: "再降 MTTR：",
+              text: `${measureLayerNames.system} ${system.length} 项把单次等效损失从 ${duration(afterComponent.mttrHours)} 缩到 ${duration(after.mttrHours)}，可用度到 ${percent(after.availability)}（${points(stageGain.system)}）。`,
             },
           ]
         : []),
@@ -1876,7 +1913,7 @@ export function buildBrief(
             [
               { text: heading, bold: true, color: C.ink },
               {
-                text: `  ${goal} · ${list.length} 项 · 合计 ${points(layerGain(list))}`,
+                text: `  ${goal} · ${list.length} 项 · ${points(stageGain[layerOf(list[0]?.category ?? "prevent")])}`,
                 color: C.ink2,
               },
             ],
@@ -1885,7 +1922,7 @@ export function buildBrief(
           ),
         ],
         sorted = [...list].sort(
-          (a, b) => share.get(b.id)!.shapley - share.get(a.id)!.shapley,
+          (a, b) => (sequence.get(b.id) ?? 0) - (sequence.get(a.id) ?? 0),
         ),
         shown = sorted.slice(0, 9),
         rowH = Math.min(0.5, (BOTTOM - TOP - 0.75) / Math.max(shown.length, 1));
@@ -1909,11 +1946,11 @@ export function buildBrief(
             top,
             1.2,
             rowH,
-            points(share.get(m.id)!.shapley),
+            points(sequence.get(m.id) ?? 0),
             11.5,
             {
               bold: true,
-              color: C.ink,
+              color: (sequence.get(m.id) ?? 0) < -0.0005 ? C.bad : C.ink,
               align: "right",
               valign: "middle",
             },
@@ -1928,7 +1965,7 @@ export function buildBrief(
             TOP + 0.7 + shown.length * rowH,
             w,
             0.3,
-            `另有 ${sorted.length - shown.length} 项，合计 ${points(layerGain(sorted.slice(shown.length)))}`,
+            `另有 ${sorted.length - shown.length} 项，合计 ${points(seqGain(sorted.slice(shown.length)))}`,
             10.5,
             { color: C.muted },
           ),
@@ -1937,8 +1974,8 @@ export function buildBrief(
     };
     const half = (WIDTH - 0.3) / 2;
     add(
-      `方案：${enabled.length} 项措施，两个方向同时下手`,
-      `${measureLayerNames.component}让故障更少发生（提升 MTBF）；${measureLayerNames.system}让每次故障的损失更小（降低 MTTR）。右侧数字是每项措施在总提升 ${points(totalGain)} 里的分摊贡献。`,
+      `方案：${enabled.length} 项措施，先升 MTBF，再降 MTTR`,
+      `${measureLayerNames.component}让故障更少发生（提升 MTBF）；${measureLayerNames.system}让每次故障的损失更小（降低 MTTR）。右侧数字是按“先组件级、后系统级”的顺序逐项加入时，每一项带来的可用度提升，合计 ${points(totalGain)}。`,
       [
         ...column(
           LEFT,
@@ -1960,87 +1997,104 @@ export function buildBrief(
     );
   }
 
-  // ---------- 两个方向各自能到多少 ----------
+  // ---------- 先升 MTBF，再降 MTTR：两段各拿到多少 ----------
   if (component.length && system.length) {
-    const onlyComponent = evaluate(new Set(component.map((m) => m.id))),
-      onlySystem = evaluate(new Set(system.map((m) => m.id))),
-      rows = [
-        { name: "现状", value: before.availability, color: C.grey },
+    const rows = [
         {
-          name: `只做${measureLayerNames.component}（${component.length} 项）`,
-          value: onlyComponent,
+          name: "现状",
+          value: before.availability,
+          color: C.grey,
+          label: percent(before.availability),
+        },
+        {
+          name: `先做${measureLayerNames.component}（${component.length} 项）`,
+          value: afterComponent.availability,
           color: C.blue,
+          label: `${percent(afterComponent.availability)}（${points(stageGain.component)}）`,
         },
         {
-          name: `只做${measureLayerNames.system}（${system.length} 项）`,
-          value: onlySystem,
-          color: C.orange,
-        },
-        {
-          name: `两边都做（${enabled.length} 项）`,
+          name: `再做${measureLayerNames.system}（${system.length} 项）`,
           value: after.availability,
-          color: C.green,
+          color: C.orange,
+          label: `${percent(after.availability)}（${points(stageGain.system)}）`,
         },
-      ].map((row) => ({
-        ...row,
-        label: `${percent(row.value)}（${points(row.value - before.availability)}）`,
-      })),
-      synergy =
-        after.availability -
-        before.availability -
-        (onlyComponent - before.availability) -
-        (onlySystem - before.availability),
-      better =
-        onlySystem >= onlyComponent
-          ? measureLayerNames.system
-          : measureLayerNames.component;
+      ],
+      // 组件级措施去掉的多是恢复较快的故障，剩下的故障平均单次损失可能反而变长
+      mixShift = afterComponent.mttrHours > before.mttrHours * 1.05;
     add(
-      Math.max(onlyComponent, onlySystem) >= target
-        ? `两个方向：只做${better}就能到目标，另一边提供余量`
-        : `两个方向缺一不可：只做一边最多到 ${percent(Math.max(onlyComponent, onlySystem), 1)}`,
-      `只降频次到 ${percent(onlyComponent)}，只缩短单次损失到 ${percent(onlySystem)}，两边都做到 ${percent(after.availability)}。${
-        synergy > 0.005
-          ? `两边叠加比各自相加多出 ${points(synergy)}：故障少了，剩下的每一次损失折算成的可用度更多。`
-          : ""
-      }`,
+      `先升 MTBF 再降 MTTR：组件级 ${points(stageGain.component)}，系统级 ${points(stageGain.system)}`,
+      `组件级措施把 MTBF 从 ${duration(before.mtbfHours)} 提到 ${duration(afterComponent.mtbfHours)}，可用度到 ${percent(afterComponent.availability)}；在此基础上系统级措施把单次等效损失从 ${duration(afterComponent.mttrHours)} 缩到 ${duration(after.mttrHours)}，可用度到 ${percent(after.availability)}。`,
       [
-        ...hbars(LEFT, TOP + 0.6, WIDTH * 0.62, 3.4, rows, {
-          nameW: 3.1,
-          labelW: 2.4,
-          rowH: 0.85,
+        ...hbars(LEFT, TOP + 0.6, WIDTH * 0.6, 3.0, rows, {
+          nameW: 3.3,
+          labelW: 2.5,
+          rowH: 0.95,
           max: 1,
           target,
           targetLabel: "目标 " + percent(target),
         }).prims,
+        ...kpi(
+          LEFT,
+          TOP + 3.55,
+          2.35,
+          1.3,
+          "MTBF",
+          fromTo(
+            duration(before.mtbfHours),
+            duration(afterComponent.mtbfHours),
+          ),
+          "组件级措施",
+          C.blue,
+        ),
+        ...kpi(
+          LEFT + 2.5,
+          TOP + 3.55,
+          2.35,
+          1.3,
+          "故障频次（每周）",
+          `${frequency(before.ratePerWeek).replace(" 次/周", "")} → ${frequency(after.ratePerWeek).replace(" 次/周", "")}`,
+          "连续运行一周的次数",
+          C.blue,
+        ),
+        ...kpi(
+          LEFT + 5.0,
+          TOP + 3.55,
+          2.35,
+          1.3,
+          "单次等效损失",
+          fromTo(duration(afterComponent.mttrHours), duration(after.mttrHours)),
+          "系统级措施",
+          C.orange,
+        ),
         ...bullets(
-          LEFT + WIDTH * 0.66,
+          LEFT + WIDTH * 0.64,
           TOP + 0.3,
-          WIDTH * 0.34,
+          WIDTH * 0.36,
           [
             {
-              head: `${measureLayerNames.component}：`,
-              text: `降低器件失效率，故障频次 ${frequency(before.ratePerWeek)} → ${frequency(after.ratePerWeek)}。对它针对的器件有效，所有后续环节等比例受益。`,
+              head: `第一段 · ${measureLayerNames.component}（升 MTBF）：`,
+              text: `${component.map((m) => m.name).join("、")}。每卡 FIT 从 ${Math.round(before.fitPerCard)} 降到 ${Math.round(afterComponent.fitPerCard)}，MTBF ${duration(before.mtbfHours)} → ${duration(afterComponent.mtbfHours)}，可用度 ${points(stageGain.component)}。`,
             },
             {
-              head: `${measureLayerNames.system}：`,
-              text: `检测、恢复、隔离与弹性、检查点，单次等效损失 ${duration(before.mttrHours)} → ${duration(after.mttrHours)}。对多种器件的故障同时有效。`,
+              head: `第二段 · ${measureLayerNames.system}（降 MTTR）：`,
+              text: `检测、恢复、隔离与弹性、检查点共 ${system.length} 项，MTBF 不变，单次等效损失 ${duration(afterComponent.mttrHours)} → ${duration(after.mttrHours)}，可用度 ${points(stageGain.system)}。`,
             },
+            ...(mixShift
+              ? [
+                  {
+                    head: "为什么第一段之后单次损失变长：",
+                    text: `组件级措施去掉的主要是恢复较快的中断类故障，剩下的故障里静默故障等长尾的占比变大，平均单次损失从 ${duration(before.mttrHours)} 变成 ${duration(afterComponent.mttrHours)}；每一次故障本身并没有变慢。`,
+                  },
+                ]
+              : []),
             {
-              head: "为什么要两边都做：",
-              text: "每周损失 = 故障频次 × 单次等效损失，两个因子相乘；只压一个因子，另一个因子留下的损失仍然超出预算。",
+              head: "到目标还要多少：",
+              text: `MTBF ${duration(afterComponent.mtbfHours)} 时，${percent(target)} 允许的单次等效损失是 ${duration(((1 - after.overhead) / target - 1) * afterComponent.mtbfHours)}；方案做到 ${duration(after.mttrHours)}。`,
             },
           ],
-          12.5,
+          12,
+          0.13,
         ).prims,
-        text(
-          LEFT,
-          TOP + 4.25,
-          WIDTH * 0.62,
-          0.6,
-          "横条是系统可用度，括号里是相对现状的提升；虚线是目标。",
-          11,
-          { color: C.muted },
-        ),
       ],
     );
   }
@@ -2063,7 +2117,9 @@ export function buildBrief(
       });
     }
     const negative = extra.filter((s) => s.gain < -0.0005),
-      major = path.steps.filter((s) => s.gain >= 0.005).slice(0, 10),
+      major = path.steps
+        .filter((s) => s.gain >= 0.005 || layerOf(s.category) === "component")
+        .slice(0, 10),
       rest = [
         ...path.steps.filter((s) => !major.includes(s)),
         ...extra.filter((s) => !negative.includes(s)),
@@ -2086,11 +2142,9 @@ export function buildBrief(
       push(`其余 ${rest.length} 项`, "每项不到 0.5 pp", restGain, C.grey);
     for (const s of negative)
       push(s.name, "在这组措施里是负收益", s.gain, C.bad);
-    const first = path.steps.slice(0, Math.min(3, path.steps.length)),
-      firstGain = first[first.length - 1].availability - path.base;
     add(
-      `组合收益：前 ${first.length} 项拿到 ${points(firstGain)}，逐项叠加到 ${percent(level)}`,
-      `从现状出发，每一步加入“在已选措施基础上提升最大”的一项，已扣除措施之间的重叠。${first.map((s) => `“${s.name}”`).join("、")}占全部提升的 ${percent(firstGain / Math.max(level - path.base, 1e-9), 0)}。${
+      `组合收益：组件级 ${points(stageGain.component)}，系统级 ${points(stageGain.system)}，逐项叠加到 ${percent(level)}`,
+      `先把组件级措施逐项加入（升 MTBF），再逐项加入系统级措施（降 MTTR）；每一段内每一步取“在已选措施基础上提升最大”的一项，已扣除措施之间的重叠。${
         negative.length
           ? `${negative.map((s) => `“${s.name}”`).join("、")}在这组措施里是负收益（合计 ${points(negative.reduce((sum, s) => sum + s.gain, 0))}）。`
           : ""

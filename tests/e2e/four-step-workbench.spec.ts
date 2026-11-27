@@ -217,13 +217,26 @@ test("四步工作台：分配、评估、设计、验证共用一份模型并�
     "暂不优化",
   );
   const path = page.getByRole("region", { name: "组合收益路径" });
+  // 默认先排组件级措施（升 MTBF），再排系统级措施（降 MTTR），每段有小计
   await expect(path).toContainText("还差 2.60 pp");
+  await expect(path).toContainText("第一段 · 组件级高可用（升 MTBF）");
+  await expect(path).toContainText("MTBF 17 分钟 → 52.7 分钟");
+  await expect(path).toContainText("第二段 · 系统级可靠性机制（降 MTTR）");
+  await expect(
+    path.getByRole("row", { name: /^1 Hi-One 下一代光模块/ }),
+  ).toContainText("58.65%");
+  await expect(
+    path.getByRole("row", { name: /^8 通信与算子重执行/ }),
+  ).toContainText("排在“Hi-One 下一代光模块”之后只剩 +8.09 pp");
+  // 也可以改成不分层、按提升大小排
+  await path.getByRole("tab", { name: "按提升大小" }).click();
   await expect(
     path.getByRole("row", { name: /^1 通信与算子重执行/ }),
   ).toContainText("63.71%");
   await expect(
     path.getByRole("row", { name: /^3 CKPT 回滚优化/ }),
   ).toContainText("只剩 +7.35 pp");
+  await path.getByRole("tab", { name: "先组件级，后系统级" }).click();
   await expect(path).toContainText("为什么和右上“各措施的贡献”对不上");
   // 展开机制：参数—收益曲线、拖动试算；把进程重调度做到设计目标并纳入设计
   await page.getByRole("button", { name: "展开 进程重调度" }).click();

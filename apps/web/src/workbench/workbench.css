@@ -3130,3 +3130,15 @@ h2.rw-direction {
     margin-left: 0;
   }
 }
+
+/* 组合收益分两段时的小计行 */
+.rw-path-row.is-stage {
+  display: block;
+  padding: 8px 10px;
+  background: var(--rw-subtle);
+  color: var(--rw-ink-2);
+  font-size: 13px;
+}
+.rw-path-row.is-stage b {
+  color: var(--rw-ink);
+}

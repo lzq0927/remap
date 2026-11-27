@@ -550,6 +550,7 @@ export function effectSweep(
   };
 }
 
+export type PathOrder = "gain" | "layer";
 export interface PathStep {
   id: string;
   name: string;
@@ -585,23 +586,38 @@ export function priorityPath(
   limit = 30,
   /** 只在这些措施里排序（如只看已启用的措施）；不给则用措施库里全部参与设计的措施。 */
   only?: ReadonlySet<string>,
+  /**
+   * gain：所有措施放在一起，每一步取提升最大的；
+   * layer：先把组件级措施（升 MTBF）排完，再排系统级措施（降 MTTR），各自内部仍按提升大小。
+   */
+  order: PathOrder = "gain",
 ) {
   const evaluate = createEvaluator(model),
     chosen = new Set<string>(),
     base = evaluate(chosen),
     steps: PathStep[] = [],
-    pool = model.measures.filter((m) => (only ? only.has(m.id) : !isHeld(m)));
-  let current = base;
-  while (steps.length < limit) {
+    pool = model.measures.filter((m) => (only ? only.has(m.id) : !isHeld(m))),
+    stages: MeasureLayer[][] =
+      order === "layer"
+        ? [["component"], ["system"]]
+        : [["component", "system"]];
+  let current = base,
+    stage = 0;
+  while (steps.length < limit && stage < stages.length) {
     let pick: { measure: Measure; value: number } | null = null;
     for (const measure of pool) {
       if (chosen.has(measure.id)) continue;
+      if (!stages[stage].includes(layerOf(measure.category))) continue;
       chosen.add(measure.id);
       const value = evaluate(chosen);
       chosen.delete(measure.id);
       if (!pick || value > pick.value) pick = { measure, value };
     }
-    if (!pick || pick.value <= current + 1e-9) break;
+    // 这一段里没有还能提升的措施了：进入下一段
+    if (!pick || pick.value <= current + 1e-9) {
+      stage++;
+      continue;
+    }
     const gain = pick.value - current,
       standalone = evaluate(new Set([pick.measure.id])) - base;
     // 单独做与排在这一步的收益差得明显时，找出造成差别最大的那项前序措施
