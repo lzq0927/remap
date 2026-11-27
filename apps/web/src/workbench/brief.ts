@@ -486,9 +486,10 @@ function waterfall(
         { valign: "middle" },
       ),
       rect(
-        at(row.from),
+        // 负收益的一步向左画
+        Math.min(at(row.from), at(row.to)),
         mid - barH / 2,
-        Math.max(at(row.to) - at(row.from), 0.03),
+        Math.max(Math.abs(at(row.to) - at(row.from)), 0.03),
         barH,
         row.color,
         undefined,
@@ -2046,42 +2047,62 @@ export function buildBrief(
 
   // ---------- 7 组合收益 ----------
   if (path.steps.length) {
-    const major = path.steps.filter((s) => s.gain >= 0.005).slice(0, 11),
-      rest = path.steps.filter((s) => !major.includes(s)),
-      last = path.steps[path.steps.length - 1],
-      rows = [
-        ...major.map((s) => ({
-          name: s.name,
-          sub: layerName(s),
-          from: s.availability - s.gain,
-          to: s.availability,
-          color: layerColor(s),
-        })),
-        ...(rest.length
-          ? [
-              {
-                name: `其余 ${rest.length} 项`,
-                sub: "每项不到 0.5 pp",
-                from:
-                  last.availability - rest.reduce((sum, s) => sum + s.gain, 0),
-                to: last.availability,
-                color: C.grey,
-              },
-            ]
-          : []),
+    // 路径只收有提升的措施；已启用但在这组里没有提升（甚至为负）的措施接在后面，
+    // 这样瀑布的终点就是方案的可用度
+    const chosen = new Set(path.steps.map((s) => s.id)),
+      extra: { name: string; category: Measure["category"]; gain: number }[] =
+        [];
+    for (const m of enabled) {
+      if (chosen.has(m.id)) continue;
+      const before = evaluate(chosen);
+      chosen.add(m.id);
+      extra.push({
+        name: m.name,
+        category: m.category,
+        gain: evaluate(chosen) - before,
+      });
+    }
+    const negative = extra.filter((s) => s.gain < -0.0005),
+      major = path.steps.filter((s) => s.gain >= 0.005).slice(0, 10),
+      rest = [
+        ...path.steps.filter((s) => !major.includes(s)),
+        ...extra.filter((s) => !negative.includes(s)),
       ],
-      first = path.steps.slice(0, Math.min(3, path.steps.length)),
+      restGain = rest.reduce((sum, s) => sum + s.gain, 0),
+      rows: {
+        name: string;
+        sub: string;
+        from: number;
+        to: number;
+        color: string;
+      }[] = [];
+    let level = path.base;
+    const push = (name: string, sub: string, gain: number, color: string) => {
+      rows.push({ name, sub, from: level, to: level + gain, color });
+      level += gain;
+    };
+    for (const s of major) push(s.name, layerName(s), s.gain, layerColor(s));
+    if (rest.length)
+      push(`其余 ${rest.length} 项`, "每项不到 0.5 pp", restGain, C.grey);
+    for (const s of negative)
+      push(s.name, "在这组措施里是负收益", s.gain, C.bad);
+    const first = path.steps.slice(0, Math.min(3, path.steps.length)),
       firstGain = first[first.length - 1].availability - path.base;
-    // 其余小项排在最后一条，位置按累计值画
-    rows.sort((a, b) => a.to - b.to);
     add(
-      `组合收益：前 ${first.length} 项拿到 ${points(firstGain)}，逐项叠加到 ${percent(last.availability)}`,
-      `从现状出发，每一步加入“在已选措施基础上提升最大”的一项，已扣除措施之间的重叠。${first.map((s) => `“${s.name}”`).join("、")}占全部提升的 ${percent(firstGain / Math.max(last.availability - path.base, 1e-9), 0)}。`,
+      `组合收益：前 ${first.length} 项拿到 ${points(firstGain)}，逐项叠加到 ${percent(level)}`,
+      `从现状出发，每一步加入“在已选措施基础上提升最大”的一项，已扣除措施之间的重叠。${first.map((s) => `“${s.name}”`).join("、")}占全部提升的 ${percent(firstGain / Math.max(level - path.base, 1e-9), 0)}。${
+        negative.length
+          ? `${negative.map((s) => `“${s.name}”`).join("、")}在这组措施里是负收益（合计 ${points(negative.reduce((sum, s) => sum + s.gain, 0))}）。`
+          : ""
+      }`,
       [
         ...legend(LEFT, TOP - 0.12, [
           [C.blue, "组件级（降频次）"],
           [C.orange, "系统级（缩短单次损失）"],
           [C.grey, "现状 / 小项合计"],
+          ...(negative.length
+            ? ([[C.bad, "负收益"]] as [string, string][])
+            : []),
         ]),
         ...waterfall(
           LEFT,
@@ -2335,6 +2356,8 @@ export function buildBrief(
       tight = byShare.filter((m) => (minimum.get(m.id) ?? 0) > 0.9).slice(0, 4),
       over = designGaps.filter((g) => g.status === "over" || g.usage > 1),
       held = model.measures.filter((m) => m.hold && !m.enabled),
+      // 去掉后可用度反而更高的已启用措施
+      harmful = enabled.filter((m) => share.get(m.id)!.marginal < -0.0005),
       risks = [
         {
           head: "参数证据：",
@@ -2365,6 +2388,14 @@ export function buildBrief(
                   .join(
                     "、",
                   )}${over.length > 4 ? ` 等 ${over.length} 个` : ""}在方案后仍高于分配预算，系统靠其他模块的余量达标。`,
+              },
+            ]
+          : []),
+        ...(harmful.length
+          ? [
+              {
+                head: "负收益的措施：",
+                text: `${harmful.map((m) => `“${m.name}”（${points(share.get(m.id)!.marginal)}）`).join("、")}按现在的参数去掉后可用度反而更高，需要核对它的参数或作用方式。`,
               },
             ]
           : []),

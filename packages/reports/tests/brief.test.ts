@@ -78,6 +78,16 @@ describe("汇报导出：同一份页面内容输出 PPT 和网页", () => {
     expect(brief.slides[3].title).toMatch(
       /^关键立项点：“进程重调度”耗时 60 秒时，成功率不低于 9\d(\.\d)?%$/,
     );
+    // 组合收益瀑布的终点就是方案的可用度：负收益的弹性恢复也画在里面
+    const combined = brief.slides.find((slide) =>
+      slide.title.startsWith("组合收益"),
+    )!;
+    expect(combined.title).toMatch(/逐项叠加到 95\.12%$/);
+    expect(
+      combined.prims
+        .flatMap((p) => (p.t === "text" ? p.runs.map((r) => r.text) : []))
+        .join(""),
+    ).toContain("在这组措施里是负收益");
     const html = briefHtml(brief);
     expect(html.match(/class="b-slide"/g)).toHaveLength(brief.slides.length);
     expect(html).toContain("95.12%");
